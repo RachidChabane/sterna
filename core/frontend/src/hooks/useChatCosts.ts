@@ -11,6 +11,7 @@
 
 import { useMemo } from 'react'
 import { pricingUtils } from '@/lib/pricing-utils'
+import { formatLatencyFromSeconds } from '@/utils/latency'
 import type { Message } from '@/components/models/types'
 
 interface UseChatCostsProps {
@@ -61,12 +62,7 @@ export function useChatCosts({ messages }: UseChatCostsProps): ChatCosts {
   }
 
   // Latency formatting utility (latency comes in seconds from backend)
-  const formatLatency = (latency?: number) => {
-    if (!latency) return 'N/A'
-    const latencyMs = latency * 1000 // Convert seconds to milliseconds
-    if (latencyMs < 1000) return `${Math.round(latencyMs)}ms`
-    return `${latency.toFixed(1)}s`
-  }
+  const formatLatency = (latency?: number) => formatLatencyFromSeconds(latency, 'N/A')
 
   return {
     ...costs,

@@ -459,6 +459,29 @@
     animation: slideUp 300ms cubic-bezier(0.87, 0, 0.13, 1);
   }
 
+  /* Radix ScrollArea wraps a Viewport's children in an internal, inline-styled
+     `display: table; min-width: 100%` box. A table box is sized by shrink-to-fit
+     — min(max(min-content, available), max-content) — so a single non-wrapping
+     descendant (a `truncate` line, a code span, a GFM table) whose min-content
+     exceeds the viewport raises that floor and stretches the wrapper past the
+     viewport's width. Every percentage width inside then resolves against the
+     stretched wrapper, so content is laid out wider than the visible area and
+     the Root's `overflow: hidden` silently clips it — text looks cut off with
+     no scrollbar to reveal it. No descendant can fix this from the inside: a
+     child can't constrain its own ancestor's box.
+
+     Forcing the wrapper to `display: block` makes it take the viewport's width
+     like any other block box, so descendants inherit a definite width and wrap
+     (or truncate, or scroll in their own `overflow-x` container) as authored.
+     Content that genuinely must stay wide still overflows the block box, and
+     that overflow is still scrollable — horizontal ScrollBar consumers keep
+     working, provided they size their own child (e.g. `min-w-max`) rather than
+     relying on the wrapper's shrink-to-fit. `!important` is required because
+     Radix sets `display` as an inline style. */
+  [data-radix-scroll-area-viewport] > div {
+    display: block !important;
+  }
+
   /* Primary CTA — flat cobalt, ink border, hard shadow, press effect */
   .btn-premium {
     background: hsl(var(--accent-brand));

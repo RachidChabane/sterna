@@ -76,6 +76,7 @@ import {
 } from 'lucide-react'
 import { PremiumMenuIcon } from '@/components/ui/premium-menu-icon'
 import { cn } from '@/lib/utils'
+import { formatLatencyFromSeconds } from '@/utils/latency'
 import { useNavigate } from '@tanstack/react-router'
 import { ModelComboBox } from './ModelComboBox'
 import { ModelIcon } from './ModelIcon'
@@ -844,10 +845,7 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
     return `$${cost.toFixed(4)}`
   }, [])
 
-  const formatLatency = useCallback((latency?: number) => {
-    if (!latency) return '-'
-    return `${(latency / 1000).toFixed(2)}s`
-  }, [])
+  const formatLatency = useCallback((latency?: number) => formatLatencyFromSeconds(latency), [])
 
   // Image gallery state
   const [imageGalleryOpen, setImageGalleryOpen] = useState(false)

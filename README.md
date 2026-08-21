@@ -25,7 +25,11 @@ FastAPI microservices, a React SPA, a Docker sandbox, Postgres with pgvector,
 and Kubernetes and Terraform for the infrastructure.
 
 <p align="center">
-  <img src="docs/images/demo.gif" alt="Sterna in 45 seconds: multi-model chat, sandboxed coding agent IDE, implementation plans, voice rooms, Sparks, and MCP connectors" width="900">
+  <img src="docs/images/demo.gif" alt="Sterna in 50 seconds: signing in, multi-model side-by-side chat, the sandboxed coding agent IDE, an implementation plan, a generated Spark mini-app, and the MCP connector gallery" width="900">
+</p>
+
+<p align="center">
+  <a href="docs/demos.md">More feature demos →</a>
 </p>
 
 ## Highlights

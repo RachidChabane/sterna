@@ -390,8 +390,14 @@ function BranchSection({ plan, clonedRepo }: { plan: AgentPlan; clonedRepo: Clon
         ) : null}
       </div>
 
-      {/* Plan title */}
-      <div className="text-xs text-muted-foreground mt-1 truncate">{plan.title}</div>
+      {/* Plan title — wraps rather than truncates. `truncate` implies
+          `white-space: nowrap`, which gives this element a min-content width
+          equal to the whole (often sentence-length) title; inside the side
+          panel that raised the ScrollArea wrapper's shrink-to-fit floor and
+          stretched the entire plan detail past the panel, clipping it. Beyond
+          that layout hazard, an ellipsis here hid the end of the title with no
+          way to reveal it, since this card has no tooltip or expansion. */}
+      <div className="text-xs text-muted-foreground mt-1 break-words">{plan.title}</div>
 
       {/* Commits list */}
       {isLoading ? (

@@ -46,9 +46,11 @@ class KnowledgeBaseConfig:
         settings, 'KNOWLEDGE_BASE_DEFAULT_STORAGE_MB',
         100
     )
+    # Cosine scores from text-embedding-3-large rarely exceed ~0.6 even for
+    # strong matches, so a 0.7 floor silently filters out every result.
     default_similarity_threshold: float = getattr(
         settings, 'KNOWLEDGE_BASE_DEFAULT_SIMILARITY_THRESHOLD',
-        0.7
+        0.4
     )
     default_max_chunks_per_query: int = getattr(
         settings, 'KNOWLEDGE_BASE_DEFAULT_MAX_CHUNKS',

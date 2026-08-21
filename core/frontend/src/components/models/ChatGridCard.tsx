@@ -42,6 +42,7 @@ import { pricingUtils } from '@/lib/pricing-utils'
 import { useAuthStore } from '@/store/authStore'
 import { assetsAPI } from '@/api/assets'
 import { useToast } from '@/hooks/use-toast'
+import { formatLatencyFromSeconds } from '@/utils/latency'
 import type { Chat, Model, Message, Attachment, FileAttachment } from './types'
 import type { ModelCatalogEntry } from '@/types/models'
 
@@ -124,10 +125,11 @@ export const ChatGridCard = memo(function ChatGridCard({
     return pricingUtils.formatCost(cost)
   }, [])
 
-  const formatLatency = useCallback((latency: number | null | undefined) => {
-    if (latency === null || latency === undefined) return ''
-    return `${(latency / 1000).toFixed(2)}s`
-  }, [])
+  const formatLatency = useCallback(
+    (latency: number | null | undefined) =>
+      formatLatencyFromSeconds(latency ?? undefined, ''),
+    []
+  )
 
   // File preview handlers
   const handleOpenImageGallery = useCallback((images: { src: string; alt: string }[], selectedIndex: number) => {
