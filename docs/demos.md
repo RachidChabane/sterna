@@ -6,7 +6,7 @@ turn in these clips is real. The short tour on the [README](../README.md) is the
 condensed version; each clip below shows one capability end to end.
 
 Each GIF is silent and loops. The source `.mp4` masters are 1280x800 and are not
-committed to the repository.
+committed to the repository; each clip links its mp4 master from the [v0.1.0 release](https://github.com/RachidChabane/sterna/releases/tag/v0.1.0).
 
 ---
 
@@ -19,6 +19,8 @@ its sandbox. The Plans tab then holds the plan it wrote — summary, numbered st
 and the source issue — behind an **Implement Plan** button.
 
 <img src="images/demo-issue-to-plan.gif" alt="Planning a real GitHub issue: the Issues tab, the agent working, and the saved plan with an Implement Plan button" width="900">
+
+[Watch the mp4 version](https://github.com/RachidChabane/sterna/releases/download/v0.1.0/issue-to-plan.mp4) (sharper, seekable).
 
 ---
 
@@ -35,6 +37,8 @@ are a single unedited session.
 
 <img src="images/demo-multimodal-tools.gif" alt="A single chat showing reasoning sections, sandboxed Python execution with its output, and a generated image" width="900">
 
+[Watch the mp4 version](https://github.com/RachidChabane/sterna/releases/download/v0.1.0/multimodal-tools.mp4) (sharper, seekable).
+
 ---
 
 ## Knowledge base
@@ -46,6 +50,8 @@ chunks are listed with their match scores and can be expanded to the exact text
 the model was given.
 
 <img src="images/demo-knowledge-base.gif" alt="The Knowledge Base page, its retrieval settings, and a chat answer with expandable cited source chunks" width="900">
+
+[Watch the mp4 version](https://github.com/RachidChabane/sterna/releases/download/v0.1.0/knowledge-base.mp4) (sharper, seekable).
 
 ---
 
@@ -62,6 +68,8 @@ and the only one recorded in dark mode, as voice rooms tend to be used.
 
 <img src="images/demo-voice-room-live.gif" alt="A live voice room: two AI agents answering a spoken question in turn, with live captions and a saved transcript" width="900">
 
+[Watch the mp4 version](https://github.com/RachidChabane/sterna/releases/download/v0.1.0/voice-room-live.mp4) (sharper, seekable). Includes the session's real synthesized speech.
+
 ---
 
 ## Single chat and cost accounting
@@ -72,3 +80,5 @@ measured latency, prompt and completion tokens, and what that single message
 cost. Every message in Sterna carries this.
 
 <img src="images/demo-single-chat.gif" alt="A streaming chat answer followed by its per-message popover showing latency, token counts and cost" width="900">
+
+[Watch the mp4 version](https://github.com/RachidChabane/sterna/releases/download/v0.1.0/single-chat.mp4) (sharper, seekable).
