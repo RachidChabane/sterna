@@ -24,6 +24,10 @@ is a full-stack system rather than a wrapper around one API: Django and Celery,
 FastAPI microservices, a React SPA, a Docker sandbox, Postgres with pgvector,
 and Kubernetes and Terraform for the infrastructure.
 
+<p align="center">
+  <img src="docs/images/demo.gif" alt="Sterna in 45 seconds: multi-model chat, sandboxed coding agent IDE, implementation plans, voice rooms, Sparks, and MCP connectors" width="900">
+</p>
+
 ## Highlights
 
 - **Multi-model side-by-side chat.** Run several models in parallel columns,
