@@ -1,0 +1,128 @@
+# =============================================================================
+# Database Backup CronJob
+# =============================================================================
+# Runs daily at 2 AM UTC to backup PostgreSQL to Cloudflare R2
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: database-backup
+  namespace: sterna
+  labels:
+    app.kubernetes.io/name: database-backup
+    app.kubernetes.io/component: backup
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800  # 30 minutes max
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: database-backup
+            app.kubernetes.io/component: backup
+        spec:
+          serviceAccountName: backup
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+
+          # Wait for database to be ready
+          initContainers:
+            - name: wait-for-db
+              image: postgres:16-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Parse DATABASE_URL for connection check
+                  DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:]+):([0-9]+)/.*|\1|')
+                  DB_PORT=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:]+):([0-9]+)/.*|\2|')
+
+                  echo "Waiting for database at ${DB_HOST}:${DB_PORT}..."
+                  for i in $(seq 1 30); do
+                    if pg_isready -h "$DB_HOST" -p "$DB_PORT" -q; then
+                      echo "Database is ready"
+                      exit 0
+                    fi
+                    echo "Attempt $i/30: Database not ready, waiting..."
+                    sleep 2
+                  done
+                  echo "Database not ready after 30 attempts"
+                  exit 1
+              envFrom:
+                - secretRef:
+                    name: database-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+
+          containers:
+            - name: backup
+              image: postgres:16-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Install AWS CLI for R2 uploads
+                  apk add --no-cache aws-cli bash
+
+                  # Run backup script
+                  chmod +x /scripts/*.sh
+                  /scripts/backup.sh
+              env:
+                - name: ENVIRONMENT
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.labels['environment']
+              envFrom:
+                - secretRef:
+                    name: database-secrets
+                - secretRef:
+                    name: storage-secrets
+                - secretRef:
+                    name: alerting-secrets
+                    optional: true
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                - name: tmp
+                  mountPath: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+                limits:
+                  cpu: 500m
+                  memory: 1Gi
+
+          volumes:
+            - name: scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0755
+            - name: tmp
+              emptyDir:
+                sizeLimit: 2Gi

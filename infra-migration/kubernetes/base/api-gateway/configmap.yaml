@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-config
+  namespace: sterna
+data:
+  # Rate limiting defaults
+  GATEWAY_DEFAULT_RATE_LIMIT: "1000"
+
+  # Upstream service routes (cluster-internal DNS)
+  GATEWAY_ROUTES: |
+    {
+      "/api/v1/auth": "http://web:8000",
+      "/api/v1/users": "http://web:8000",
+      "/api/v1/llm": "http://web:8000",
+      "/api/v1/rooms": "http://web:8000",
+      "/api/v1/sandbox": "http://orchestrator:8003",
+      "/api/v1/search": "http://brave-search:8000",
+      "/api/v1/preferences": "http://user-preferences:8000"
+    }
+
+  # Public paths (no auth required) - JSON array format for pydantic-settings
+  GATEWAY_PUBLIC_PATHS: '["/health","/ready","/api/v1/auth/login","/api/v1/auth/register","/api/v1/auth/refresh","/api/v1/auth/google","/api/v1/auth/google/callback"]'
+
+  # Endpoint-specific rate limits
+  GATEWAY_ENDPOINT_LIMITS: |
+    {
+      "/api/v1/llm": {"limit": 100, "window": 60},
+      "/api/v1/auth/login": {"limit": 10, "window": 60},
+      "/api/v1/auth/register": {"limit": 5, "window": 60},
+      "/api/v1/sandbox": {"limit": 30, "window": 60}
+    }

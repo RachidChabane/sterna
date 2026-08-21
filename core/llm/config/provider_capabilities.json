@@ -1,0 +1,31 @@
+{
+  "stream_cancellation": {
+    "supported_slugs": [
+      "openai",
+      "azure",
+      "anthropic",
+      "fireworks",
+      "mancer",
+      "novita",
+      "deepinfra",
+      "together",
+      "cohere",
+      "hyperbolic",
+      "infermatic",
+      "avian",
+      "xai",
+      "cloudflare",
+      "nineteen",
+      "liquid",
+      "friendli",
+      "chutes",
+      "deepseek"
+    ],
+    "source": "https://openrouter.ai/docs/api-reference/streaming",
+    "fetched_at": "2025-10-16T16:30:00.000000",
+    "expires_at": "2025-10-23T16:30:00.000000",
+    "note": "Manually curated list based on OpenRouter documentation"
+  },
+  "last_verified": "2025-10-16T16:30:00.000000",
+  "note": "This is a fallback configuration used when web scraping fails"
+}

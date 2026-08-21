@@ -1,0 +1,85 @@
+# Sandbox IDE Image with OpenVSCode Server
+# Extends the base sandbox image with an embedded web IDE
+
+FROM python:3.11-slim-bookworm
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    wget \
+    tar \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install OpenVSCode Server
+ARG OPENVSCODE_VERSION=1.85.1
+ARG TARGETARCH
+
+# Map Docker's TARGETARCH to OpenVSCode's architecture naming
+# Docker: amd64 → OpenVSCode: x64
+# Docker: arm64 → OpenVSCode: arm64
+RUN ARCH=$([ "$TARGETARCH" = "amd64" ] && echo "x64" || echo "arm64") && \
+    wget -q "https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v${OPENVSCODE_VERSION}/openvscode-server-v${OPENVSCODE_VERSION}-linux-${ARCH}.tar.gz" \
+    -O /tmp/openvscode-server.tar.gz && \
+    mkdir -p /opt/openvscode-server && \
+    tar -xzf /tmp/openvscode-server.tar.gz -C /opt/openvscode-server --strip-components=1 && \
+    rm /tmp/openvscode-server.tar.gz
+
+# Create sandboxuser (non-root) with fixed UID/GID
+RUN groupadd -g 1000 sandboxuser && \
+    useradd -u 1000 -g sandboxuser -m -s /bin/bash sandboxuser
+
+# Create necessary directories
+RUN mkdir -p /workspace /home/sandboxuser/.openvscode-server && \
+    chown -R sandboxuser:sandboxuser /workspace /home/sandboxuser /opt/openvscode-server
+
+# Create tmpfs mount points
+RUN mkdir -p /tmp /run/secrets && \
+    chown sandboxuser:sandboxuser /tmp /run/secrets
+
+# Install common development tools for sandboxuser
+USER sandboxuser
+
+# Install Python packages in user space
+RUN pip install --user --no-cache-dir \
+    python-lsp-server[all] \
+    pylint \
+    black \
+    isort \
+    mypy
+
+# Install Node.js (optional, for JS/TS development)
+# Using nvm to install as non-root
+ENV NVM_DIR=/home/sandboxuser/.nvm
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash && \
+    . $NVM_DIR/nvm.sh && \
+    nvm install --lts && \
+    nvm use --lts && \
+    npm install -g typescript typescript-language-server
+
+# Configure OpenVSCode Server
+ENV VSCODE_SERVER_DIR=/opt/openvscode-server
+ENV PATH="${VSCODE_SERVER_DIR}/bin:${PATH}"
+
+# Set working directory
+WORKDIR /workspace
+
+# Expose OpenVSCode Server port
+EXPOSE 3000
+
+# Health check - OpenVSCode Server doesn't have /healthz, use root endpoint
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:3000/ || exit 1
+
+# Start OpenVSCode Server
+CMD ["/opt/openvscode-server/bin/openvscode-server", \
+     "--host", "0.0.0.0", \
+     "--port", "3000", \
+     "--without-connection-token", \
+     "--accept-server-license-terms"]
+
+# Metadata
+LABEL org.opencontainers.image.title="Sterna Sandbox IDE"
+LABEL org.opencontainers.image.description="Secure sandboxed IDE with OpenVSCode Server"
+LABEL org.opencontainers.image.vendor="Sterna"

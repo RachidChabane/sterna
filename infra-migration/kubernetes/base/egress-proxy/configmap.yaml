@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: egress-proxy-config
+  namespace: sterna
+data:
+  # Allowed domains for sandbox egress
+  ALLOWED_DOMAINS: |
+    api.anthropic.com
+    api.openai.com
+    api.github.com
+    github.com
+    raw.githubusercontent.com
+    pypi.org
+    files.pythonhosted.org
+    registry.npmjs.org
+    cdn.jsdelivr.net
+    unpkg.com
+    esm.sh
+    deno.land
+
+  # Rate limiting
+  RATE_LIMIT_PER_SANDBOX: "100"
+  RATE_LIMIT_WINDOW: "60"
+
+  # Request limits
+  MAX_REQUEST_SIZE: "10485760"
+  MAX_RESPONSE_SIZE: "104857600"
+
+  # Logging
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  LOG_BLOCKED_REQUESTS: "true"

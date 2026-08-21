@@ -1,0 +1,87 @@
+# RBAC for sandbox orchestrator to manage sandbox pods
+# The orchestrator needs to create/delete/manage pods in the sandboxes namespace
+# Note: sterna-sandboxes namespace is defined in base/sandboxes-namespace.yaml
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sandbox-manager
+  namespace: sterna-sandboxes
+rules:
+  # Pod management for sandboxes
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete", "get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+  # Services for sandbox network access
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  # ConfigMaps for sandbox configuration
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  # Secrets for sandbox credentials
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  # PVCs for sandbox persistent storage
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  # Network policies for sandbox isolation
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  # Resource quotas for cost control
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: orchestrator-sandbox-manager
+  namespace: sterna-sandboxes
+subjects:
+  - kind: ServiceAccount
+    name: orchestrator
+    namespace: sterna
+roleRef:
+  kind: Role
+  name: sandbox-manager
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ClusterRole for reading RuntimeClasses (gVisor)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: runtime-class-reader
+rules:
+  - apiGroups: ["node.k8s.io"]
+    resources: ["runtimeclasses"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orchestrator-runtime-class-reader
+subjects:
+  - kind: ServiceAccount
+    name: orchestrator
+    namespace: sterna
+roleRef:
+  kind: ClusterRole
+  name: runtime-class-reader
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,42 @@
+# Python Package Index (PyPI)
+pypi.org
+files.pythonhosted.org
+pythonhosted.org
+
+# Node.js / npm
+npmjs.com
+npmjs.org
+registry.npmjs.org
+www.npmjs.com
+www.npmjs.org
+
+# Yarn
+yarnpkg.com
+registry.yarnpkg.com
+
+# GitHub (for git clones and package dependencies)
+github.com
+raw.githubusercontent.com
+githubusercontent.com
+codeload.github.com
+
+# Ubuntu repositories (for apt packages)
+archive.ubuntu.com
+security.ubuntu.com
+
+# OpenRouter (for Coding Agent CLI / Coding Agent)
+openrouter.ai
+api.openrouter.ai
+
+# Anthropic (Claude CLI requires direct API access + telemetry)
+api.anthropic.com
+statsig.anthropic.com
+
+# Documentation sites
+docs.python.org
+numpy.org
+pandas.pydata.org
+matplotlib.org
+scikit-learn.org
+nodejs.org
+developer.mozilla.org

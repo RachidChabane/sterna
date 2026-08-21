@@ -1,0 +1,102 @@
+---
+title: Privacy Policy
+last_updated: 2026-05-21
+version: 1.0.0
+---
+
+This Privacy Policy explains what personal data Sterna ("we", "us") collects when you use the Sterna consumer AI platform (the "Service"), why we collect it, who we share it with, and the rights you have over it.
+
+We aim for plain language. If anything is unclear, email us at `privacy@example.com`.
+
+## Identity of the data controller
+
+Sterna is operated by [FIXME — lawyer review needed: legal entity name and registered address] (the "data controller").
+
+You can reach us about any privacy matter at `privacy@example.com`. If you are an EU resident and we have not designated a representative under GDPR Art. 27, contact the same address. [FIXME — lawyer review needed: appoint or document the EU representative].
+
+## Categories of personal data we process
+
+When you use the Service we collect:
+
+- **Account data** — email address; full name; password hash (when you sign up with email); OAuth profile data (name, avatar URL, provider user ID) when you sign in with Google or GitHub.
+- **Chat content** — the prompts you send, files you upload, and the AI responses generated for you. This includes messages exchanged in chats, voice rooms, and image / video generation sessions.
+- **Billing metadata** — payment status and subscription level from Stripe. We do not receive your full card number; Stripe holds that data.
+- **Connection data** — IP address, browser user-agent, approximate location derived from IP (country / region only), and the rough timestamps of your sessions. We use this for rate limiting, abuse detection, and security forensics.
+- **Device fingerprint** — a coarse hash of browser characteristics used solely to detect account-sharing abuse.
+- **Diagnostic data** — application logs containing request IDs, error stacks, and feature flags. We strip personal identifiers from these logs before persistence where feasible.
+
+## Why we process your data (purposes)
+
+We process the data above to:
+
+1. Deliver the Service to you (run chats, render outputs, store your work).
+2. Bill your subscription and prevent payment fraud.
+3. Keep the Service secure (rate-limit abuse, detect compromised accounts, comply with takedown requests).
+4. Improve the product through aggregated analytics (which features are used, where users encounter errors).
+5. Communicate with you about account activity, security alerts, and (with your consent) product news.
+
+## Legal basis (GDPR Art. 6)
+
+| Purpose | Legal basis |
+|---|---|
+| Service delivery (account, chats, billing) | Contract — Art. 6(1)(b) |
+| Security, fraud prevention, abuse detection | Legitimate interest — Art. 6(1)(f) |
+| Product analytics | Consent — Art. 6(1)(a) |
+| Marketing communications | Consent — Art. 6(1)(a), withdrawable at any time |
+| Legal record-keeping (Stripe invoices, tax records) | Legal obligation — Art. 6(1)(c) |
+
+## Recipients (sub-processors)
+
+We rely on the following sub-processors to operate the Service. Each is bound by data-protection terms equivalent to our obligations to you.
+
+- **Stripe, Inc.** — payments and subscription management — United States
+- **Neon, Inc.** — managed PostgreSQL database — United States
+- **Scaleway SAS** — compute, sandboxing, object storage — France
+- **Cloudflare, Inc.** — edge proxy, DDoS protection, DNS — United States
+- **OpenRouter, Inc.** — LLM gateway routing to upstream providers — United States
+- **ElevenLabs, Inc.** — text-to-speech — United States
+- **Deepgram, Inc.** — speech-to-text — United States
+- **Resend** — transactional email — United States
+
+We update this list as vendors change; check the most recent version above the "Last updated" date at the top of the page. [FIXME — lawyer review needed: confirm final list with legal basis for each transfer].
+
+## International transfers
+
+When your data is sent to a sub-processor in a country outside the European Economic Area, we rely on Standard Contractual Clauses (SCCs) published by the European Commission, supplemented by encryption in transit and at rest. Where the recipient is in a country covered by an EU adequacy decision (e.g. the United Kingdom), we rely on that decision.
+
+The SCC text is available at <https://commission.europa.eu/law/law-topic/data-protection/international-dimension-data-protection/standard-contractual-clauses-scc_en>.
+
+## Retention periods
+
+- **Active account data** — for as long as your account is open.
+- **Deleted account** — 30-day soft-delete window for recovery, then we hard-purge identifying data.
+- **Chat history** — until you delete it or until your account is hard-deleted.
+- **Server logs** — 90 days, rolling.
+- **Stripe billing records** — 10 years to satisfy tax and accounting obligations.
+- **Security incident records** — up to 2 years after closure of the incident.
+
+## Your rights (GDPR Art. 15–22)
+
+You have the right to:
+
+- **Access** your data (Art. 15).
+- **Rectify** inaccurate data (Art. 16).
+- **Erase** your data (Art. 17), subject to overriding legal obligations such as billing records.
+- **Restrict** processing (Art. 18).
+- **Port** your data to another provider (Art. 20).
+- **Object** to processing based on legitimate interests (Art. 21).
+- **Withdraw consent** at any time for processing that relies on your consent.
+
+To exercise any of these, go to Settings → Account → Data, or email `privacy@example.com`. We respond within 30 days.
+
+## Right to lodge a complaint
+
+If you believe we are mishandling your data, you can complain to the data-protection authority for your country. For French residents, that is the CNIL (Commission Nationale de l'Informatique et des Libertés) — <https://www.cnil.fr/en/plaintes>. [FIXME — lawyer review needed: confirm the correct French DPA contact URL if Sterna is established outside France].
+
+## Children's data
+
+The Service is not directed to children under 16. We do not knowingly collect data from anyone under that age. If you believe a child has created an account, contact `privacy@example.com` and we will delete it.
+
+## Changes to this policy
+
+We will email you at least 30 days before a material change takes effect. The version and "Last updated" badge at the top of this page identify the current text. Continued use of the Service after the change takes effect is treated as acceptance.

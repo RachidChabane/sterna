@@ -1,0 +1,230 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sterna
+
+namePrefix: production-
+nameSuffix: ""
+
+resources:
+  - ../../base
+  - pdb.yaml
+
+# Rewrite every sternaway-staging-* Scaleway remoteRef to
+# sternaway-production-* (shared component, also used by the
+# standalone overlays/production-external-secrets kustomization).
+# See infra-migration/README.md for the secrets that must exist.
+components:
+  - ../../components/production-secret-names
+
+# Production-specific patches
+patches:
+  # Add imagePullSecrets to all deployments.
+  # The patch file's `__SECRET_NAME__` placeholder is rewritten by the
+  # deploy workflow to `scaleway-registry` (legacy) or `ghcr-registry`
+  # (Hetzner path). See .github/workflows/deploy-production.yml.
+  - path: patches/image-pull-secret.yaml
+    target:
+      kind: Deployment
+  # Increase resource limits for production
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 2Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 1000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 512Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 200m
+    target:
+      kind: Deployment
+      name: web
+
+  # Increase Redis memory for production
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/args
+        value:
+          - redis-server
+          - --appendonly
+          - "yes"
+          - --maxmemory
+          - "1gb"
+          - --maxmemory-policy
+          - "allkeys-lru"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 1Gi
+    target:
+      kind: Deployment
+      name: redis
+
+  # ConfigMap overrides for production (strategic-merge patches — the
+  # same pattern as overlays/staging/kustomization.yaml; a
+  # configMapGenerator with behavior:merge cannot merge into ConfigMaps
+  # that come from plain base resources, only into generated ones).
+  # NOTE: Service URLs must use production- prefixed names due to the
+  # kustomize namePrefix.
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: common-config
+      data:
+        ENVIRONMENT: "production"
+        LOG_LEVEL: "WARNING"
+    target:
+      kind: ConfigMap
+      name: common-config
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: frontend-config
+      data:
+        # The frontend is a Vite app — env keys are VITE_* (the
+        # ExternalSecret frontend-secrets provides the same keys; these
+        # ConfigMap values are the non-sensitive production defaults).
+        VITE_API_URL: "https://api.sternaway.ai"
+        VITE_WS_URL: "wss://api.sternaway.ai"
+        VITE_ENABLE_ANALYTICS: "true"
+    target:
+      kind: ConfigMap
+      name: frontend-config
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: web-config
+      data:
+        DEBUG: "false"
+        CORS_ALLOWED_ORIGINS: "https://sternaway.ai,https://app.sternaway.ai"
+        # Internal service URLs with production prefix
+        REDIS_URL: "redis://production-redis:6379/0"
+        ORCHESTRATOR_URL: "http://production-orchestrator:8003"
+        BRAVE_SEARCH_URL: "http://production-brave-search:8000"
+        USER_PREFERENCES_URL: "http://production-user-preferences:8000"
+        CONSIGLIERE_URL: "http://production-consigliere:8000"
+    target:
+      kind: ConfigMap
+      name: web-config
+
+  # API Gateway config with production service names
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: api-gateway-config
+      data:
+        GATEWAY_ROUTES: |
+          {
+            "/api/v1/auth": "http://production-web:8000",
+            "/api/v1/users": "http://production-web:8000",
+            "/api/v1/llm": "http://production-web:8000",
+            "/api/v1/rooms": "http://production-web:8000",
+            "/api/v1/voice-rooms": "http://production-web:8000",
+            "/api/v1/sandbox": "http://production-orchestrator:8003",
+            "/api/v1/search": "http://production-brave-search:8000",
+            "/api/v1/preferences": "http://production-user-preferences:8000",
+            "/api/v1/consigliere": "http://production-consigliere:8000",
+            "/api/v1/maps": "http://production-google-maps:8005"
+          }
+        GATEWAY_REDIS_URL: "redis://production-redis:6379/1"
+        # JSON array (pydantic-settings env convention, see
+        # GATEWAY_PUBLIC_PATHS). Credentialed CORS requires an explicit
+        # origin list — the gateway refuses to start on a wildcard.
+        GATEWAY_CORS_ORIGINS: '["https://sternaway.ai","https://app.sternaway.ai"]'
+        # base/api-gateway never sets this, so it would otherwise default
+        # to "development" here too — which would make a stray
+        # GATEWAY_ALLOW_INSECURE_JWT_SECRET=true live in production
+        # instead of the no-op it's meant to be (gateway/config.py).
+        GATEWAY_ENVIRONMENT: "production"
+    target:
+      kind: ConfigMap
+      name: api-gateway-config
+
+  # Orchestrator config with production service names
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: orchestrator-config
+      data:
+        EGRESS_PROXY_URL: "http://production-egress-proxy:8888"
+    target:
+      kind: ConfigMap
+      name: orchestrator-config
+
+  # Fix ExternalSecrets secretStoreRef to use prefixed name
+  - patch: |-
+      - op: replace
+        path: /spec/secretStoreRef/name
+        value: production-scaleway-secret-store
+    target:
+      kind: ExternalSecret
+
+  # Add environment label to backup CronJobs for script to detect environment
+  - patch: |-
+      - op: add
+        path: /spec/jobTemplate/spec/template/metadata/labels/environment
+        value: production
+    target:
+      kind: CronJob
+      labelSelector: app.kubernetes.io/component=backup
+
+  # Increase backup job resources for production (larger database)
+  - patch: |-
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/resources/limits/memory
+        value: 2Gi
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/resources/limits/cpu
+        value: 1000m
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/resources/requests/memory
+        value: 1Gi
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/resources/requests/cpu
+        value: 500m
+    target:
+      kind: CronJob
+      name: database-backup
+
+# Production images - using Scaleway Container Registry
+# Format: rg.<region>.scw.cloud/<namespace>/<image>:<tag>
+images:
+  - name: ghcr.io/sterna-ai/api-gateway
+    newName: rg.fr-par.scw.cloud/sternaway-production/api-gateway
+    newTag: latest
+  - name: ghcr.io/sterna-ai/web
+    newName: rg.fr-par.scw.cloud/sternaway-production/web
+    newTag: latest
+  - name: ghcr.io/sterna-ai/frontend
+    newName: rg.fr-par.scw.cloud/sternaway-production/frontend
+    newTag: latest
+  - name: ghcr.io/sterna-ai/orchestrator
+    newName: rg.fr-par.scw.cloud/sternaway-production/orchestrator
+    newTag: latest
+  - name: ghcr.io/sterna-ai/sandbox-datascience
+    newName: rg.fr-par.scw.cloud/sternaway-production/sandbox-datascience
+    newTag: latest
+  - name: ghcr.io/sterna-ai/egress-proxy
+    newName: rg.fr-par.scw.cloud/sternaway-production/egress-proxy
+    newTag: latest
+  - name: ghcr.io/sterna-ai/brave-search
+    newName: rg.fr-par.scw.cloud/sternaway-production/brave-search
+    newTag: latest
+  - name: ghcr.io/sterna-ai/user-preferences
+    newName: rg.fr-par.scw.cloud/sternaway-production/user-preferences
+    newTag: latest
+  - name: ghcr.io/sterna-ai/google-maps
+    newName: rg.fr-par.scw.cloud/sternaway-production/google-maps
+    newTag: latest
+  # consigliere, celery-worker, celery-beat use the web image (no separate entry needed)
+
+commonLabels:
+  environment: production

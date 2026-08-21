@@ -1,0 +1,75 @@
+[
+    {
+        "model": "usage_quota.subscriptionplan",
+        "pk": "00000000-0000-0000-0000-000000000001",
+        "fields": {
+            "name": "free",
+            "display_name": "Free Plan",
+            "description": "Basic access with limited usage",
+            "weekly_limit_usd": "50.00",
+            "session_limit_usd": "20.00",
+            "features": {
+                "chat": true,
+                "voice_rooms": true,
+                "code_sessions": false,
+                "search": true
+            },
+            "chat_weekly_limit_usd": null,
+            "voice_room_weekly_limit_usd": null,
+            "code_session_weekly_limit_usd": null,
+            "is_active": true,
+            "is_default": true,
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "usage_quota.subscriptionplan",
+        "pk": "00000000-0000-0000-0000-000000000002",
+        "fields": {
+            "name": "pro",
+            "display_name": "Pro Plan",
+            "description": "Full access with higher limits",
+            "weekly_limit_usd": "200.00",
+            "session_limit_usd": "50.00",
+            "features": {
+                "chat": true,
+                "voice_rooms": true,
+                "code_sessions": true,
+                "search": true
+            },
+            "chat_weekly_limit_usd": null,
+            "voice_room_weekly_limit_usd": null,
+            "code_session_weekly_limit_usd": null,
+            "is_active": true,
+            "is_default": false,
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "usage_quota.subscriptionplan",
+        "pk": "00000000-0000-0000-0000-000000000003",
+        "fields": {
+            "name": "enterprise",
+            "display_name": "Enterprise Plan",
+            "description": "Unlimited access for teams",
+            "weekly_limit_usd": "100.00",
+            "session_limit_usd": "20.00",
+            "features": {
+                "chat": true,
+                "voice_rooms": true,
+                "code_sessions": true,
+                "search": true,
+                "priority_support": true
+            },
+            "chat_weekly_limit_usd": null,
+            "voice_room_weekly_limit_usd": null,
+            "code_session_weekly_limit_usd": null,
+            "is_active": true,
+            "is_default": false,
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z"
+        }
+    }
+]

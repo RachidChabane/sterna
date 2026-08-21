@@ -1,0 +1,38 @@
+# API Gateway Dependencies
+
+# Web framework
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+starlette==0.36.3
+
+# HTTP client for proxying
+httpx==0.26.0
+
+# WebSocket client for proxying WS connections to backends
+websockets>=12.0
+
+# JWT handling
+PyJWT==2.8.0
+
+# Redis for rate limiting
+redis==5.0.1
+
+# Configuration
+pydantic-settings==2.1.0
+
+# Multipart form handling
+python-multipart==0.0.9
+
+# Testing
+pytest>=8.2.0
+pytest-asyncio>=0.24.0
+pytest-cov==4.1.0
+httpx[http2]==0.26.0
+
+# Type checking
+mypy==1.8.0
+types-redis==4.6.0
+
+# Structured logging + error tracking (task-21)
+python-json-logger==3.2.1
+sentry-sdk==2.20.0

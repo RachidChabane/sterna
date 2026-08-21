@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: common-config
+  namespace: sterna
+data:
+  # Service discovery URLs (internal cluster DNS)
+  # NOTE: Redis URL is overridden per environment in web-config
+  # REDIS_URL is set via secrets or overlay patches with correct service name
+  POSTGRES_HOST: "neon-pooler"  # Overridden per environment
+
+  # Feature flags
+  ENABLE_SANDBOX: "true"
+  ENABLE_MCP: "true"
+
+  # Logging
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+
+  # Timeouts
+  REQUEST_TIMEOUT: "30"
+  SANDBOX_IDLE_TIMEOUT: "3600"
+
+  # Used to synthesize per-environment names (e.g. sternaway-backups-<env>).
+  # Overlays MUST set this to "staging" or "production"; leaving it "unset"
+  # makes the synthesized bucket name not match any real bucket and the
+  # backup task fails loudly instead of silently writing to the wrong env.
+  ENVIRONMENT: "unset"

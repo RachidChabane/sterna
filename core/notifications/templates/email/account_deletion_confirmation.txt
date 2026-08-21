@@ -1,0 +1,12 @@
+{% extends "email/base.txt" %}{% load i18n %}
+{% block content %}
+{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}
+
+{% blocktrans with brand=brand_name %}We've received your request to delete your {{ brand }} account.{% endblocktrans %}
+
+{% blocktrans with days=grace_days %}Your account will be permanently deleted in {{ days }} days. Until then, you can cancel this request at any time.{% endblocktrans %}
+
+{% trans "Cancel deletion:" %} {{ action_url }}
+
+{% trans "Request ID:" %} {{ request_id }}
+{% endblock %}

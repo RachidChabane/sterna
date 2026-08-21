@@ -1,0 +1,10 @@
+# Default deny all ingress in sandboxes namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: sterna-sandboxes
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress

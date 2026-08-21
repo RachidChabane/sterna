@@ -1,0 +1,859 @@
+name: CI
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master, develop]
+  workflow_dispatch:
+
+# Least-privilege default: read-only. Jobs that need more (version-bump
+# commit/push, PR comments, package pushes, SARIF upload) elevate at the
+# job level — see `changes`, `build`, `security-scan` below.
+permissions:
+  contents: read
+
+env:
+  # Branch configuration
+  MAIN_BRANCH: master
+  STAGING_BRANCH: develop
+  # Infrastructure directory prefix (contains terraform/ and kubernetes/)
+  INFRA_DIR: infra-migration
+  # GitHub Container Registry (GHCR) — primary image registry as of
+  # task 27. Owner is resolved per-job to lowercase via the
+  # `Resolve GHCR owner` step; never reference
+  # ${{ github.repository_owner }} directly in image paths (Docker
+  # rejects mixed-case namespaces).
+  GHCR_REGISTRY: ghcr.io
+
+jobs:
+  # Detect which services have changes and bump their versions
+  changes:
+    name: Detect Changes & Version
+    runs-on: ubuntu-latest
+    # Needs write to commit + push the version bump (see "Commit version
+    # bumps" below). Write subsumes read, so no separate `contents: read`.
+    permissions:
+      contents: write
+    outputs:
+      # On workflow_dispatch, build all services; otherwise use path filter
+      api-gateway: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.api-gateway }}
+      web: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.web }}
+      frontend: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.frontend }}
+      orchestrator: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.orchestrator }}
+      egress-proxy: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.egress-proxy }}
+      brave-search: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.brave-search }}
+      user-preferences: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.user-preferences }}
+      google-maps: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.google-maps }}
+      sandbox-datascience: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.sandbox-datascience }}
+      any-service: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.any-service }}
+      infra: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.infra }}
+      docs: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.docs }}
+      # Version outputs for each service
+      api-gateway-version: ${{ steps.versions.outputs.api-gateway }}
+      web-version: ${{ steps.versions.outputs.web }}
+      frontend-version: ${{ steps.versions.outputs.frontend }}
+      orchestrator-version: ${{ steps.versions.outputs.orchestrator }}
+      egress-proxy-version: ${{ steps.versions.outputs.egress-proxy }}
+      brave-search-version: ${{ steps.versions.outputs.brave-search }}
+      user-preferences-version: ${{ steps.versions.outputs.user-preferences }}
+      google-maps-version: ${{ steps.versions.outputs.google-maps }}
+      sandbox-datascience-version: ${{ steps.versions.outputs.sandbox-datascience }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api-gateway:
+              - 'core/api-gateway/**'
+            web:
+              - 'core/web/**'
+              - 'core/sterna/**'
+              - 'core/manage.py'
+              - 'core/requirements.txt'
+              - 'core/docker/backend.Dockerfile'
+            frontend:
+              - 'core/frontend/**'
+              - 'core/docker/frontend.Dockerfile'
+            orchestrator:
+              - 'core/sandbox/orchestrator/**'
+            egress-proxy:
+              - 'core/sandbox/runtime/**'
+            brave-search:
+              - 'core/brave-search/**'
+            user-preferences:
+              - 'core/user-preferences-service/**'
+            google-maps:
+              - 'core/google-maps/**'
+            sandbox-datascience:
+              - 'core/sandbox/runtime/Dockerfile.sandbox-datascience'
+              - 'core/sandbox/runtime/Dockerfile.sandbox-base'
+            any-service:
+              - 'core/**'
+            infra:
+              - 'infra-migration/**'
+            docs:
+              - 'docs/**'
+
+      - name: Bump versions for changed services
+        id: versions
+        run: |
+          # Read current versions
+          VERSIONS=$(cat core/versions.json)
+          UPDATED=false
+
+          # Only bump on push events (not PRs)
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Get commit message to determine bump type
+            COMMIT_MSG=$(git log -1 --pretty=%B)
+
+            # Determine bump type from conventional commit
+            if echo "$COMMIT_MSG" | grep -qE "^BREAKING CHANGE:|^[a-z]+(\(.+\))?!:"; then
+              BUMP="major"
+            elif echo "$COMMIT_MSG" | grep -qE "^feat(\(.+\))?:"; then
+              BUMP="minor"
+            else
+              BUMP="patch"
+            fi
+
+            echo "Detected bump type: $BUMP"
+          else
+            BUMP="none"
+            echo "Pull request - not bumping versions"
+          fi
+
+          # Function to bump semver
+          bump_version() {
+            local version=$1
+            local type=$2
+            local major minor patch
+            IFS='.' read -r major minor patch <<< "$version"
+
+            case $type in
+              major) echo "$((major + 1)).0.0" ;;
+              minor) echo "${major}.$((minor + 1)).0" ;;
+              patch) echo "${major}.${minor}.$((patch + 1))" ;;
+            esac
+          }
+
+          # Process each service
+          SERVICES="api-gateway web frontend orchestrator egress-proxy brave-search user-preferences google-maps sandbox-datascience"
+
+          for SERVICE in $SERVICES; do
+            # Check each service individually
+            case $SERVICE in
+              api-gateway) CHANGED="${{ steps.filter.outputs.api-gateway }}" ;;
+              web) CHANGED="${{ steps.filter.outputs.web }}" ;;
+              frontend) CHANGED="${{ steps.filter.outputs.frontend }}" ;;
+              orchestrator) CHANGED="${{ steps.filter.outputs.orchestrator }}" ;;
+              egress-proxy) CHANGED="${{ steps.filter.outputs.egress-proxy }}" ;;
+              brave-search) CHANGED="${{ steps.filter.outputs.brave-search }}" ;;
+              user-preferences) CHANGED="${{ steps.filter.outputs.user-preferences }}" ;;
+              google-maps) CHANGED="${{ steps.filter.outputs.google-maps }}" ;;
+              sandbox-datascience) CHANGED="${{ steps.filter.outputs.sandbox-datascience }}" ;;
+            esac
+
+            CURRENT=$(echo "$VERSIONS" | jq -r ".\"$SERVICE\"")
+
+            if [ "$CHANGED" = "true" ] && [ "$BUMP" != "none" ]; then
+              NEW=$(bump_version "$CURRENT" "$BUMP")
+              VERSIONS=$(echo "$VERSIONS" | jq ".\"$SERVICE\" = \"$NEW\"")
+              echo "$SERVICE: $CURRENT -> $NEW"
+              echo "$SERVICE=$NEW" >> $GITHUB_OUTPUT
+              UPDATED=true
+            else
+              echo "$SERVICE=$CURRENT" >> $GITHUB_OUTPUT
+            fi
+          done
+
+          # Save updated versions (only on push)
+          if [ "$UPDATED" = "true" ]; then
+            echo "$VERSIONS" | jq '.' > core/versions.json
+            echo "versions_updated=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit version bumps
+        if: steps.versions.outputs.versions_updated == 'true' && github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add core/versions.json
+          git commit -m "chore: bump service versions [skip ci]"
+          git push
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.any-service == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        # Pinned to the version in core/venv so local and CI agree.
+        run: |
+          pip install ruff==0.8.6
+
+      - name: Run Ruff
+        run: ruff check .
+
+      # black and mypy were removed from this gate (2026-07-11): neither
+      # has ever passed on this codebase, so they only guaranteed a red
+      # pipeline. Ruff (pinned) is the enforced lint gate. Reintroduce
+      # mypy incrementally per-module if/when annotations reach coverage.
+
+  runbook-lint:
+    name: Runbook Lint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: |
+      needs.changes.outputs.docs == 'true' ||
+      needs.changes.outputs.infra == 'true' ||
+      github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest
+        run: pip install pytest==8.3.4
+
+      - name: Run runbook lint
+        # Asserts every numbered step in cold-bring-up-runbook.md
+        # carries a `**Verify:**` line. See infra-migration/tests/
+        # test_runbook.py for the contract.
+        run: pytest infra-migration/tests/test_runbook.py -v
+
+  frontend-tests:
+    name: Frontend Tests (Vitest)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: core/frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: core/frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Vitest
+        working-directory: core/frontend
+        env:
+          # Vitest setup may need a handful of VITE_* env vars to boot;
+          # add to this list if the suite blows up on import.meta.env
+          # access during setup.
+          VITE_API_BASE_URL: http://localhost:8000
+          VITE_FRONTEND_ENV: ci
+        run: pnpm test -- --run --reporter=verbose
+
+      - name: Type check
+        working-directory: core/frontend
+        run: pnpm typecheck
+
+  frontend-e2e:
+    name: Frontend E2E (Playwright @smoke)
+    runs-on: ubuntu-latest
+    needs: [changes, frontend-tests]
+    # Only on develop/master pushes — keeps PR feedback fast. NOTE:
+    # `env` context is NOT available in job-level `if:` (see the
+    # terraform.yml convention) so the branch names are literal.
+    # `!cancelled()` + explicit result check: without it, a SKIPPED
+    # frontend-tests (backend-only push) silently skips this job too,
+    # even though the E2E suite exercises the backend. Run when
+    # frontend-tests succeeded OR was skipped; never after a failure.
+    if: |
+      !cancelled() &&
+      (needs.frontend-tests.result == 'success' || needs.frontend-tests.result == 'skipped') &&
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop') &&
+      needs.changes.outputs.any-service == 'true'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: core/frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: core/frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: core/frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Seed core/.env from .env.example
+        working-directory: ./core
+        run: |
+          cp .env.example .env
+          # Append CI-only overrides so `web` boots against the
+          # compose services (postgres/redis hostnames) and Django
+          # doesn't reject ALLOWED_HOSTS.
+          {
+            echo ""
+            echo "# CI-only overrides"
+            echo "DATABASE_URL=postgresql://postgres:postgres@postgres:5432/sterna"
+            echo "REDIS_URL=redis://redis:6379/0"
+            echo "DEBUG=False"
+            echo "SECRET_KEY=ci-secret-key-not-for-prod-$(openssl rand -hex 16)"
+            echo "ALLOWED_HOSTS=localhost,127.0.0.1,web"
+          } >> .env
+
+      - name: Start backend stack (web + redis + postgres only)
+        working-directory: ./core
+        run: |
+          # IMPORTANT: do NOT start `frontend` here — Playwright's own
+          # webServer block starts it on port 5173. Starting both
+          # causes a port-5173 collision. See ci-cd runbook §3.
+          # The web service bind-mounts the repo over /app, shadowing
+          # the image's own directory creation; gitignored runtime
+          # dirs (media, staticfiles) must exist on the host. The
+          # image runs as uid 1000 (appuser) while the runner checkout
+          # is uid 1001, so the dirs must be world-writable (throwaway
+          # CI runner only). Logging is console-only (sterna/logging.py)
+          # so `logs/` is not needed here.
+          mkdir -p media staticfiles
+          chmod 777 media staticfiles
+          docker compose up -d web redis postgres
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+              echo "Backend healthy after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -sf http://localhost:8000/health; then
+            echo "Backend never became healthy. Logs:"
+            docker compose logs --tail=100 web
+            docker compose logs --tail=50 postgres redis
+            exit 1
+          fi
+
+      - name: Run Playwright @smoke tests
+        working-directory: core/frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:5173
+        run: pnpm exec playwright test --project=chromium --grep @smoke
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: core/frontend/playwright-report/
+          retention-days: 14
+
+      - name: Tear down
+        if: always()
+        working-directory: ./core
+        run: docker compose down -v
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.any-service == 'true'
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: ./core
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          REDIS_URL: redis://localhost:6379/0
+          DJANGO_SETTINGS_MODULE: sterna.settings.test
+          # 50-char placeholder satisfies Django's SECRET_KEY length
+          # heuristic so settings load cleanly under pytest.
+          SECRET_KEY: ci-test-key-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        working-directory: ./core
+        run: pytest --cov=. --cov-report=xml -v
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  # Standalone pytest suites for the FastAPI microservices. These were
+  # previously never exercised by any CI job (the `test` job only runs
+  # the Django suite in ./core). No paid API keys are needed — the
+  # suites run against local service containers + dummy secrets.
+  microservice-tests:
+    name: Microservice Tests (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.any-service == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api-gateway
+            directory: core/api-gateway
+            python-version: "3.12"
+            # rootdir = its own pyproject.toml [tool.pytest.ini_options]
+            pytest-args: "tests/ -v --tb=short"
+          - service: user-preferences
+            directory: core/user-preferences-service
+            python-version: "3.11"
+            # rootdir = its own pytest.ini (-p no:django included there)
+            pytest-args: "tests/ -v --tb=short"
+          - service: orchestrator
+            directory: core/sandbox/orchestrator
+            python-version: "3.11"
+            # No pytest config of its own — without -c /dev/null pytest
+            # walks up to core/pytest.ini, whose addopts (--reuse-db)
+            # require pytest-django and break the run.
+            pytest-args: "-c /dev/null tests/ -v --tb=short"
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          # user-preferences conftest.py connects to this database
+          POSTGRES_DB: test_preferences
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Alias compose hostnames to localhost
+        # user-preferences tests hardcode host `postgres` (the compose
+        # service name); GH service containers are only reachable via
+        # localhost port mappings on non-container jobs.
+        run: |
+          echo "127.0.0.1 postgres" | sudo tee -a /etc/hosts
+          echo "127.0.0.1 redis" | sudo tee -a /etc/hosts
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.directory }}
+        run: |
+          pip install -r requirements.txt
+          # orchestrator's requirements.txt does not include pytest;
+          # no-op for the other two (already pinned in requirements).
+          pip install pytest
+
+      - name: Run pytest
+        working-directory: ${{ matrix.directory }}
+        env:
+          # user-preferences/orchestrator Settings() requires these at
+          # import time. api-gateway uses the GATEWAY_ prefix instead
+          # (gateway/config.py) and now fails startup on a placeholder
+          # secret, so it needs its own dummy value here too. Neither
+          # var is read by the other two services — harmless no-ops there.
+          DATABASE_URL: postgresql://postgres:postgres@postgres:5432/test_preferences
+          JWT_SECRET_KEY: ci-test-secret-key-not-for-prod
+          GATEWAY_JWT_SECRET_KEY: ci-test-secret-key-not-for-prod
+          # cors_origins has no default (config.py) and credentials are
+          # allowed by default, so this is required at import time too.
+          GATEWAY_CORS_ORIGINS: '["http://localhost:5173"]'
+          REDIS_URL: redis://localhost:6379/0
+        run: pytest ${{ matrix.pytest-args }}
+
+  build:
+    name: Build Images
+    runs-on: ubuntu-latest
+    needs: [changes, lint, test]
+    # `packages: write` lets the workflow PUSH images to GHCR via
+    # `secrets.GITHUB_TOKEN`. GHCR is the primary registry as of task 27.
+    permissions:
+      contents: read
+      packages: write
+    # Only run if at least one service changed
+    if: |
+      always() &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      (needs.changes.outputs.api-gateway == 'true' ||
+       needs.changes.outputs.web == 'true' ||
+       needs.changes.outputs.frontend == 'true' ||
+       needs.changes.outputs.orchestrator == 'true' ||
+       needs.changes.outputs.egress-proxy == 'true' ||
+       needs.changes.outputs.brave-search == 'true' ||
+       needs.changes.outputs.user-preferences == 'true' ||
+       needs.changes.outputs.google-maps == 'true' ||
+       needs.changes.outputs.sandbox-datascience == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api-gateway
+            context: ./core/api-gateway
+            dockerfile: Dockerfile
+            changed: ${{ needs.changes.outputs.api-gateway }}
+            version: ${{ needs.changes.outputs.api-gateway-version }}
+          - service: web
+            context: ./core
+            dockerfile: docker/backend.Dockerfile
+            changed: ${{ needs.changes.outputs.web }}
+            version: ${{ needs.changes.outputs.web-version }}
+          - service: frontend
+            context: ./core
+            dockerfile: docker/frontend.Dockerfile
+            changed: ${{ needs.changes.outputs.frontend }}
+            version: ${{ needs.changes.outputs.frontend-version }}
+          - service: orchestrator
+            context: ./core/sandbox/orchestrator
+            dockerfile: Dockerfile
+            changed: ${{ needs.changes.outputs.orchestrator }}
+            version: ${{ needs.changes.outputs.orchestrator-version }}
+          - service: egress-proxy
+            context: ./core/sandbox/runtime
+            dockerfile: Dockerfile.egress-proxy
+            changed: ${{ needs.changes.outputs.egress-proxy }}
+            version: ${{ needs.changes.outputs.egress-proxy-version }}
+          - service: brave-search
+            context: ./core/brave-search
+            dockerfile: Dockerfile
+            changed: ${{ needs.changes.outputs.brave-search }}
+            version: ${{ needs.changes.outputs.brave-search-version }}
+          - service: user-preferences
+            context: ./core/user-preferences-service
+            dockerfile: Dockerfile
+            changed: ${{ needs.changes.outputs.user-preferences }}
+            version: ${{ needs.changes.outputs.user-preferences-version }}
+          - service: google-maps
+            context: ./core/google-maps
+            dockerfile: Dockerfile
+            changed: ${{ needs.changes.outputs.google-maps }}
+            version: ${{ needs.changes.outputs.google-maps-version }}
+          - service: sandbox-datascience
+            context: ./core/sandbox/runtime
+            dockerfile: Dockerfile.sandbox-datascience
+            changed: ${{ needs.changes.outputs.sandbox-datascience }}
+            version: ${{ needs.changes.outputs.sandbox-datascience-version }}
+
+    steps:
+      - name: Skip if unchanged
+        if: matrix.changed != 'true'
+        run: echo "Skipping ${{ matrix.service }} - no changes detected"
+
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
+
+      - name: Set up Docker Buildx
+        if: matrix.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      # Resolve GHCR owner once per job and reuse downstream. Docker
+      # rejects mixed-case namespaces client-side, so we MUST lowercase
+      # ${{ github.repository_owner }} before forming an image path.
+      - name: Resolve GHCR owner (lowercase)
+        if: matrix.changed == 'true'
+        id: ghcr
+        run: |
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "owner=${owner}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        if: matrix.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ steps.ghcr.outputs.owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        if: matrix.changed == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.GHCR_REGISTRY }}/${{ steps.ghcr.outputs.owner }}/sterna-${{ matrix.service }}
+          tags: |
+            # Semantic version tag (e.g., 1.2.3)
+            type=raw,value=${{ matrix.version }}
+            # Branch-clean tags (preferred form)
+            type=raw,value=${{ env.MAIN_BRANCH }}-latest,enable=${{ github.ref == format('refs/heads/{0}', env.MAIN_BRANCH) }}
+            type=raw,value=${{ env.STAGING_BRANCH }}-latest,enable=${{ github.ref == format('refs/heads/{0}', env.STAGING_BRANCH) }}
+            # Legacy aliases kept so existing deploy workflows' TAG=staging/TAG=latest
+            # logic keeps working during the transition. Task 28 drops them.
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', env.MAIN_BRANCH) }}
+            type=raw,value=staging,enable=${{ github.ref == format('refs/heads/{0}', env.STAGING_BRANCH) }}
+            # SHA for traceability
+            type=sha,prefix=
+
+      # sandbox-datascience builds FROM sandbox-base, which exists in no
+      # public registry — build and push the base first, then point the
+      # datascience build at it. On pull requests nothing is pushed, so
+      # the datascience build is skipped there (base would be unreachable
+      # from the buildx container driver).
+      # The base image bakes a mitmproxy CA into its trust store. The real
+      # CA is generated by the egress proxy at runtime and shared via the
+      # proxy-ca volume; the baked file is a build-time placeholder and is
+      # gitignored (*.pem), so CI generates a throwaway one.
+      - name: Generate placeholder proxy CA for sandbox-base build
+        if: matrix.service == 'sandbox-datascience' && matrix.changed == 'true' && github.event_name != 'pull_request'
+        run: |
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj "/CN=ci-placeholder-mitmproxy-ca" \
+            -keyout /dev/null \
+            -out core/sandbox/runtime/mitmproxy-ca-cert.pem
+
+      - name: Build and push sandbox-base (datascience prerequisite)
+        if: matrix.service == 'sandbox-datascience' && matrix.changed == 'true' && github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/Dockerfile.sandbox-base
+          push: true
+          tags: ${{ env.GHCR_REGISTRY }}/${{ steps.ghcr.outputs.owner }}/sterna-sandbox-base:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Build and push
+        if: matrix.changed == 'true' && !(matrix.service == 'sandbox-datascience' && github.event_name == 'pull_request')
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          build-args: |
+            ${{ matrix.service == 'sandbox-datascience' && format('BASE_IMAGE={0}/{1}/sterna-sandbox-base:{2}', env.GHCR_REGISTRY, steps.ghcr.outputs.owner, github.sha) || '' }}
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.0"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: ./${{ env.INFRA_DIR }}/terraform
+
+      - name: Terraform Init (staging)
+        run: terraform init -backend=false
+        working-directory: ./${{ env.INFRA_DIR }}/terraform/environments/staging
+
+      - name: Terraform Validate (staging)
+        run: terraform validate
+        working-directory: ./${{ env.INFRA_DIR }}/terraform/environments/staging
+
+      - name: Terraform Init (staging-hetzner)
+        run: terraform init -backend=false
+        working-directory: ./${{ env.INFRA_DIR }}/terraform/environments/staging-hetzner
+
+      - name: Terraform Validate (staging-hetzner)
+        run: terraform validate
+        working-directory: ./${{ env.INFRA_DIR }}/terraform/environments/staging-hetzner
+
+      # NOTE: production validate steps removed in task 26 — the
+      # `environments/production` directory was renamed to
+      # `_production_disabled` in a prior migration, and the validate
+      # steps referenced a path that no longer exists. Task 28 will
+      # recreate the production environment (Hetzner-backed) and
+      # re-add a corresponding validate step here.
+
+  kubernetes-validate:
+    name: Kubernetes Validate
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        env:
+          # Pinned to a specific release — `releases/latest/download` would
+          # silently change behavior on any run with no diff in this repo.
+          KUBECONFORM_VERSION: "0.8.0"
+        run: |
+          wget "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tar xf kubeconform-linux-amd64.tar.gz
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Install kustomize
+        env:
+          # Pinned to a specific release tag — was `master`, which drifts
+          # silently. The version arg pins the downloaded binary too, not
+          # just the installer script.
+          KUSTOMIZE_VERSION: "5.8.1"
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/kustomize/v${KUSTOMIZE_VERSION}/hack/install_kustomize.sh" \
+            | bash -s "${KUSTOMIZE_VERSION}"
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Validate base manifests
+        run: |
+          kustomize build ${{ env.INFRA_DIR }}/kubernetes/base | kubeconform -strict -summary \
+            -skip ExternalSecret,SecretStore,ClusterSecretStore
+
+      - name: Validate staging overlay
+        run: |
+          kustomize build ${{ env.INFRA_DIR }}/kubernetes/overlays/staging | kubeconform -strict -summary \
+            -skip ExternalSecret,SecretStore,ClusterSecretStore
+
+      - name: Validate production overlay
+        run: |
+          kustomize build ${{ env.INFRA_DIR }}/kubernetes/overlays/production | kubeconform -strict -summary \
+            -skip ExternalSecret,SecretStore,ClusterSecretStore
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [changes, build]
+    if: |
+      github.event_name != 'pull_request' &&
+      needs.build.result == 'success'
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve GHCR owner (lowercase)
+        id: ghcr
+        run: |
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "owner=${owner}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare trivy results dir
+        run: mkdir -p trivy-results
+
+      - name: Run Trivy filesystem scan
+        # Pin the action to a stable release tag (was @master, which
+        # drifts silently). Verify the latest stable on
+        # https://github.com/aquasecurity/trivy-action/releases before
+        # bumping.
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "CRITICAL,HIGH"
+          format: "sarif"
+          output: "trivy-results/trivy-fs.sarif"
+          # SARIF upload to GH Security is the signal channel — don't
+          # let findings hard-fail the workflow.
+          exit-code: "0"
+
+      - name: Upload filesystem scan to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results/trivy-fs.sarif"
+          category: "trivy-filesystem"
+        continue-on-error: true  # May fail if Advanced Security not enabled
+
+      - name: Log in to GHCR (for image scan)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ steps.ghcr.outputs.owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan Docker images
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/${{ env.MAIN_BRANCH }}" ]; then
+            TAG="${{ env.MAIN_BRANCH }}-latest"
+          else
+            TAG="${{ env.STAGING_BRANCH }}-latest"
+          fi
+
+          for service in api-gateway web frontend orchestrator; do
+            IMAGE="${{ env.GHCR_REGISTRY }}/${{ steps.ghcr.outputs.owner }}/sterna-${service}:${TAG}"
+            echo "Scanning ${IMAGE}"
+            docker pull "${IMAGE}" || continue
+            trivy image \
+              --severity CRITICAL,HIGH \
+              --exit-code 0 \
+              --format sarif \
+              --output "trivy-results/trivy-${service}.sarif" \
+              "${IMAGE}"
+          done
+
+      - name: Upload image scans to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results/"
+          category: "trivy-images"
+        continue-on-error: true  # May fail if Advanced Security not enabled

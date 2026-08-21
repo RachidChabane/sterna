@@ -1,0 +1,59 @@
+# PodDisruptionBudgets for production high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway-pdb
+  namespace: sterna
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: sterna
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: sterna
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: frontend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: orchestrator-pdb
+  namespace: sterna
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: orchestrator
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cloudflare-tunnel-pdb
+  namespace: sterna
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cloudflare-tunnel

@@ -1,0 +1,1 @@
+"""User preferences service tests."""

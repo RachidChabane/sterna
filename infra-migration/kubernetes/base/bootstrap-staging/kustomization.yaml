@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Bootstrap manifests for a cold Hetzner cluster bring-up.
+# Applied immediately after `terraform apply` succeeds and the
+# kubeconfig is in hand.
+#
+# This kustomization installs:
+#   - namespace.yaml: the `sterna` Namespace (local copy — kept
+#     in sync with ../namespace.yaml; the duplicate is needed because
+#     kustomize's default LoadRestrictionsRootOnly forbids walking up
+#     a directory). Required first so subsequent steps
+#     (kubectl create secret -n sterna, ESO Helm install,
+#     external-secrets manifests) can target it. Without this, those
+#     steps fail with "namespaces 'sterna' not found" on a fresh
+#     cluster.
+#   - ../hetzner-cloud (referenced as a directory, which kustomize
+#     resolves to its kustomization.yaml — a sibling directory under
+#     base/, allowed by LoadRestrictionsRootOnly): CCM + CSI driver
+#     (clears the uninitialized taint + provisions Hetzner volumes
+#     for stateful PVCs).
+#
+# It does NOT include ../external-secrets/. That directory's manifests
+# reference ExternalSecret / SecretStore CRDs that are installed by the
+# ESO Helm chart. Bundling them here would make the first apply fail
+# with "no matches for kind ExternalSecret …". The runbook applies
+# ../external-secrets/ as a separate step after ESO Helm install
+# lands the CRDs.
+#
+# What this DOES NOT install (intentional — see
+# docs/migration/cold-bring-up-runbook.md "Why no cert-manager and
+# ingress-nginx"):
+#   - cert-manager: TLS terminates at Cloudflare; no certs at cluster.
+#   - ingress-nginx: cloudflare-tunnel is the ingress; no nginx.
+#
+# Apply with:
+#   kubectl apply -k infra-migration/kubernetes/base/bootstrap-staging/
+
+resources:
+  - namespace.yaml
+  - ../hetzner-cloud

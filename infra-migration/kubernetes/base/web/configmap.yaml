@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-config
+  namespace: sterna
+data:
+  # Django environment (for settings/__init__.py dynamic loading)
+  DJANGO_ENV: "prod"
+  # Django settings module (environment-specific, set via overlay)
+  DJANGO_SETTINGS_MODULE: "sterna.settings.prod"
+
+  # Internal service URLs (Kubernetes DNS - these don't change)
+  ORCHESTRATOR_URL: "http://orchestrator:8003"
+  BRAVE_SEARCH_URL: "http://brave-search:8000"
+  USER_PREFERENCES_URL: "http://user-preferences:8000"
+  REDIS_URL: "redis://redis:6379/0"
+
+  # All other configurable values come from Scaleway Secret Manager:
+  # - FRONTEND_URL (api-secrets)
+  # - CORS_ALLOWED_ORIGINS (api-secrets)
+  # - DEBUG (api-secrets)
+  # - ALLOWED_HOSTS (api-secrets)

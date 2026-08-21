@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: google-maps
+  namespace: sterna
+  labels:
+    app: google-maps
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8005
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: google-maps

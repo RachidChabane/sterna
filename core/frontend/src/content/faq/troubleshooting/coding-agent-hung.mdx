@@ -1,0 +1,13 @@
+---
+title: The coding agent seems stuck
+category: Troubleshooting
+last_updated: 2026-05-21
+---
+
+The coding agent runs inside an isolated sandbox with a 30-minute timeout. If it appears stuck:
+
+1. **Check the progress panel** — if the step count is increasing, it's still working. Complex tasks can take 10–20 minutes.
+2. **Wait for the timeout** — if there's no progress for 5+ minutes, the session will auto-terminate and return a partial result.
+3. **Retry with a simpler task** — very broad instructions ("build me a full app") cause the agent to get lost. Break the task into smaller steps.
+
+If the agent terminates but leaves the workspace in a bad state, use the **Reset workspace** button in the Project panel to restore the last good snapshot.

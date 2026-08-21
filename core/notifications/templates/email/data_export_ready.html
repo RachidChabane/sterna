@@ -1,0 +1,11 @@
+{% extends "email/base.html" %}{% load i18n %}
+{% block content %}
+<p>{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}</p>
+<p>{% blocktrans with brand=brand_name %}Your {{ brand }} data export is ready.{% endblocktrans %}</p>
+<p style="text-align:center;margin:32px 0;">
+  <a href="{{ action_url }}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:500;">{% trans "Download your data" %}</a>
+</p>
+<p style="font-size:14px;color:#6b7280;">{% trans "Link expires:" %} {{ expires_at|date:"Y-m-d H:i T" }}</p>
+<p>{% trans "The zip includes your profile, conversations, sparks, knowledge-base documents, usage logs, and audit log. Encrypted secrets (BYOK API keys, MCP credentials) are redacted." %}</p>
+<p>{% blocktrans with support=support_email %}If you didn't request this, please contact <a href="mailto:{{ support }}">{{ support }}</a>.{% endblocktrans %}</p>
+{% endblock %}

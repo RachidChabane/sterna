@@ -1,0 +1,12 @@
+{% extends "email/base.txt" %}{% load i18n %}
+{% block content %}
+{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}
+
+{% blocktrans with brand=brand_name %}Your {{ brand }} trial ends in 3 days.{% endblocktrans %}
+{% if trial_end %}
+{% blocktrans %}On {{ trial_end }}, your subscription will convert to paid using the payment method on file.{% endblocktrans %}
+{% endif %}
+{% trans "Manage subscription:" %} {{ action_url }}
+
+{% trans "Cancel anytime before your trial ends and you won't be charged." %}
+{% endblock %}

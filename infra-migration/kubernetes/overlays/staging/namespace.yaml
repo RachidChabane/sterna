@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sternaway-staging
+  labels:
+    app.kubernetes.io/name: sterna
+    environment: staging

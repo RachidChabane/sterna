@@ -1,0 +1,86 @@
+# =============================================================================
+# Backup Validation CronJob
+# =============================================================================
+# Runs daily at 4 AM UTC to validate the latest backup
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-validation
+  namespace: sterna
+  labels:
+    app.kubernetes.io/name: backup-validation
+    app.kubernetes.io/component: backup
+spec:
+  schedule: "0 4 * * *"  # Daily at 4 AM UTC (2 hours after backup)
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600  # 10 minutes max
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: backup-validation
+            app.kubernetes.io/component: backup
+        spec:
+          serviceAccountName: backup
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+
+          containers:
+            - name: validate
+              image: postgres:16-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  # Install AWS CLI for R2 downloads
+                  apk add --no-cache aws-cli bash
+
+                  # Run validation script
+                  chmod +x /scripts/*.sh
+                  /scripts/validate.sh
+              env:
+                - name: ENVIRONMENT
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.labels['environment']
+              envFrom:
+                - secretRef:
+                    name: storage-secrets
+                - secretRef:
+                    name: alerting-secrets
+                    optional: true
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                - name: tmp
+                  mountPath: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 200m
+                  memory: 512Mi
+
+          volumes:
+            - name: scripts
+              configMap:
+                name: backup-scripts
+                defaultMode: 0755
+            - name: tmp
+              emptyDir:
+                sizeLimit: 2Gi

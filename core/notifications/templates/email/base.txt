@@ -1,0 +1,4 @@
+{% load i18n %}{{ brand_name }}
+{% block content %}{% endblock %}
+
+{% blocktrans %}Need help? Reply to this email or contact{% endblocktrans %} {{ support_email }}.

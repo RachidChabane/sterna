@@ -1,0 +1,10 @@
+{% extends "email/base.html" %}{% load i18n %}
+{% block content %}
+<p>{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}</p>
+<p>{% blocktrans with brand=brand_name %}We were unable to charge your card for your {{ brand }} subscription.{% endblocktrans %}</p>
+<p>{% trans "We'll retry automatically over the next 14 days. To avoid an interruption, please update your payment method:" %}</p>
+<p style="text-align:center;margin:32px 0;">
+  <a href="{{ action_url }}" style="display:inline-block;padding:12px 24px;background:#dc2626;color:#fff;text-decoration:none;border-radius:6px;font-weight:500;">{% trans "Update payment method" %}</a>
+</p>
+<p style="font-size:14px;color:#6b7280;">{% trans "If we cannot charge a payment method after several attempts, your subscription will be canceled." %}</p>
+{% endblock %}

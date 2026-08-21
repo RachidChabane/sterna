@@ -1,0 +1,121 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  namespace: sterna
+  labels:
+    app: web
+    app.kubernetes.io/name: web
+    app.kubernetes.io/component: migration
+  annotations:
+    # Ensure this runs before deployments
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  # Don't retry on failure - manual intervention needed
+  backoffLimit: 0
+  # Keep job for debugging (clean up after 1 hour)
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: web
+        app.kubernetes.io/name: web
+        app.kubernetes.io/component: migration
+    spec:
+      serviceAccountName: web
+      restartPolicy: Never
+      # Init container to wait for database
+      initContainers:
+        - name: wait-for-db
+          image: postgres:16-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for database to be ready..."
+              until pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER; do
+                echo "Database not ready, waiting..."
+                sleep 2
+              done
+              echo "Database is ready!"
+          env:
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: DB_PORT
+                  optional: true
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: DB_USER
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+      containers:
+        - name: migrate
+          image: ghcr.io/sterna-ai/web:latest
+          imagePullPolicy: Always
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "=== Starting database migrations ==="
+
+              # Run Django migrations
+              echo "Running Django migrations..."
+              python manage.py migrate --noinput
+
+              # Collect static files (if needed)
+              echo "Collecting static files..."
+              python manage.py collectstatic --noinput --clear || true
+
+              # Create cache table if using database cache
+              echo "Creating cache table..."
+              python manage.py createcachetable || true
+
+              echo "=== Migrations completed successfully ==="
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: DATABASE_URL
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: JWT_SECRET_KEY
+            - name: DJANGO_SETTINGS_MODULE
+              value: "config.settings.production"
+          envFrom:
+            - configMapRef:
+                name: common-config
+            - configMapRef:
+                name: web-config
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

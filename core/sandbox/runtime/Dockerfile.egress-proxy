@@ -1,0 +1,42 @@
+# Egress Proxy (mitmproxy)
+#
+# HTTPS-capable proxy with domain whitelist for sandbox security.
+# Blocks all traffic except whitelisted domains.
+
+FROM python:3.11-slim
+
+LABEL maintainer="Sterna Sandbox Team"
+LABEL org.opencontainers.image.description="Egress proxy with HTTPS filtering for sandbox security"
+
+WORKDIR /app
+
+# Install curl for healthchecks and mitmproxy for proxy functionality
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    pip install --no-cache-dir mitmproxy==10.1.1
+
+# Copy whitelist and proxy script
+COPY whitelist.txt /app/whitelist.txt
+COPY proxy.py /app/proxy.py
+
+# Create non-root user and generate mitmproxy CA certificates at build time
+# The CA is generated fresh for each image build (more secure than storing in git)
+RUN useradd -m -u 1000 proxyuser && \
+    mkdir -p /home/proxyuser/.mitmproxy && \
+    chown -R proxyuser:proxyuser /app /home/proxyuser/.mitmproxy
+
+# Generate CA certificates as proxyuser (fresh CA per image build)
+USER proxyuser
+RUN python -c "from mitmproxy.certs import CertStore; CertStore.from_store('/home/proxyuser/.mitmproxy', 'mitmproxy', 2048)"
+
+# Expose proxy port
+EXPOSE 8888
+
+# Health check - mitmproxy responds to HTTP requests on the proxy port
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -x http://localhost:8888 -f http://pypi.org/ || exit 1
+
+# Run mitmproxy with our filtering script
+# --set confdir=/home/proxyuser/.mitmproxy - use the CA cert generated at build time
+# --ssl-insecure - allow connections to sites with invalid certs
+CMD ["mitmdump", "--set", "confdir=/home/proxyuser/.mitmproxy", "-s", "/app/proxy.py", "--listen-host", "0.0.0.0", "--listen-port", "8888", "--ssl-insecure"]

@@ -1,0 +1,20 @@
+{% extends "email/base.txt" %}{% load i18n %}
+{% block content %}
+{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}
+
+{% blocktrans with brand=brand_name %}Thanks for your subscription to {{ brand }}. Here is your receipt.{% endblocktrans %}
+
+{% trans "Plan" %}: {{ invoice.plan_name }}
+{% trans "Subtotal" %}: {{ invoice.subtotal_display }}{% if invoice.tax_display %}
+{{ invoice.tax_rate_display|default:"VAT" }}: {{ invoice.tax_display }}{% endif %}
+{% trans "Total paid" %}: {{ invoice.amount_display }}{% if invoice.date_paid_display %}
+{% trans "Date paid" %}: {{ invoice.date_paid_display }}{% endif %}
+{% trans "Billing period" %}: {{ invoice.period_start }} - {{ invoice.period_end }}{% if invoice.next_renewal_display %}
+{% trans "Next renewal" %}: {{ invoice.next_renewal_display }}{% endif %}
+{% trans "Invoice" %}: {{ invoice.invoice_number }}
+{% if invoice.hosted_invoice_url %}
+{% trans "View online" %}: {{ invoice.hosted_invoice_url }}{% endif %}{% if invoice.invoice_pdf %}
+{% trans "Download PDF" %}: {{ invoice.invoice_pdf }}{% endif %}
+
+{% blocktrans with brand=brand_name %}Manage your subscription anytime from your {{ brand }} billing page.{% endblocktrans %}
+{% endblock %}

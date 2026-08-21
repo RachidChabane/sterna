@@ -1,0 +1,11 @@
+{
+  "api-gateway": "6.2.1",
+  "web": "6.2.1",
+  "frontend": "6.2.1",
+  "orchestrator": "6.2.1",
+  "egress-proxy": "6.2.1",
+  "brave-search": "4.2.1",
+  "user-preferences": "4.2.1",
+  "google-maps": "4.2.1",
+  "sandbox-datascience": "6.2.1"
+}

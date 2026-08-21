@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egress-proxy
+  namespace: sterna
+  labels:
+    app: egress-proxy
+    app.kubernetes.io/name: egress-proxy
+    app.kubernetes.io/component: network
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: egress-proxy
+  template:
+    metadata:
+      labels:
+        app: egress-proxy
+        app.kubernetes.io/name: egress-proxy
+    spec:
+      serviceAccountName: egress-proxy
+      containers:
+        - name: egress-proxy
+          image: ghcr.io/sterna-ai/egress-proxy:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http-proxy
+              containerPort: 8888
+              protocol: TCP
+            - name: control
+              containerPort: 8889
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: egress-proxy-config
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: control
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: control
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: egress-proxy
+                topologyKey: kubernetes.io/hostname

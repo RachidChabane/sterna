@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consigliere
+  namespace: sterna
+  labels:
+    app: consigliere
+    app.kubernetes.io/name: consigliere
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consigliere
+  template:
+    metadata:
+      labels:
+        app: consigliere
+    spec:
+      serviceAccountName: consigliere
+      containers:
+        - name: consigliere
+          # Uses the web image with different Django settings
+          image: ghcr.io/sterna-ai/web:latest
+          imagePullPolicy: Always
+          command:
+            - gunicorn
+            - --bind
+            - "0.0.0.0:8000"
+            - --workers
+            - "2"
+            - consigliere.wsgi_service:application
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              value: "consigliere.settings_service"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: DATABASE_URL
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+            - name: CORS_ALLOWED_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: CORS_ALLOWED_ORIGINS
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: JWT_SECRET_KEY
+            - name: ALLOWED_HOSTS
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: ALLOWED_HOSTS
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: SENTRY_DSN_CONSIGLIERE
+                  optional: true
+          envFrom:
+            - configMapRef:
+                name: common-config
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

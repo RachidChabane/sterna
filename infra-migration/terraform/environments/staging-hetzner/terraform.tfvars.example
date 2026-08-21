@@ -1,0 +1,7 @@
+hcloud_token = "REPLACE_ME"
+ssh_public_keys = [
+  "ssh-ed25519 AAAA... operator@example"
+]
+operator_ssh_allow_cidrs = [
+  # "1.2.3.4/32"
+]

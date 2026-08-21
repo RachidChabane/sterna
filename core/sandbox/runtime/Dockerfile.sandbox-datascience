@@ -1,0 +1,74 @@
+# Sandbox Data Science Image
+# Lightweight environment with essential Python packages
+# Based on sandbox-base (which includes Node.js and Coding Agent CLI)
+# Users can install additional packages via pip as needed
+
+# Default suits local builds (build sandbox-base first); CI passes the
+# GHCR-pushed base via --build-arg BASE_IMAGE=...
+ARG BASE_IMAGE=sandbox-base:latest
+FROM ${BASE_IMAGE}
+
+# Switch to root to install packages
+USER root
+
+# Install minimal system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # For numpy/scipy (BLAS/LAPACK)
+    libopenblas-dev \
+    # Clean up
+    && rm -rf /var/lib/apt/lists/*
+
+# Install essential Python packages in a single layer for faster builds
+RUN pip install --no-cache-dir \
+    # Core data manipulation
+    numpy==1.26.4 \
+    pandas==2.2.0 \
+    # Basic visualization
+    matplotlib==3.8.2 \
+    # Document generation
+    reportlab==4.1.0 \
+    python-docx==1.1.0 \
+    # Utilities
+    requests==2.31.0 \
+    pyyaml==6.0.1 \
+    python-dotenv==1.0.1 \
+    tqdm==4.66.2 \
+    # Data validation
+    pydantic==2.6.1 \
+    # Interactive Python
+    ipython==8.21.0
+
+# Create directory for MCP gateway
+RUN mkdir -p /opt/mcp-gateway /home/sandboxuser/.npm && \
+    chown -R sandboxuser:sandboxuser /opt/mcp-gateway /home/sandboxuser/.npm
+
+# Install undici for proxy support with native fetch()
+WORKDIR /opt/mcp-gateway
+RUN npm init -y && npm install undici
+WORKDIR /workspace
+
+# Copy proxy bootstrap script (sets up global fetch proxy)
+COPY --chown=sandboxuser:sandboxuser proxy-bootstrap.js /opt/mcp-gateway/proxy-bootstrap.js
+
+# Copy MCP gateway script
+COPY --chown=sandboxuser:sandboxuser mcp-gateway.js /opt/mcp-gateway/mcp-gateway.js
+
+# Set npm cache directory
+ENV NPM_CONFIG_CACHE=/home/sandboxuser/.npm
+
+# Ensure .local/bin is in PATH for user-installed packages
+ENV PATH="/home/sandboxuser/.local/bin:${PATH}"
+
+# Set matplotlib to use non-interactive backend
+ENV MPLBACKEND=Agg
+
+# Switch back to non-root user for runtime
+USER sandboxuser
+
+# Metadata
+LABEL org.opencontainers.image.title="Sterna Sandbox Data Science"
+LABEL org.opencontainers.image.description="Lightweight environment with essential data science packages"
+LABEL org.opencontainers.image.vendor="Sterna"
+
+# Default command
+CMD ["/bin/bash"]

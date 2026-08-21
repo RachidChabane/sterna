@@ -1,0 +1,238 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sterna
+
+namePrefix: staging-
+nameSuffix: ""
+
+resources:
+  - ../../base
+
+# Staging-specific patches
+patches:
+  # Add imagePullSecrets to all deployments.
+  # The patch file's `__SECRET_NAME__` placeholder is rewritten by the
+  # deploy workflow to `scaleway-registry` (legacy) or `ghcr-registry`
+  # (Hetzner path). See .github/workflows/deploy-staging.yml.
+  - path: patches/image-pull-secret.yaml
+    target:
+      kind: Deployment
+  # Reduce replicas for staging
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: api-gateway
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: web
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: frontend
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: orchestrator
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: cloudflare-tunnel
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: egress-proxy
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: celery-worker
+
+  # Reduce HPA min replicas
+  - patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+    target:
+      kind: HorizontalPodAutoscaler
+
+  # Reduce resource limits for staging
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 512Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+    target:
+      kind: Deployment
+      name: web
+
+  # ConfigMap overrides for staging
+  # NOTE: Service URLs must use staging- prefixed names due to kustomize namePrefix
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: common-config
+      data:
+        ENVIRONMENT: "staging"
+    target:
+      kind: ConfigMap
+      name: common-config
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: web-config
+      data:
+        DJANGO_ENV: "prod"
+        DJANGO_SETTINGS_MODULE: "sterna.settings.prod"
+        # Internal service URLs with staging prefix
+        REDIS_URL: "redis://staging-redis:6379/0"
+        ORCHESTRATOR_URL: "http://staging-orchestrator:8003"
+        BRAVE_SEARCH_URL: "http://staging-brave-search:8000"
+        USER_PREFERENCES_URL: "http://staging-user-preferences:8000"
+        CONSIGLIERE_URL: "http://staging-consigliere:8000"
+    target:
+      kind: ConfigMap
+      name: web-config
+
+  # API Gateway config with staging service names
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: api-gateway-config
+      data:
+        GATEWAY_DEFAULT_RATE_LIMIT: "1000"
+        GATEWAY_ROUTES: |
+          {
+            "/api/v1/auth": "http://staging-web:8000",
+            "/api/v1/users": "http://staging-web:8000",
+            "/api/v1/llm": "http://staging-web:8000",
+            "/api/v1/rooms": "http://staging-web:8000",
+            "/api/v1/voice-rooms": "http://staging-web:8000",
+            "/api/v1/sandbox": "http://staging-orchestrator:8003",
+            "/api/v1/search": "http://staging-brave-search:8000",
+            "/api/v1/preferences": "http://staging-user-preferences:8000",
+            "/api/v1/consigliere": "http://staging-consigliere:8000",
+            "/api/v1/maps": "http://staging-google-maps:8005"
+          }
+        GATEWAY_PUBLIC_PATHS: '["/health","/ready","/api/v1/auth/login","/api/v1/auth/register","/api/v1/auth/refresh","/api/v1/auth/google","/api/v1/auth/google/callback"]'
+        GATEWAY_ENDPOINT_LIMITS: |
+          {
+            "/api/v1/llm": {"limit": 100, "window": 60},
+            "/api/v1/auth/login": {"limit": 10, "window": 60},
+            "/api/v1/auth/register": {"limit": 5, "window": 60},
+            "/api/v1/sandbox": {"limit": 30, "window": 60}
+          }
+        GATEWAY_REDIS_URL: "redis://staging-redis:6379/1"
+        # base/api-gateway never sets this, so it would otherwise default
+        # to "development" — which would make a stray
+        # GATEWAY_ALLOW_INSECURE_JWT_SECRET=true live in staging instead
+        # of the no-op it's meant to be (gateway/config.py).
+        GATEWAY_ENVIRONMENT: "staging"
+        # TODO(deploy-blocker): GATEWAY_CORS_ORIGINS is REQUIRED — the
+        # gateway now refuses to start without an explicit, non-wildcard
+        # origin list when credentials are allowed (the default; see
+        # gateway/config.py). Unlike the production overlay, the
+        # correct staging origin isn't safely inferable from this repo
+        # (terraform/environments/staging/terraform.tfvars sets
+        # domain = "featherise.com", vs. the production overlay's
+        # hardcoded sternaway.ai — get the current value from ops
+        # before wiring this). Example once known:
+        # GATEWAY_CORS_ORIGINS: '["https://staging.example.com"]'
+    target:
+      kind: ConfigMap
+      name: api-gateway-config
+
+  # Orchestrator config with staging service names
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: orchestrator-config
+      data:
+        ORCHESTRATOR_MODE: "kubernetes"
+        EGRESS_PROXY_URL: "http://staging-egress-proxy:8888"
+    target:
+      kind: ConfigMap
+      name: orchestrator-config
+
+  # Fix ExternalSecrets secretStoreRef to use prefixed name
+  - patch: |-
+      - op: replace
+        path: /spec/secretStoreRef/name
+        value: staging-scaleway-secret-store
+    target:
+      kind: ExternalSecret
+
+  # Add environment label to backup CronJobs for script to detect environment
+  - patch: |-
+      - op: add
+        path: /spec/jobTemplate/spec/template/metadata/labels/environment
+        value: staging
+    target:
+      kind: CronJob
+      labelSelector: app.kubernetes.io/component=backup
+
+# Staging images - using Scaleway Container Registry
+# Format: rg.<region>.scw.cloud/<namespace>/<image>:<tag>
+# The actual registry endpoint is injected via CI/CD pipeline
+images:
+  - name: ghcr.io/sterna-ai/api-gateway
+    newName: rg.fr-par.scw.cloud/sternaway-staging/api-gateway
+    newTag: staging
+  - name: ghcr.io/sterna-ai/web
+    newName: rg.fr-par.scw.cloud/sternaway-staging/web
+    newTag: staging
+  - name: ghcr.io/sterna-ai/frontend
+    newName: rg.fr-par.scw.cloud/sternaway-staging/frontend
+    newTag: staging
+  - name: ghcr.io/sterna-ai/orchestrator
+    newName: rg.fr-par.scw.cloud/sternaway-staging/orchestrator
+    newTag: staging
+  - name: ghcr.io/sterna-ai/sandbox-datascience
+    newName: rg.fr-par.scw.cloud/sternaway-staging/sandbox-datascience
+    newTag: staging
+  - name: ghcr.io/sterna-ai/egress-proxy
+    newName: rg.fr-par.scw.cloud/sternaway-staging/egress-proxy
+    newTag: staging
+  - name: ghcr.io/sterna-ai/brave-search
+    newName: rg.fr-par.scw.cloud/sternaway-staging/brave-search
+    newTag: staging
+  - name: ghcr.io/sterna-ai/user-preferences
+    newName: rg.fr-par.scw.cloud/sternaway-staging/user-preferences
+    newTag: staging
+  - name: ghcr.io/sterna-ai/google-maps
+    newName: rg.fr-par.scw.cloud/sternaway-staging/google-maps
+    newTag: staging
+  # consigliere, celery-worker, celery-beat use the web image (no separate entry needed)
+
+commonLabels:
+  environment: staging

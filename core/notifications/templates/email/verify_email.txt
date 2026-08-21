@@ -1,0 +1,10 @@
+{% extends "email/base.txt" %}{% load i18n %}
+{% block content %}
+{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}
+
+{% blocktrans with brand=brand_name %}Please confirm your email so you can start using {{ brand }}.{% endblocktrans %}
+
+{% trans "Verify email:" %} {{ action_url }}
+
+{% trans "This link expires in 24 hours." %}
+{% endblock %}

@@ -1,0 +1,303 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: sterna
+  labels:
+    app: web
+    app.kubernetes.io/name: web
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+        app.kubernetes.io/name: web
+    spec:
+      serviceAccountName: web
+      # Run migrations before starting the app
+      initContainers:
+        - name: migrate
+          image: ghcr.io/sterna-ai/web:latest
+          imagePullPolicy: Always
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "=== Running database migrations ==="
+              python manage.py migrate --noinput
+              echo "=== Migrations completed ==="
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: DATABASE_URL
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: JWT_SECRET_KEY
+            - name: ALLOWED_HOSTS
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: ALLOWED_HOSTS
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: RESEND_API_KEY
+            - name: DEFAULT_FROM_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: DEFAULT_FROM_EMAIL
+            - name: SUPPORT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: SUPPORT_EMAIL
+                  optional: true
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: SENTRY_DSN_WEB
+                  optional: true
+          envFrom:
+            - configMapRef:
+                name: common-config
+            - configMapRef:
+                name: web-config
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: web
+          image: ghcr.io/sterna-ai/web:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            # task-29 H1: require CF-Connecting-IP. XFF is spoofable
+            # from inside the cluster; only Cloudflare can set
+            # CF-Connecting-IP.
+            - name: CF_REQUIRE_HEADER
+              value: "true"
+            # task-29 H4: hard-reject dev-token JWT bypass in prod
+            # via env var (settings.prod also forces False in code).
+            - name: DEV_TOKEN_BYPASS
+              value: "false"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: DATABASE_URL
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: JWT_SECRET_KEY
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: OPENAI_API_KEY
+            - name: GOOGLE_AI_STUDIO_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: GOOGLE_AI_STUDIO_API_KEY
+                  optional: true
+            - name: RUNWAY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-secrets
+                  key: RUNWAY_API_KEY
+                  optional: true
+            - name: R2_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_ACCESS_KEY_ID
+                  optional: true
+            - name: R2_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_SECRET_ACCESS_KEY
+                  optional: true
+            - name: R2_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_BUCKET_NAME
+                  optional: true
+            - name: R2_ENDPOINT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_ENDPOINT
+                  optional: true
+            - name: FRONTEND_URL
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: FRONTEND_URL
+            - name: SITE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: SITE_URL
+            - name: CORS_ALLOWED_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: CORS_ALLOWED_ORIGINS
+            - name: DEBUG
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: DEBUG
+            - name: ALLOWED_HOSTS
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: ALLOWED_HOSTS
+            # BYOK Fernet key — defaults to FIELD_ENCRYPTION_KEY if unset.
+            # See docs/operations/byok-key-rotation.md.
+            - name: BYOK_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: BYOK_ENCRYPTION_KEY
+                  optional: true
+            - name: BYOK_ENCRYPTION_KEY_LEGACY
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: BYOK_ENCRYPTION_KEY_LEGACY
+                  optional: true
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: RESEND_API_KEY
+            - name: DEFAULT_FROM_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: DEFAULT_FROM_EMAIL
+            - name: SUPPORT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: SUPPORT_EMAIL
+                  optional: true
+            - name: STRIPE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-secrets
+                  key: STRIPE_API_KEY
+            - name: STRIPE_PUBLISHABLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-secrets
+                  key: STRIPE_PUBLISHABLE_KEY
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-secrets
+                  key: STRIPE_WEBHOOK_SECRET
+                  optional: true
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: SENTRY_DSN_WEB
+                  optional: true
+            # Smoke-suite secrets (task 28). Both optional so non-smoke
+            # environments roll out unaffected; seed_all + the smoke
+            # pytest pick these up from the pod env via the
+            # smoke-secrets ExternalSecret (see ../external-secrets/
+            # external-secrets.yaml).
+            - name: SMOKE_TEST_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: smoke-secrets
+                  key: SMOKE_TEST_USER_PASSWORD
+                  optional: true
+            - name: SMOKE_STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: smoke-secrets
+                  key: SMOKE_STRIPE_WEBHOOK_SECRET
+                  optional: true
+          envFrom:
+            - configMapRef:
+                name: common-config
+            - configMapRef:
+                name: web-config
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/health/live/
+              port: http
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /api/health/
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 5
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: web
+                topologyKey: kubernetes.io/hostname

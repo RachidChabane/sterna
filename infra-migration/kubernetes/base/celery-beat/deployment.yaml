@@ -1,0 +1,139 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  namespace: sterna
+  labels:
+    app: celery-beat
+    app.kubernetes.io/name: celery-beat
+    app.kubernetes.io/component: scheduler
+spec:
+  # Only 1 replica - beat scheduler must be singleton
+  replicas: 1
+  strategy:
+    type: Recreate  # Ensure only one instance runs at a time
+  selector:
+    matchLabels:
+      app: celery-beat
+  template:
+    metadata:
+      labels:
+        app: celery-beat
+        app.kubernetes.io/name: celery-beat
+    spec:
+      serviceAccountName: celery-beat
+      containers:
+        - name: celery-beat
+          image: ghcr.io/sterna-ai/web:latest
+          imagePullPolicy: Always
+          command:
+            - celery
+            - -A
+            - sterna
+            - beat
+            - -l
+            - INFO
+            - --scheduler
+            - django_celery_beat.schedulers:DatabaseScheduler
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: DATABASE_URL
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: JWT_SECRET_KEY
+            - name: ALLOWED_HOSTS
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: ALLOWED_HOSTS
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: RESEND_API_KEY
+            - name: DEFAULT_FROM_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: DEFAULT_FROM_EMAIL
+            - name: SUPPORT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: email-secrets
+                  key: SUPPORT_EMAIL
+                  optional: true
+            - name: STRIPE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-secrets
+                  key: STRIPE_API_KEY
+            - name: STRIPE_PUBLISHABLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-secrets
+                  key: STRIPE_PUBLISHABLE_KEY
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-secrets
+                  key: STRIPE_WEBHOOK_SECRET
+                  optional: true
+            - name: R2_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_BUCKET_NAME
+                  optional: true
+            - name: R2_ENDPOINT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_ENDPOINT
+                  optional: true
+            - name: R2_ACCOUNT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_ACCOUNT_ID
+                  optional: true
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: SENTRY_DSN_WEB
+                  optional: true
+          envFrom:
+            - configMapRef:
+                name: common-config
+            - configMapRef:
+                name: web-config
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          # Simple liveness check - process is running
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pgrep -f "celery.*beat" > /dev/null
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

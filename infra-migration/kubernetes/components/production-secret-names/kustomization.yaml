@@ -1,0 +1,68 @@
+# =============================================================================
+# Component: production Scaleway secret names
+# =============================================================================
+# The base ExternalSecret manifests
+# (kubernetes/base/external-secrets/external-secrets.yaml) reference the
+# STAGING-named Scaleway secrets (sternaway-staging-*). This component
+# rewrites every per-environment remoteRef to its sternaway-production-*
+# counterpart. Shared secrets (sternaway-shared-*) are intentionally NOT
+# rewritten — they are the same object in both environments.
+#
+# Included by:
+#   - overlays/production            (full production build)
+#   - overlays/production-external-secrets  (cold bring-up step 6 —
+#     see docs/migration/cold-bring-up-runbook.md §F.1.d)
+#
+# The corresponding sternaway-production-* secrets MUST exist in
+# Scaleway Secret Manager before ExternalSecrets can sync (see
+# infra-migration/README.md for how they are generated and populated).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: "name:sternaway-production-api-secrets"
+    target:
+      kind: ExternalSecret
+      name: api-secrets
+  - patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: "name:sternaway-production-database-secrets"
+    target:
+      kind: ExternalSecret
+      name: database-secrets
+  - patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: "name:sternaway-production-cloudflare-secrets"
+    target:
+      kind: ExternalSecret
+      name: cloudflare-tunnel-secrets
+  - patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: "name:sternaway-production-redis-secrets"
+    target:
+      kind: ExternalSecret
+      name: redis-secrets
+  - patch: |-
+      - op: replace
+        path: /spec/dataFrom/0/extract/key
+        value: "name:sternaway-production-frontend-secrets"
+    target:
+      kind: ExternalSecret
+      name: frontend-secrets
+  # smoke-secrets uses per-key `data:` (two remoteRefs), not dataFrom.
+  - patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: "name:sternaway-production-smoke-secrets"
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: "name:sternaway-production-smoke-secrets"
+    target:
+      kind: ExternalSecret
+      name: smoke-secrets

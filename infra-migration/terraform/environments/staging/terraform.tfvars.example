@@ -1,0 +1,18 @@
+# Staging Environment Configuration
+# Copy this file to terraform.tfvars and fill in your values
+
+# Scaleway
+scaleway_access_key      = "your-scaleway-access-key"
+scaleway_secret_key      = "your-scaleway-secret-key"
+scaleway_project_id      = "your-scaleway-project-id"
+scaleway_organization_id = "your-scaleway-organization-id"
+
+# Cloudflare
+cloudflare_api_token  = "your-cloudflare-api-token"
+cloudflare_account_id = "your-cloudflare-account-id"
+
+# Neon
+neon_api_key = "your-neon-api-key"
+
+# Domain
+domain = "sternaway.ai"

@@ -1,0 +1,2186 @@
+"""
+Coding Agent Runner
+
+Coordinates Coding Agent execution inside user sandboxes.
+Creates isolated job directories with workspace access and runs the agent script.
+Captures file versions before/after execution for history tracking.
+"""
+
+import uuid
+import json
+import logging
+import asyncio
+import time
+import hashlib
+import tarfile
+import io
+import secrets
+from pathlib import Path
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass, field
+
+from workspace_client import get_workspace_client
+from claude_output_parser import ClaudeOutputParser, parse_claude_output
+
+logger = logging.getLogger(__name__)
+
+# In-memory progress store for real-time progress tracking.
+# Keyed by "{user_id}:{chat_id}". Updated during execution, read by progress endpoint.
+# This bypasses the file-based approach which fails when Docker's put_archive
+# can't write to tmpfs-mounted workspace directories.
+_progress_store: Dict[str, dict] = {}
+
+
+def get_progress_from_store(user_id: str, chat_id: str) -> Optional[dict]:
+    """Get cached progress data for a coding agent execution."""
+    key = f"{user_id}:{chat_id}"
+    return _progress_store.get(key)
+
+
+@dataclass
+class CodingAgentConfig:
+    """Configuration for Coding Agent execution."""
+    task: str
+    model: str
+    api_key: str
+    allowed_tools: List[str]
+    max_iterations: int
+    workspace_path: str
+    job_dir: str
+    mcp_servers: Optional[Dict[str, Any]] = None  # MCP server configs for --mcp-config
+    mode: str = "auto"  # "plan", "implement", or "auto"
+    plan_id: Optional[str] = None  # Plan ID for implement mode
+    plan_content: Optional[str] = None  # Full plan content for implement mode
+    sub_agents: Optional[List[Dict[str, Any]]] = None  # Sub-agent defs as {name, markdown} dicts
+    user_model_preferences: Optional[Dict[str, str]] = None  # Tier→model mapping from user prefs
+
+
+@dataclass
+class CodingAgentResult:
+    """Result of Coding Agent execution."""
+    success: bool
+    job_id: str
+    summary: Optional[str] = None
+    files_modified: List[str] = field(default_factory=list)
+    files_created: List[str] = field(default_factory=list)
+    steps: List[Dict[str, Any]] = field(default_factory=list)
+    error: Optional[str] = None
+    duration_ms: int = 0
+
+
+@dataclass
+class FileSnapshot:
+    """Snapshot of a file for before/after comparison."""
+    path: str
+    content: bytes
+    sha256: str
+    size: int
+
+
+class CodingAgentRunner:
+    """
+    Runs Coding Agent agent inside user sandboxes.
+
+    Creates an isolated job directory at /agents/coding-agent-{job_id}/
+    with a symlink to the user's workspace. The agent runs with
+    restricted environment variables for OpenRouter access.
+
+    Also captures file versions before/after execution for history tracking.
+    """
+
+    # Execution timeout in seconds
+    EXECUTION_TIMEOUT = 600  # 10 minutes
+
+    # Valid tools that can be allowed
+    VALID_TOOLS = {"Read", "Write", "Edit", "Bash", "Glob", "Grep"}
+
+    # Max file size for version capture (10MB)
+    MAX_VERSION_FILE_SIZE = 10 * 1024 * 1024
+
+    # SECURITY: Dangerous config file patterns that could be exploited
+    # These files could inject malicious hooks, MCP servers, or settings
+    DANGEROUS_CONFIG_PATTERNS = [
+        ".claude",           # Claude config directory
+        ".clauderc",         # Claude RC file
+        "claude.config.json", # Alternative config file
+        ".mcp.json",         # MCP server config
+    ]
+
+    async def _scan_for_dangerous_configs(
+        self,
+        container,
+        workspace_path: str
+    ) -> tuple[bool, List[str]]:
+        """
+        SECURITY: Scan workspace for dangerous Claude config files.
+
+        Users could plant malicious config files via the terminal that would
+        be read when the Coding Agent agent runs, potentially:
+        - Defining malicious MCP servers that execute arbitrary code
+        - Injecting hooks that run on agent events
+        - Modifying agent behavior via settings
+
+        Returns:
+            (is_safe, list_of_dangerous_files_found)
+        """
+        dangerous_found = []
+
+        for pattern in self.DANGEROUS_CONFIG_PATTERNS:
+            # Check in workspace root
+            check_cmd = f'test -e "{workspace_path}/{pattern}" && echo "EXISTS" || echo "NOTFOUND"'
+            result = container.exec_run(
+                ["sh", "-c", check_cmd],
+                workdir=workspace_path,
+                user="sandboxuser"
+            )
+            output = result.output.decode().strip() if result.output else ""
+
+            if output == "EXISTS":
+                dangerous_found.append(f"{workspace_path}/{pattern}")
+                logger.warning(
+                    f"[SECURITY] Dangerous config file found: {workspace_path}/{pattern}"
+                )
+
+        if dangerous_found:
+            logger.error(
+                f"[SECURITY] Blocking Coding Agent execution - {len(dangerous_found)} "
+                f"dangerous config file(s) found: {dangerous_found}"
+            )
+            return (False, dangerous_found)
+
+        return (True, [])
+
+    async def _setup_ephemeral_home(
+        self,
+        container,
+        job_id: str,
+        workspace_path: str,
+        mode: str = "auto",
+    ) -> str:
+        """
+        SECURITY: Create an ephemeral HOME directory for this job.
+
+        This prevents any persistent config files from being read and ensures
+        each execution starts with a clean, controlled environment.
+
+        Also creates a .claude/settings.json that restricts file access to
+        only the workspace directory, preventing writes to /tmp or elsewhere.
+
+        In plan mode, permissions are tightened: workspace is read-only,
+        but writes to ephemeral home are allowed (needed for ExitPlanMode
+        which saves plans to $HOME/.claude/plans/).
+
+        Args:
+            container: Docker container
+            job_id: Unique job identifier
+            workspace_path: The workspace directory to restrict access to
+            mode: Agent mode - "plan" for restricted, anything else for full
+
+        Returns:
+            Path to the ephemeral home directory
+        """
+        ephemeral_home = f"/tmp/claude-home-{job_id}"
+        claude_config_dir = f"{ephemeral_home}/.claude"
+
+        # Create the ephemeral home and .claude config directory
+        setup_cmd = f'mkdir -p "{claude_config_dir}" && chmod 700 "{ephemeral_home}"'
+        result = container.exec_run(
+            ["sh", "-c", setup_cmd],
+            user="sandboxuser"
+        )
+
+        if result.exit_code != 0:
+            logger.warning(
+                f"[SECURITY] Failed to create ephemeral home: {ephemeral_home}, "
+                f"falling back to /home/sandboxuser"
+            )
+            return "/home/sandboxuser"
+
+        # SECURITY: Create settings.json that restricts file access to workspace
+        # This prevents Claude CLI from reading/writing outside the workspace
+        # Reference: https://docs.anthropic.com/en/docs/claude-code/settings
+        # NOTE: The sandbox container provides additional isolation, so we only
+        # need to restrict the most dangerous operations here.
+        # We allow ephemeral_home access since Claude CLI needs it for internal operations.
+
+        if mode == "plan":
+            # PLAN MODE: Workspace is read-only but ephemeral home is writable.
+            # ExitPlanMode writes plans to $HOME/.claude/plans/ which is under ephemeral_home.
+            # Bash is allowed for exploration (git log, find, tree, etc.).
+            settings = {
+                "permissions": {
+                    "allow": [
+                        # Read the entire workspace
+                        f"Read({workspace_path}/**)",
+                        # Allow access to ephemeral home (ExitPlanMode writes here)
+                        f"Read({ephemeral_home}/**)",
+                        f"Write({ephemeral_home}/**)",
+                        # Bash allowed for exploration commands
+                        f"Bash(cd {workspace_path}*)",
+                        "Bash(ls*)",
+                        "Bash(cat*)",
+                        "Bash(grep*)",
+                        "Bash(find*)",
+                        "Bash(head*)",
+                        "Bash(tail*)",
+                        "Bash(wc*)",
+                        "Bash(sort*)",
+                        "Bash(uniq*)",
+                        "Bash(diff*)",
+                        "Bash(echo*)",
+                        "Bash(tree*)",
+                        "Bash(git*)",
+                        "Bash(file*)",
+                    ],
+                    "deny": [
+                        # Block ALL writes and edits to workspace
+                        f"Write({workspace_path}/**)",
+                        f"Edit({workspace_path}/**)",
+                        # Block system directories
+                        "Read(/etc/**)",
+                        "Read(/root/**)",
+                        # Block dangerous bash commands
+                        "Bash(sudo*)",
+                        "Bash(rm*)",
+                        "Bash(mv*)",
+                        "Bash(cp*)",
+                        "Bash(chmod*)",
+                        "Bash(python*)",
+                        "Bash(node*)",
+                        "Bash(npm*)",
+                        "Bash(pip*)",
+                        "Bash(curl*)",
+                        "Bash(wget*)",
+                        "Bash(ssh*)",
+                    ]
+                }
+            }
+            logger.info("[SECURITY] Plan mode: read-only workspace, bash exploration allowed")
+        else:
+            # NORMAL MODE: Full workspace access
+            settings = {
+                "permissions": {
+                    "allow": [
+                        f"Read({workspace_path}/**)",
+                        f"Write({workspace_path}/**)",
+                        f"Edit({workspace_path}/**)",
+                        # Allow access to ephemeral home for Claude CLI internal operations
+                        f"Read({ephemeral_home}/**)",
+                        f"Write({ephemeral_home}/**)",
+                        # Bash commands allowed in sandbox
+                        f"Bash(cd {workspace_path}*)",
+                        "Bash(ls*)",
+                        "Bash(cat*)",
+                        "Bash(grep*)",
+                        "Bash(find*)",
+                        "Bash(head*)",
+                        "Bash(tail*)",
+                        "Bash(wc*)",
+                        "Bash(sort*)",
+                        "Bash(uniq*)",
+                        "Bash(diff*)",
+                        "Bash(echo*)",
+                        "Bash(printf*)",
+                        "Bash(mkdir*)",
+                        "Bash(touch*)",
+                        "Bash(rm*)",
+                        "Bash(cp*)",
+                        "Bash(mv*)",
+                        "Bash(chmod*)",
+                        "Bash(python*)",
+                        "Bash(node*)",
+                        "Bash(npm*)",
+                        "Bash(npx*)",
+                        "Bash(pip*)",
+                        "Bash(git*)",
+                    ],
+                    "deny": [
+                        # Block system directories (sandbox provides additional isolation)
+                        "Read(/etc/**)",
+                        "Write(/etc/**)",
+                        "Edit(/etc/**)",
+                        "Read(/root/**)",
+                        "Write(/root/**)",
+                        "Edit(/root/**)",
+                        # Block dangerous bash commands
+                        "Bash(sudo*)",
+                        "Bash(su*)",
+                        "Bash(curl*)",
+                        "Bash(wget*)",
+                        "Bash(ssh*)",
+                        "Bash(scp*)",
+                        "Bash(nc*)",
+                        "Bash(netcat*)",
+                    ]
+                }
+            }
+
+        settings_json = json.dumps(settings, indent=2)
+        settings_path = f"{claude_config_dir}/settings.json"
+
+        # Write the settings file
+        write_cmd = f"cat > {settings_path} << 'SETTINGS_EOF'\n{settings_json}\nSETTINGS_EOF"
+        write_result = container.exec_run(
+            ["sh", "-c", write_cmd],
+            user="sandboxuser"
+        )
+
+        if write_result.exit_code != 0:
+            logger.warning(
+                "[SECURITY] Failed to write Claude settings file, "
+                "file access restrictions may not be enforced"
+            )
+        else:
+            logger.info(
+                f"[SECURITY] Created Claude settings with workspace restriction: {workspace_path}"
+            )
+
+        logger.info(f"[SECURITY] Created ephemeral home directory: {ephemeral_home}")
+        return ephemeral_home
+
+    def _get_metadata_base_path(self) -> str:
+        """Get metadata base path for this chat."""
+        return f"/workspace/metadata-{self.chat_id}"
+
+    def _get_safe_metadata_path(self, file_path: str) -> tuple:
+        """
+        Safely construct metadata path for a file, preventing path traversal (CWE-22).
+
+        Returns:
+            (is_valid, meta_dir, meta_path)
+        """
+        import os
+
+        metadata_base = self._get_metadata_base_path()
+
+        # SECURITY: Block path traversal attempts
+        if ".." in file_path:
+            logger.error(f"[SECURITY] Metadata path traversal blocked: {file_path}")
+            return (False, "", "")
+
+        # Get clean relative path
+        relative_path = file_path.lstrip("/")
+
+        # SECURITY: Use basename to prevent directory traversal in filename
+        directory = os.path.dirname(relative_path)
+        filename = os.path.basename(relative_path)
+
+        # SECURITY: Validate directory doesn't contain traversal
+        if directory and (".." in directory or directory.startswith("/")):
+            logger.error(f"[SECURITY] Metadata directory traversal blocked: {directory}")
+            return (False, "", "")
+
+        # Build metadata path
+        meta_dir = os.path.join(metadata_base, directory) if directory else metadata_base
+        meta_filename = f"{filename}.meta.json"
+        meta_path = os.path.join(meta_dir, meta_filename)
+
+        # SECURITY: Verify the final path is within metadata_base
+        normalized_meta_path = os.path.normpath(meta_path)
+        normalized_metadata_base = os.path.normpath(metadata_base)
+        if not normalized_meta_path.startswith(normalized_metadata_base):
+            logger.error(f"[SECURITY] Metadata path escape blocked: {meta_path}")
+            return (False, "", "")
+
+        return (True, meta_dir, meta_path)
+
+    async def _write_file_metadata(
+        self,
+        container,
+        file_path: str,
+        model_metadata: Dict[str, Any],
+        is_creation: bool
+    ):
+        """
+        Write metadata sidecar file for a file created/modified by Coding Agent.
+
+        Args:
+            container: Docker container to execute commands in
+            file_path: Relative path to the file
+            model_metadata: Model info (model_name, model_id, provider, icons)
+            is_creation: True if file is newly created, False if modified
+        """
+        try:
+            is_valid, meta_dir, meta_path = self._get_safe_metadata_path(file_path)
+            if not is_valid:
+                logger.warning(f"[CodingAgent] Skipping metadata for invalid path: {file_path}")
+                return
+
+            timestamp = time.time()
+
+            if is_creation:
+                # First time creating the file
+                metadata_content = {
+                    "created_by": {
+                        "model_name": model_metadata.get("model_name"),
+                        "model_id": model_metadata.get("model_id"),
+                        "provider": model_metadata.get("provider"),
+                        "model_icon_slug": model_metadata.get("model_icon_slug"),
+                        "model_icon_url": model_metadata.get("model_icon_url"),
+                        "provider_icon_slug": model_metadata.get("provider_icon_slug"),
+                        "provider_icon_url": model_metadata.get("provider_icon_url"),
+                        "message_id": model_metadata.get("message_id"),
+                        "timestamp": timestamp
+                    },
+                    "modified_by": {
+                        "model_name": model_metadata.get("model_name"),
+                        "model_id": model_metadata.get("model_id"),
+                        "provider": model_metadata.get("provider"),
+                        "model_icon_slug": model_metadata.get("model_icon_slug"),
+                        "model_icon_url": model_metadata.get("model_icon_url"),
+                        "provider_icon_slug": model_metadata.get("provider_icon_slug"),
+                        "provider_icon_url": model_metadata.get("provider_icon_url"),
+                        "message_id": model_metadata.get("message_id"),
+                        "timestamp": timestamp
+                    }
+                }
+            else:
+                # File being modified - read existing metadata to preserve created_by
+                read_meta_result = container.exec_run(["cat", meta_path])
+                if read_meta_result.exit_code == 0:
+                    existing_metadata = json.loads(read_meta_result.output.decode('utf-8'))
+                    metadata_content = {
+                        "created_by": existing_metadata.get("created_by"),
+                        "modified_by": {
+                            "model_name": model_metadata.get("model_name"),
+                            "model_id": model_metadata.get("model_id"),
+                            "provider": model_metadata.get("provider"),
+                            "model_icon_slug": model_metadata.get("model_icon_slug"),
+                            "model_icon_url": model_metadata.get("model_icon_url"),
+                            "provider_icon_slug": model_metadata.get("provider_icon_slug"),
+                            "provider_icon_url": model_metadata.get("provider_icon_url"),
+                            "message_id": model_metadata.get("message_id"),
+                            "timestamp": timestamp
+                        }
+                    }
+                else:
+                    # No existing metadata - treat as creation
+                    metadata_content = {
+                        "created_by": {
+                            "model_name": model_metadata.get("model_name"),
+                            "model_id": model_metadata.get("model_id"),
+                            "provider": model_metadata.get("provider"),
+                            "model_icon_slug": model_metadata.get("model_icon_slug"),
+                            "model_icon_url": model_metadata.get("model_icon_url"),
+                            "provider_icon_slug": model_metadata.get("provider_icon_slug"),
+                            "provider_icon_url": model_metadata.get("provider_icon_url"),
+                            "message_id": model_metadata.get("message_id"),
+                            "timestamp": timestamp
+                        },
+                        "modified_by": {
+                            "model_name": model_metadata.get("model_name"),
+                            "model_id": model_metadata.get("model_id"),
+                            "provider": model_metadata.get("provider"),
+                            "model_icon_slug": model_metadata.get("model_icon_slug"),
+                            "model_icon_url": model_metadata.get("model_icon_url"),
+                            "provider_icon_slug": model_metadata.get("provider_icon_slug"),
+                            "provider_icon_url": model_metadata.get("provider_icon_url"),
+                            "message_id": model_metadata.get("message_id"),
+                            "timestamp": timestamp
+                        }
+                    }
+
+            # Ensure metadata directory exists
+            container.exec_run(["mkdir", "-p", meta_dir])
+
+            # Write metadata file using heredoc
+            meta_json = json.dumps(metadata_content)
+            cmd = f"cat > {meta_path} << 'METAEOF'\n{meta_json}\nMETAEOF"
+            result = container.exec_run(
+                ["sh", "-c", cmd],
+                user="sandboxuser"
+            )
+
+            if result.exit_code != 0:
+                logger.warning(f"[CodingAgent] Failed to write metadata for {file_path}: {result.output.decode()}")
+            else:
+                logger.debug(f"[CodingAgent] Wrote metadata for {file_path}")
+
+        except Exception as e:
+            logger.warning(f"[CodingAgent] Error writing metadata for {file_path}: {e}")
+
+    def __init__(
+        self,
+        sandbox_executor,
+        user_id: str,
+        chat_id: str
+    ):
+        """
+        Initialize the runner.
+
+        Args:
+            sandbox_executor: SandboxExecutor instance for container access
+            user_id: User ID for sandbox isolation
+            chat_id: Chat ID for workspace scoping
+        """
+        self.sandbox_executor = sandbox_executor
+        self.user_id = user_id
+        self.chat_id = chat_id
+        self._workspace_client = None
+
+    def _get_workspace_client(self):
+        """Lazy load workspace client."""
+        if self._workspace_client is None:
+            self._workspace_client = get_workspace_client()
+        return self._workspace_client
+
+    async def _capture_workspace_state(
+        self,
+        container,
+        workspace_path: str
+    ) -> Dict[str, FileSnapshot]:
+        """
+        Capture current state of all files in workspace.
+
+        Returns dict mapping file paths to their snapshots.
+        """
+        snapshots: Dict[str, FileSnapshot] = {}
+
+        try:
+            # List all files in workspace
+            result = container.exec_run(
+                ["find", workspace_path, "-type", "f",
+                 "-not", "-path", "*/__pycache__/*",
+                 "-not", "-path", "*/node_modules/*",
+                 "-not", "-path", "*/.git/*",
+                 "-not", "-name", "*.pyc",
+                 "-not", "-name", ".coding-agent-*"],
+                workdir=workspace_path
+            )
+
+            if result.exit_code != 0:
+                logger.warning(f"[CodingAgent] Failed to list workspace files: {result.output.decode()}")
+                return snapshots
+
+            file_paths = result.output.decode().strip().split('\n')
+            file_paths = [p for p in file_paths if p and p != workspace_path]
+
+            for file_path in file_paths:
+                try:
+                    # Get file size first
+                    stat_result = container.exec_run(["stat", "-c", "%s", file_path])
+                    if stat_result.exit_code != 0:
+                        continue
+
+                    file_size = int(stat_result.output.decode().strip())
+
+                    # Skip large files
+                    if file_size > self.MAX_VERSION_FILE_SIZE:
+                        continue
+
+                    # Read file content
+                    cat_result = container.exec_run(["cat", file_path])
+                    if cat_result.exit_code != 0:
+                        continue
+
+                    content = cat_result.output
+                    sha256 = hashlib.sha256(content).hexdigest()
+
+                    # Get relative path
+                    relative_path = file_path.replace(workspace_path + "/", "", 1)
+
+                    snapshots[relative_path] = FileSnapshot(
+                        path=relative_path,
+                        content=content,
+                        sha256=sha256,
+                        size=file_size,
+                    )
+
+                except Exception as e:
+                    logger.debug(f"[CodingAgent] Error capturing {file_path}: {e}")
+
+            logger.info(f"[CodingAgent] Captured {len(snapshots)} files from workspace")
+
+        except Exception as e:
+            logger.warning(f"[CodingAgent] Failed to capture workspace state: {e}")
+
+        return snapshots
+
+    async def _create_versions_for_changes(
+        self,
+        container,
+        before_state: Dict[str, FileSnapshot],
+        after_state: Dict[str, FileSnapshot],
+        job_id: str,
+        model_metadata: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """
+        Compare before/after state and create versions for changed files.
+        Also writes metadata sidecar files for file attribution.
+
+        Returns number of versions created.
+        """
+        versions_created = 0
+        workspace_client = self._get_workspace_client()
+
+        try:
+            all_paths = set(before_state.keys()) | set(after_state.keys())
+
+            for path in all_paths:
+                before = before_state.get(path)
+                after = after_state.get(path)
+
+                # Determine if file changed
+                if before is None and after is not None:
+                    # New file created
+                    workspace_client.create_version(
+                        user_id=self.user_id,
+                        chat_id=self.chat_id,
+                        path=path,
+                        content=after.content,
+                        source_type='coding_agent',
+                        source_job_id=job_id,
+                        source_tool_name='Write',
+                    )
+                    versions_created += 1
+                    logger.debug(f"[CodingAgent] Created version for new file: {path}")
+
+                    # Write metadata sidecar file for new file
+                    if model_metadata:
+                        await self._write_file_metadata(
+                            container, path, model_metadata, is_creation=True
+                        )
+
+                elif before is not None and after is None:
+                    # File deleted
+                    workspace_client.create_version(
+                        user_id=self.user_id,
+                        chat_id=self.chat_id,
+                        path=path,
+                        content=b'',
+                        source_type='coding_agent',
+                        source_job_id=job_id,
+                        is_deleted=True,
+                    )
+                    versions_created += 1
+                    logger.debug(f"[CodingAgent] Created deletion version for: {path}")
+
+                elif before is not None and after is not None:
+                    # Check if content changed
+                    if before.sha256 != after.sha256:
+                        # For modified files, create a "before" version first
+                        # This ensures the diff viewer has both states
+                        workspace_client.create_version(
+                            user_id=self.user_id,
+                            chat_id=self.chat_id,
+                            path=path,
+                            content=before.content,
+                            source_type='coding_agent',
+                            source_job_id=job_id,
+                            source_tool_name='Read',  # Captured state before modification
+                        )
+                        # Then create the "after" version
+                        workspace_client.create_version(
+                            user_id=self.user_id,
+                            chat_id=self.chat_id,
+                            path=path,
+                            content=after.content,
+                            source_type='coding_agent',
+                            source_job_id=job_id,
+                            source_tool_name='Edit',
+                        )
+                        versions_created += 2
+                        logger.debug(f"[CodingAgent] Created before/after versions for modified file: {path}")
+
+                        # Write metadata sidecar file for modified file
+                        if model_metadata:
+                            await self._write_file_metadata(
+                                container, path, model_metadata, is_creation=False
+                            )
+
+            logger.info(f"[CodingAgent] Created {versions_created} versions for job {job_id}")
+
+        except Exception as e:
+            logger.error(f"[CodingAgent] Failed to create versions: {e}")
+
+        return versions_created
+
+    def _generate_job_id(self) -> str:
+        """Generate a unique job ID."""
+        return f"cc_{uuid.uuid4().hex[:12]}"
+
+    def _validate_tools(self, tools: List[str]) -> List[str]:
+        """Validate and filter allowed tools."""
+        return [t for t in tools if t in self.VALID_TOOLS]
+
+    def _sanitize_task(self, task: str, max_length: int = 10000) -> str:
+        """Sanitize task string for safety."""
+        # Truncate if too long
+        if len(task) > max_length:
+            task = task[:max_length] + "..."
+
+        # Remove potentially dangerous characters
+        # (shell injection protection - task goes through JSON, but be safe)
+        task = task.replace('\x00', '')
+
+        return task
+
+    async def execute(
+        self,
+        task: str,
+        model: str,
+        api_key: str,
+        allowed_tools: Optional[List[str]] = None,
+        max_iterations: int = 20,
+        conversation_id: Optional[str] = None,
+        model_metadata: Optional[Dict[str, Any]] = None,
+        mcp_servers: Optional[Dict[str, Dict[str, Any]]] = None,
+        mode: str = "auto",
+        plan_id: Optional[str] = None,
+        sub_agents: Optional[List[Dict[str, Any]]] = None,
+        user_model_preferences: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Execute Coding Agent agent.
+
+        Args:
+            task: Task description for the agent
+            model: OpenRouter model ID
+            api_key: OpenRouter API key
+            allowed_tools: Tools the agent can use
+            max_iterations: Maximum iterations
+            conversation_id: Optional conversation ID
+            model_metadata: Model metadata for file attribution (model_name, model_id, provider, icons)
+            mcp_servers: MCP server configurations to pass to Coding Agent CLI
+            mode: Agent mode - "plan" (create plan), "implement" (execute plan), or "auto" (default)
+            plan_id: Plan ID to implement (required when mode="implement")
+            sub_agents: Sub-agent definitions as {name, markdown} dicts
+
+        Returns:
+            Dict with execution results
+        """
+        job_id = self._generate_job_id()
+        start_time = time.time()
+
+        logger.info(f"[CodingAgent] Starting job {job_id}: task={task[:100]}...")
+
+        # Validate inputs
+        task = self._sanitize_task(task)
+        allowed_tools = self._validate_tools(allowed_tools or list(self.VALID_TOOLS))
+        max_iterations = min(max(1, max_iterations), 100)
+
+        try:
+            # Get or create sandbox
+            sandbox_id = self.sandbox_executor._generate_sandbox_id(
+                self.user_id, self.chat_id, self.chat_id, True
+            )
+            container = self.sandbox_executor._get_or_create_sandbox(sandbox_id)
+
+            # Setup paths
+            workspace_path = f"/workspace/chat-{self.chat_id}"
+            job_dir = f"/tmp/agents/coding-agent-{job_id}"
+
+            # Generate per-job auth token for MCP ask_user relay
+            job_token = secrets.token_urlsafe(32)
+            store_key = f"{self.user_id}:{self.chat_id}"
+            _progress_store[store_key] = {
+                **_progress_store.get(store_key, {}),
+                "_job_token": job_token,
+            }
+
+            # Create job directory and symlink to workspace
+            setup_result = await self._setup_job_directory(
+                container, job_dir, workspace_path
+            )
+            if not setup_result["success"]:
+                return {
+                    "success": False,
+                    "job_id": job_id,
+                    "error": setup_result.get("error", "Failed to setup job directory"),
+                    "duration_ms": int((time.time() - start_time) * 1000),
+                }
+
+            # Load plan content if in implement mode
+            plan_content = None
+            if mode == "implement" and plan_id:
+                plan_content = await self._load_plan_content(plan_id, conversation_id)
+
+            # Create config file
+            config = CodingAgentConfig(
+                task=task,
+                model=model,
+                api_key=api_key,  # Will be passed via env var, not config
+                allowed_tools=allowed_tools,
+                max_iterations=max_iterations,
+                workspace_path=workspace_path,
+                job_dir=job_dir,
+                mcp_servers=mcp_servers,
+                mode=mode,
+                plan_id=plan_id,
+                plan_content=plan_content,
+                sub_agents=sub_agents,
+                user_model_preferences=user_model_preferences,
+            )
+
+            config_result = await self._create_config_file(container, job_dir, config)
+            if not config_result["success"]:
+                return {
+                    "success": False,
+                    "job_id": job_id,
+                    "error": config_result.get("error", "Failed to create config"),
+                    "duration_ms": int((time.time() - start_time) * 1000),
+                }
+
+            # Capture workspace state BEFORE execution for version tracking
+            before_state = await self._capture_workspace_state(container, workspace_path)
+
+            # Execute the runner script
+            result = await self._run_agent(
+                container, job_dir, api_key, model, job_token=job_token
+            )
+
+            # Capture workspace state AFTER execution
+            after_state = await self._capture_workspace_state(container, workspace_path)
+
+            # Create versions for any files that changed and write metadata sidecar files
+            versions_created = await self._create_versions_for_changes(
+                container, before_state, after_state, job_id, model_metadata
+            )
+
+            # Calculate duration
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            # If plan mode, read the plan file from the sandbox
+            if mode == "plan" and result.get("success"):
+                ephemeral_home = f"/tmp/claude-home-{job_id}"
+                plan_content = await self._read_plan_from_sandbox(
+                    container, workspace_path, ephemeral_home=ephemeral_home
+                )
+                if not plan_content:
+                    # Fallback: use the agent's text output (summary) as the plan
+                    plan_content = result.get("summary")
+                if plan_content:
+                    result["plan_content"] = plan_content
+                else:
+                    logger.warning("[CodingAgent] No plan content found after plan mode execution")
+
+            # Parse result
+            if result["success"]:
+                return {
+                    "success": True,
+                    "job_id": job_id,
+                    "summary": result.get("summary"),
+                    "files_modified": result.get("files_modified", []),
+                    "files_created": result.get("files_created", []),
+                    "steps": result.get("steps", []),
+                    "duration_ms": duration_ms,
+                    "versions_created": versions_created,
+                    "total_cost_usd": result.get("total_cost_usd", 0.0),
+                    "plan_content": result.get("plan_content"),
+                }
+            else:
+                return {
+                    "success": False,
+                    "job_id": job_id,
+                    "error": result.get("error", "Execution failed"),
+                    "steps": result.get("steps", []),
+                    "duration_ms": duration_ms,
+                    "versions_created": versions_created,
+                    "total_cost_usd": result.get("total_cost_usd", 0.0),
+                }
+
+        except asyncio.TimeoutError:
+            logger.error(f"[CodingAgent] Job {job_id} timed out")
+            # Extract partial cost from progress store before cleanup
+            partial_cost = 0.0
+            store_key = f"{self.user_id}:{self.chat_id}"
+            progress = _progress_store.get(store_key, {})
+            if progress:
+                partial_cost = progress.get("total_cost_usd", 0.0)
+            return {
+                "success": False,
+                "job_id": job_id,
+                "error": f"Execution timed out after {self.EXECUTION_TIMEOUT}s",
+                "duration_ms": int((time.time() - start_time) * 1000),
+                "total_cost_usd": partial_cost,
+            }
+        except Exception as e:
+            logger.error(f"[CodingAgent] Job {job_id} failed: {e}", exc_info=True)
+            partial_cost = 0.0
+            store_key = f"{self.user_id}:{self.chat_id}"
+            progress = _progress_store.get(store_key, {})
+            if progress:
+                partial_cost = progress.get("total_cost_usd", 0.0)
+            return {
+                "success": False,
+                "job_id": job_id,
+                "error": str(e),
+                "duration_ms": int((time.time() - start_time) * 1000),
+                "total_cost_usd": partial_cost,
+            }
+        finally:
+            # Clean up in-memory progress store
+            _progress_store.pop(f"{self.user_id}:{self.chat_id}", None)
+
+    async def _setup_job_directory(
+        self,
+        container,
+        job_dir: str,
+        workspace_path: str
+    ) -> Dict[str, Any]:
+        """Create job directory with workspace symlink."""
+        try:
+            # Create parent agents directory with proper permissions first
+            # Then create job directory and symlink workspace
+            commands = [
+                "mkdir -p /tmp/agents && chmod 777 /tmp/agents",
+                f"mkdir -p {job_dir}",
+                f"ln -sf {workspace_path} {job_dir}/workspace",
+            ]
+
+            for cmd in commands:
+                result = container.exec_run(
+                    ["sh", "-c", cmd],
+                    workdir="/",
+                    user="sandboxuser"
+                )
+                if result.exit_code != 0:
+                    error = result.output.decode() if result.output else "Unknown error"
+                    logger.error(f"[CodingAgent] Setup failed: {cmd} -> {error}")
+                    return {"success": False, "error": f"Setup failed: {error}"}
+
+            # Verify directory was created
+            verify_result = container.exec_run(
+                ["test", "-d", job_dir],
+                user="sandboxuser"
+            )
+            if verify_result.exit_code != 0:
+                logger.error(f"[CodingAgent] Directory verification failed: {job_dir} does not exist")
+                return {"success": False, "error": f"Directory {job_dir} was not created"}
+
+            logger.info(f"[CodingAgent] Job directory created and verified: {job_dir}")
+            return {"success": True}
+
+        except Exception as e:
+            logger.error(f"[CodingAgent] Setup error: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def _create_config_file(
+        self,
+        container,
+        job_dir: str,
+        config: CodingAgentConfig
+    ) -> Dict[str, Any]:
+        """Create config JSON file for the runner script."""
+        try:
+            # Build config (excluding api_key - that goes via env var)
+            config_data = {
+                "task": config.task,
+                "model": config.model,
+                "allowed_tools": config.allowed_tools,
+                "max_iterations": config.max_iterations,
+                "workspace_path": config.workspace_path,
+                "job_dir": config.job_dir,
+                "mcp_servers": config.mcp_servers,  # User's MCP servers (may be None)
+                "mode": config.mode,  # "plan", "implement", or "auto"
+                "plan_content": config.plan_content,  # Plan content for implement mode
+                "sub_agents": config.sub_agents,  # Sub-agent definitions (may be None)
+                "user_model_preferences": config.user_model_preferences,  # Tier→model mapping
+            }
+
+            # Write config file
+            config_json = json.dumps(config_data, indent=2)
+
+            # Use heredoc to write config
+            cmd = f"cat > {job_dir}/config.json << 'CONFIGEOF'\n{config_json}\nCONFIGEOF"
+
+            result = container.exec_run(
+                ["sh", "-c", cmd],
+                workdir=job_dir,
+                user="sandboxuser"
+            )
+
+            if result.exit_code != 0:
+                error = result.output.decode() if result.output else "Unknown error"
+                return {"success": False, "error": f"Config write failed: {error}"}
+
+            logger.debug(f"[CodingAgent] Config written to {job_dir}/config.json")
+            return {"success": True}
+
+        except Exception as e:
+            logger.error(f"[CodingAgent] Config error: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def _load_plan_content(
+        self,
+        plan_id: str,
+        conversation_id: Optional[str]
+    ) -> Optional[str]:
+        """Load plan content from Django API (orchestrator has no DB access)."""
+        if not plan_id:
+            return None
+
+        try:
+            import httpx
+
+            auth_token = getattr(self, '_auth_token', None)
+            if not auth_token:
+                logger.warning("[CodingAgent] No auth token for plan loading")
+                return None
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"http://sterna-web:8000/api/code-sessions/plans/{plan_id}/",
+                    headers={"Authorization": f"Bearer {auth_token}"},
+                    timeout=10.0,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get("plan_content")
+                else:
+                    logger.warning(f"[CodingAgent] Failed to load plan: {response.status_code}")
+                    return None
+
+        except Exception as e:
+            logger.warning(f"[CodingAgent] Failed to load plan {plan_id}: {e}")
+            return None
+
+    async def _read_plan_from_sandbox(
+        self,
+        container,
+        workspace_path: str,
+        ephemeral_home: str = "",
+    ) -> Optional[str]:
+        """Read the plan file from the sandbox after plan-mode execution.
+
+        Checks two locations in order:
+        1. ExitPlanMode output: {ephemeral_home}/.claude/plans/*.md
+        2. Legacy fallback: {workspace_path}/plans/plan.md
+        """
+        # First: try reading from ExitPlanMode output location
+        if ephemeral_home:
+            plans_dir = f"{ephemeral_home}/.claude/plans"
+            try:
+                # Find the most recently modified .md file
+                result = container.exec_run(
+                    ["sh", "-c", f"ls -t {plans_dir}/*.md 2>/dev/null | head -1"],
+                    user="sandboxuser",
+                )
+                if result.exit_code == 0 and result.output:
+                    plan_file = result.output.decode("utf-8", errors="replace").strip()
+                    if plan_file:
+                        content_result = container.exec_run(
+                            ["cat", plan_file],
+                            user="sandboxuser",
+                        )
+                        if content_result.exit_code == 0 and content_result.output:
+                            content = content_result.output.decode("utf-8", errors="replace")
+                            if content.strip():
+                                logger.info(
+                                    f"[CodingAgent] Read plan from ExitPlanMode: "
+                                    f"{plan_file} ({len(content)} chars)"
+                                )
+                                return content
+            except Exception as e:
+                logger.warning(f"[CodingAgent] Failed to read ExitPlanMode plans: {e}")
+
+        # Fallback: try legacy location
+        plan_path = f"{workspace_path}/plans/plan.md"
+        try:
+            result = container.exec_run(
+                ["cat", plan_path],
+                workdir=workspace_path,
+                user="sandboxuser",
+            )
+            if result.exit_code == 0 and result.output:
+                content = result.output.decode("utf-8", errors="replace")
+                if content.strip():
+                    logger.info(f"[CodingAgent] Read plan.md (legacy): {len(content)} chars")
+                    return content
+            return None
+        except Exception as e:
+            logger.warning(f"[CodingAgent] Failed to read plan.md: {e}")
+            return None
+
+    def _build_sub_agents_section(self, sub_agents: Optional[List[Dict[str, Any]]]) -> str:
+        """Build a CLAUDE.md section listing available sub-agents.
+
+        Parses the YAML frontmatter from each agent's markdown to extract
+        name and description.
+        """
+        if not sub_agents:
+            return ""
+
+        lines = ["\n## Available Sub-Agents\n"]
+        lines.append("You can delegate tasks to these sub-agents using the Task tool:\n")
+        for agent_def in sub_agents:
+            name = agent_def.get("name", "unnamed")
+            md = agent_def.get("markdown", "")
+            # Extract description from YAML frontmatter
+            description = ""
+            if md.startswith("---"):
+                parts = md.split("---", 2)
+                if len(parts) >= 3:
+                    try:
+                        import yaml
+                        fm = yaml.safe_load(parts[1])
+                        if isinstance(fm, dict):
+                            description = fm.get("description", "")
+                    except Exception:
+                        pass
+            lines.append(f"- **{name}**: {description}")
+        lines.append("")
+        return "\n".join(lines)
+
+    async def _write_mode_claude_md(
+        self,
+        container,
+        workspace_path: str,
+        mode: str,
+        sub_agents: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[str]:
+        """Write a mode-specific CLAUDE.md to the workspace root.
+
+        Claude Code deeply respects CLAUDE.md in the project directory.
+        This is our primary mechanism to control agent behavior per mode.
+        Combined with filesystem-level chmod (for plan mode), this provides
+        belt-and-suspenders enforcement.
+
+        Returns the original CLAUDE.md content (if any) for restoration, or None.
+        """
+        # Save existing CLAUDE.md if present
+        original_content = None
+        check = container.exec_run(["cat", f"{workspace_path}/CLAUDE.md"], user="sandboxuser")
+        if check.exit_code == 0 and check.output:
+            original_content = check.output.decode("utf-8", errors="replace")
+
+        sub_agents_section = self._build_sub_agents_section(sub_agents)
+
+        if mode == "plan":
+            claude_md = """# PLANNING MODE — READ ONLY
+
+**You are in PLANNING mode. The workspace is READ-ONLY.**
+
+## Absolute Rules
+- Do NOT use Write, Edit, or NotebookEdit tools — they will fail with permission errors.
+- Do NOT use Bash to create, modify, or delete files (no `cat >`, `sed -i`, `touch`, `mkdir`, `echo >`, `tee`, etc.).
+- Do NOT use TodoWrite or any tool that writes to disk.
+- Do NOT create, modify, or delete ANY files anywhere in the workspace.
+
+## What You CAN Do
+- **Read** files with Read, Glob, Grep tools.
+- **Run read-only Bash** commands: `find`, `git log`, `git diff`, `tree`, `wc`, `ls`, `cat`, `head`, `tail`, `grep`.
+- **Spawn explore sub-agents** via Task tool for parallel codebase exploration.
+- **Save your plan** using ExitPlanMode when done.
+
+## Your Goal
+Explore the codebase thoroughly, then produce a detailed implementation plan.
+Save the plan with ExitPlanMode — this is the ONLY way to deliver your output.
+"""
+        elif mode == "implement":
+            claude_md = """# IMPLEMENTATION MODE
+
+You are executing a pre-approved implementation plan. Follow the plan steps in order.
+After each significant change, create a git commit describing what was done.
+Do NOT create branches, push to remote, or create pull requests — this is handled automatically.
+
+## Package Installation
+You can install packages: `pip install <package>` and `npm install` (in the project directory) both work.
+Do NOT use `npm install -g` (global installs fail on the read-only filesystem).
+"""
+        else:
+            # Auto mode — sandbox-specific guidance
+            claude_md = """# Sandbox Environment Notes
+
+## npm / Node.js
+- `npm install` is SLOW in this environment (up to 3 minutes) due to network proxy. Always wait for it to complete fully before running build commands.
+- Use `npx <command>` instead of `npm run <command>` for build tools (next, tsc, etc.) to avoid PATH issues with `node_modules/.bin`.
+- Do NOT use `npm install -g` (global installs fail on the read-only filesystem).
+- Use `--prefix <dir>` or run from the project directory.
+
+## Working Directory
+- Always verify your cwd before running commands. Use absolute paths.
+- If you are building a project in a subdirectory, ALL files must go in that subdirectory — never create project files in the workspace root.
+
+## pip / Python
+- `pip install <package>` works (redirected to workspace via PYTHONUSERBASE).
+"""
+
+        # Append sub-agents section if there are any
+        if sub_agents_section:
+            claude_md = claude_md + sub_agents_section
+
+        # If auto mode and nothing to write, skip
+        if not claude_md.strip():
+            return original_content
+
+        # Prepend original content if it exists
+        if original_content:
+            claude_md = claude_md + "\n---\n\n" + original_content
+
+        escaped = claude_md.replace("'", "'\"'\"'")
+        write_result = container.exec_run(
+            ["sh", "-c", f"printf '%s' '{escaped}' > {workspace_path}/CLAUDE.md"],
+            user="sandboxuser",
+        )
+        if write_result.exit_code != 0:
+            logger.warning(f"[CodingAgent] Failed to write mode CLAUDE.md: {write_result.output.decode() if write_result.output else ''}")
+        else:
+            logger.info(f"[CodingAgent] Wrote {mode}-mode CLAUDE.md to workspace ({len(claude_md)} chars)")
+
+        return original_content
+
+    async def _restore_claude_md(
+        self,
+        container,
+        workspace_path: str,
+        original_content: Optional[str],
+    ):
+        """Restore the original CLAUDE.md after execution."""
+        if original_content is None:
+            # No original file — remove the one we created
+            container.exec_run(
+                ["rm", "-f", f"{workspace_path}/CLAUDE.md"],
+                user="sandboxuser",
+            )
+        else:
+            escaped = original_content.replace("'", "'\"'\"'")
+            container.exec_run(
+                ["sh", "-c", f"printf '%s' '{escaped}' > {workspace_path}/CLAUDE.md"],
+                user="sandboxuser",
+            )
+        logger.debug("[CodingAgent] Restored original CLAUDE.md")
+
+    def _build_planning_prompt(self, task: str, workspace_path: str) -> str:
+        """Build the system prompt for planning mode.
+
+        In planning mode, the agent explores the codebase and creates a
+        detailed implementation plan instead of directly making changes.
+        Uses sub-agents for exploration and ExitPlanMode to save the plan.
+        """
+        return f"""You are a planning agent. Your goal is to deeply explore the codebase and produce a thorough implementation plan.
+
+## Task
+{task}
+
+## Exploration Strategy
+- Use Task tool to spawn **explore sub-agents** for parallel codebase exploration. This is critical for large codebases.
+- Each sub-agent can search for specific patterns, read related files, or investigate a subsystem.
+- Use Bash to run commands like `find`, `wc -l`, `git log`, `tree`, etc. to understand project structure.
+- Use Read, Glob, and Grep directly for quick targeted lookups.
+- Explore thoroughly before writing the plan — the more you understand, the better the plan.
+
+## Rules
+- Do NOT modify, create, edit, or delete any source code files. This is PLANNING ONLY.
+- Do NOT implement any changes — only produce a plan.
+- When done exploring, save your plan using **ExitPlanMode**.
+
+## Plan Format
+Your plan MUST use this exact markdown structure:
+
+# Implementation Plan: <clear title>
+
+## Summary
+<2-3 sentence summary of what will be implemented>
+
+## Files to Modify
+- path/to/file1.py - <what changes>
+- path/to/file2.ts - <what changes>
+
+### Step 1: <step title>
+<detailed description of what to do>
+**Files:** file1.py, file2.py
+
+### Step 2: <step title>
+<detailed description of what to do>
+**Files:** file3.py
+
+(continue for all steps)
+
+## Testing Plan
+<how to verify the implementation works>
+"""
+
+    def _build_implementation_prompt(
+        self,
+        task: str,
+        plan_content: str,
+        workspace_path: str
+    ) -> str:
+        """Build the system prompt for implementation mode.
+
+        In implementation mode, the agent follows a pre-approved plan
+        step by step, marking progress as it goes.
+        """
+        return f"""MODE: IMPLEMENTATION
+
+Follow the approved plan step by step. Mark completed steps with ✅ in the plan file.
+
+## Task
+{task}
+
+## Plan
+{plan_content}
+"""
+
+    async def _run_agent(
+        self,
+        container,
+        job_dir: str,
+        api_key: str,
+        model: str,
+        job_token: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Run the Coding Agent CLI agent.
+
+        Uses the real Coding Agent CLI with OpenRouter as the backend.
+        The CLI is called with --print and --output-format stream-json
+        for structured output parsing.
+        """
+        try:
+            # Read config to get task and allowed tools
+            config_result = container.exec_run(
+                ["cat", f"{job_dir}/config.json"],
+                workdir=job_dir,
+                user="sandboxuser"
+            )
+
+            if config_result.exit_code != 0:
+                return {"success": False, "error": "Failed to read config"}
+
+            config = json.loads(config_result.output.decode())
+            task = config["task"]
+            allowed_tools = config.get("allowed_tools", list(self.VALID_TOOLS))
+            max_iterations = config.get("max_iterations", 20)
+            workspace_path = config["workspace_path"]
+            mcp_servers = config.get("mcp_servers")  # User's MCP servers to pass to CLI
+            mode = config.get("mode", "auto")
+            plan_content = config.get("plan_content")
+            sub_agents = config.get("sub_agents")  # Sub-agent defs as {name, markdown} dicts
+            user_model_preferences = config.get("user_model_preferences")  # Tier→model mapping
+
+            # SECURITY: Scan for dangerous config files before execution
+            is_safe, dangerous_files = await self._scan_for_dangerous_configs(
+                container, workspace_path
+            )
+            if not is_safe:
+                return {
+                    "success": False,
+                    "error": (
+                        f"Security check failed: Found potentially malicious config files "
+                        f"in workspace that could compromise agent execution: {dangerous_files}. "
+                        f"Please remove these files and try again."
+                    )
+                }
+
+            # SECURITY: Create ephemeral HOME directory for this job
+            # This prevents reading any persistent config from /home/sandboxuser/.claude/
+            # Also creates settings.json that restricts file access to workspace only
+            # In plan mode, permissions are tightened (read-only + write plans/ only)
+            job_id = job_dir.split("-")[-1] if "-" in job_dir else "unknown"
+            ephemeral_home = await self._setup_ephemeral_home(container, job_id, workspace_path, mode=mode)
+
+            # Create writable directories for pip/npm package installs on the workspace tmpfs.
+            # The root filesystem is read-only, and /tmp is small, so packages go under /workspace.
+            container.exec_run(
+                ["sh", "-c", "mkdir -p /workspace/.pip-packages /workspace/.pip-cache /workspace/.npm-cache"],
+                user="sandboxuser",
+            )
+
+            # Write sub-agent files to ephemeral home
+            if sub_agents:
+                agents_dir = f"{ephemeral_home}/.claude/agents"
+                write_cmds = [f"mkdir -p {agents_dir}"]
+                for agent_def in sub_agents:
+                    name = agent_def.get("name", "unnamed")
+                    md = agent_def.get("markdown", "")
+                    escaped_md = md.replace("'", "'\"'\"'")
+                    write_cmds.append(f"printf '%s' '{escaped_md}' > {agents_dir}/{name}.md")
+                batch_cmd = " && ".join(write_cmds)
+                sa_result = container.exec_run(["sh", "-c", batch_cmd], user="sandboxuser")
+                if sa_result.exit_code != 0:
+                    logger.warning(
+                        f"[CodingAgent] Failed to write sub-agent files: "
+                        f"{sa_result.output.decode()[:200] if sa_result.output else 'unknown'}"
+                    )
+                else:
+                    logger.info(f"[CodingAgent] Wrote {len(sub_agents)} sub-agent files to {agents_dir}")
+
+            # Inject MCP ask_user relay script into sandbox
+            mcp_script_content = Path(__file__).parent.joinpath("mcp_ask_user_script.py").read_text()
+            mcp_script_path = f"{ephemeral_home}/mcp-ask-user.py"
+            escaped_script = mcp_script_content.replace("'", "'\"'\"'")
+            inject_result = container.exec_run(
+                ["sh", "-c", f"printf '%s' '{escaped_script}' > {mcp_script_path} && chmod +x {mcp_script_path}"],
+                user="sandboxuser",
+            )
+            if inject_result.exit_code != 0:
+                logger.warning(f"[CodingAgent] Failed to inject MCP ask_user script: {inject_result.output.decode()[:200] if inject_result.output else 'unknown'}")
+
+            # Build allowed tools string
+            tools_str = ",".join(allowed_tools)
+
+            # Determine if model needs the Anthropic-to-OpenAI bridge.
+            # OpenRouter's Anthropic skin (/api/v1/messages) only works with
+            # Anthropic-provider models. Non-Anthropic models (Google, OpenAI,
+            # open-source, etc.) need the bridge which translates to OpenAI
+            # Chat Completions format and routes via /api/v1/chat/completions.
+            _model_lower = model.lower()
+            is_anthropic_model = (
+                _model_lower.startswith("anthropic/")
+                or _model_lower.startswith("claude-")
+                or "/claude" in _model_lower
+            )
+
+            if is_anthropic_model:
+                # Anthropic models → use OpenRouter's Anthropic skin directly
+                anthropic_base_url = "https://openrouter.ai/api"
+                # Always include sterna-orchestrator so MCP ask_user relay bypasses egress proxy
+                no_proxy = "localhost,127.0.0.1,sterna-orchestrator"
+                logger.info(f"[CodingAgent] Anthropic model detected ({model}), using OpenRouter Anthropic skin")
+            else:
+                # Non-Anthropic models → use the bridge in the orchestrator
+                # The bridge converts Anthropic format to OpenAI format and
+                # forwards to OpenRouter's /api/v1/chat/completions endpoint.
+                anthropic_base_url = "http://sterna-orchestrator:8003/bridge"
+                no_proxy = "localhost,127.0.0.1,sterna-orchestrator"
+                logger.info(f"[CodingAgent] Non-Anthropic model detected ({model}), routing through bridge")
+
+            # Check if any user tier model is non-Anthropic — if so, we need the bridge
+            # for those sub-agents too. Since ANTHROPIC_BASE_URL is a single value and the
+            # bridge already passes through Anthropic models, it's safe to route everything
+            # through the bridge when any tier is non-Anthropic.
+            all_tier_models = [
+                m for m in [
+                    (user_model_preferences or {}).get("fast_model_id"),
+                    (user_model_preferences or {}).get("balanced_model_id"),
+                    (user_model_preferences or {}).get("powerful_model_id"),
+                    model,  # parent model
+                ]
+                if m  # skip None and empty strings
+            ]
+            any_non_anthropic = any(
+                not (m.lower().startswith("anthropic/") or "claude" in m.lower())
+                for m in all_tier_models
+            )
+            if any_non_anthropic:
+                anthropic_base_url = "http://sterna-orchestrator:8003/bridge"
+                no_proxy = "localhost,127.0.0.1,sterna-orchestrator"
+                logger.info("[CodingAgent] Non-Anthropic tier model detected, routing through bridge")
+
+            # Set up environment for OpenRouter
+            # Claude CLI uses ANTHROPIC_API_KEY for authentication
+            env = {
+                "ANTHROPIC_BASE_URL": anthropic_base_url,
+                "ANTHROPIC_API_KEY": api_key,  # Claude CLI needs this set to the OpenRouter key
+                "ANTHROPIC_MODEL": model,
+                # ANTHROPIC_SMALL_FAST_MODEL and CLAUDE_CODE_SUBAGENT_MODEL stay pinned to
+                # the parent model. These control ad-hoc sub-agents spawned internally by
+                # Claude Code itself (e.g. via the Task tool without an explicit agent name),
+                # NOT user-defined agents from .claude/agents/. User-defined agents get their
+                # model from the .md frontmatter `model:` field, which resolves via the
+                # ANTHROPIC_DEFAULT_*_MODEL env vars below.
+                "ANTHROPIC_SMALL_FAST_MODEL": model,
+                # User-defined agent tier overrides. These map Claude CLI's internal aliases
+                # (haiku/sonnet/opus) to the user's preferred models per tier.
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": (user_model_preferences or {}).get("fast_model_id", model),
+                "ANTHROPIC_DEFAULT_SONNET_MODEL": (user_model_preferences or {}).get("balanced_model_id", model),
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": (user_model_preferences or {}).get("powerful_model_id", model),
+                # CLAUDE_CODE_SUBAGENT_MODEL controls Task sub-agents spawned without
+                # an explicit agent name. Stays pinned to parent model for billing consistency.
+                "CLAUDE_CODE_SUBAGENT_MODEL": model,
+                # TLS: Use the mitmproxy CA certificate from egress proxy
+                # This is mounted via docker-compose volume at /etc/ssl/proxy-ca/
+                "NODE_EXTRA_CA_CERTS": "/etc/ssl/proxy-ca/mitmproxy-ca-cert.pem",
+                # SECURITY: Use ephemeral home to prevent config persistence attacks
+                "HOME": ephemeral_home,
+                # SECURITY: Disable command history to prevent credential leakage
+                "HISTFILE": "/dev/null",
+                # Proxy settings for egress through mitmproxy
+                # These may already be set in container, but exec_run with environment
+                # replaces rather than merges, so we need to include them explicitly
+                "HTTP_PROXY": "http://egress-proxy:8888",
+                "HTTPS_PROXY": "http://egress-proxy:8888",
+                "http_proxy": "http://egress-proxy:8888",
+                "https_proxy": "http://egress-proxy:8888",
+                "NO_PROXY": no_proxy,
+                "no_proxy": no_proxy,
+                # Package install support (pip/npm work inside sandbox)
+                # Root filesystem is read-only; /tmp is small (200MB ephemeral home).
+                # Redirect pip user-installs and npm cache to /workspace where there's room.
+                "PIP_USER": "1",  # pip install uses user scheme (PYTHONUSERBASE)
+                "PYTHONUSERBASE": "/workspace/.pip-packages",  # pip writes here instead of ~/.local/
+                "PIP_NO_WARN_SCRIPT_LOCATION": "1",
+                "PIP_CACHE_DIR": "/workspace/.pip-cache",  # download cache on workspace tmpfs
+                "PIP_NO_INPUT": "1",  # Suppress verbose output (internal paths, versions)
+                "PIP_DISABLE_PIP_VERSION_CHECK": "1",  # Hide upgrade notices
+                "PATH": "/workspace/.pip-packages/bin:{ephemeral_home}/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin".format(ephemeral_home=ephemeral_home),
+                "NPM_CONFIG_IGNORE_SCRIPTS": "true",  # Block postinstall scripts (supply chain safety)
+                "NPM_CONFIG_CACHE": "/workspace/.npm-cache",  # npm cache on workspace tmpfs
+                "NPM_CONFIG_LOGLEVEL": "error",  # Suppress verbose npm output
+                "NPM_CONFIG_UPDATE_NOTIFIER": "false",  # Hide "new npm version available" notices
+                "NEXT_TELEMETRY_DISABLED": "1",  # Prevent next build from spawning background telemetry (causes hangs)
+            }
+
+            # Build MCP config with ask_user server (and optionally user's servers)
+            mcp_config = {
+                "mcpServers": {
+                    "ask-user": {
+                        "command": "python3",
+                        "args": [
+                            mcp_script_path,
+                            "--user-id", self.user_id,
+                            "--chat-id", self.chat_id,
+                            "--token", job_token,
+                        ],
+                    }
+                }
+            }
+            if mcp_servers:
+                logger.warning(
+                    f"[CodingAgent] MCP config requested with {len(mcp_servers)} servers "
+                    f"({list(mcp_servers.keys())}), but user MCP passthrough is temporarily disabled "
+                    "due to CLI compatibility issues. Only ask-user MCP server will be available."
+                )
+            mcp_config_path = f"{job_dir}/mcp-config.json"
+            mcp_config_json = json.dumps(mcp_config)
+            escaped_mcp = mcp_config_json.replace("'", "'\"'\"'")
+            container.exec_run(
+                ["sh", "-c", f"printf '%s' '{escaped_mcp}' > {mcp_config_path}"],
+                user="sandboxuser",
+            )
+            mcp_flag = f"--mcp-config {mcp_config_path}"
+
+            # Build the claude CLI command
+            # --print: Non-interactive mode
+            # --verbose: Required for stream-json output
+            # --output-format stream-json: Structured output for parsing
+            # --max-turns: Limit iterations
+            # --allowedTools: Restrict available tools
+            # SECURITY FLAGS:
+            # --mcp-config or --strict-mcp-config: Control MCP server access
+            # --no-session-persistence: Don't save sessions to disk (prevents data persistence)
+
+            # SECURITY: Prepend workspace enforcement instructions
+            # This ensures Claude only operates within the designated workspace
+            workspace_instruction = f"""CRITICAL WORKSPACE RESTRICTION:
+You are working in the directory: {workspace_path}
+ALL file operations MUST be within this directory. You MUST NOT:
+- Write, create, or modify files outside {workspace_path}
+- Use /tmp/, /home/, /etc/, /root/, or any absolute path outside the workspace
+- Use relative paths that escape the workspace (like ../)
+
+Use relative paths from the current directory, or paths starting with {workspace_path}/
+
+Package installation: `pip install <package>` and `npm install` both work.
+Do NOT use `npm install -g` (global installs fail on the read-only filesystem).
+
+You have access to the ask_user MCP tool to ask the user questions. Use it when:
+- You need clarification that would meaningfully change your approach
+- You're choosing between multiple valid strategies and user preference matters
+- The task is ambiguous and guessing wrong would waste significant effort
+
+Do NOT use ask_user for:
+- Routine confirmations ("Should I proceed?", "Is this OK?")
+- Questions you can answer with your own judgment
+- Permission to perform operations the user already requested
+
+---
+"""
+            # Build task with mode-specific instructions
+            if mode == "plan":
+                full_task = workspace_instruction + self._build_planning_prompt(task, workspace_path)
+            elif mode == "implement" and plan_content:
+                full_task = workspace_instruction + self._build_implementation_prompt(task, plan_content, workspace_path)
+            else:
+                full_task = workspace_instruction + "TASK:\n" + task
+
+            # Write control files to job_dir (not workspace) so they are
+            # invisible to the end user and don't pollute the project tree.
+            task_file = f"{job_dir}/.coding-agent-task.txt"
+            output_file = f"{job_dir}/.coding-agent-output.jsonl"
+            progress_file = f"{job_dir}/.coding-agent-progress.json"
+
+            # Escape the task content for shell
+            escaped_task = full_task.replace("'", "'\"'\"'")
+
+            # Build command: write task file, run claude, redirect output to file
+            # Use stdbuf -oL for line buffering and tee to write to file
+            # IMPORTANT: Redirect tee's stdout to /dev/null because in background processes
+            # stdout has no reader, which causes SIGPIPE and early termination
+            cmd = f'''printf '%s' '{escaped_task}' > {task_file} && stdbuf -oL claude --print --verbose --output-format stream-json --max-turns {max_iterations} --allowedTools "{tools_str}" --disallowedTools "AskUserQuestion" {mcp_flag} --no-session-persistence < {task_file} 2>&1 | tee {output_file} > /dev/null'''
+
+            logger.info(f"[CodingAgent] Executing Claude CLI in {workspace_path}")
+            logger.debug(f"[CodingAgent] Command: {cmd[:200]}...")
+            # Presence only — never log key material (even a prefix).
+            logger.info(f"[CodingAgent] API key provided: {bool(api_key)}")
+
+            # Write mode-specific CLAUDE.md before any filesystem restrictions.
+            # Claude Code deeply respects CLAUDE.md — this guides the agent's intent.
+            original_claude_md = await self._write_mode_claude_md(
+                container, workspace_path, mode, sub_agents=sub_agents
+            )
+
+            # PLAN MODE: Make workspace read-only at filesystem level.
+            # This is the ONLY reliable way to prevent the agent from modifying files,
+            # since Claude Code CLI does not enforce settings.json deny rules for built-in tools.
+            # CLAUDE.md guides intent, chmod enforces it.
+            if mode == "plan":
+                logger.info(f"[CodingAgent] Plan mode: making workspace read-only: {workspace_path}")
+                chmod_result = container.exec_run(
+                    ["sh", "-c", f"chmod -R a-w {workspace_path}"],
+                    user="root"
+                )
+                if chmod_result.exit_code != 0:
+                    logger.warning(f"[CodingAgent] Failed to make workspace read-only: {chmod_result.output.decode() if chmod_result.output else 'unknown'}")
+
+            try:
+                # Execute with file-based progress tracking
+                result = await asyncio.wait_for(
+                    self._execute_with_file_streaming(
+                        container=container,
+                        cmd=cmd,
+                        workspace_path=workspace_path,
+                        env=env,
+                        output_file=output_file,
+                        progress_file=progress_file,
+                    ),
+                    timeout=self.EXECUTION_TIMEOUT
+                )
+            finally:
+                # PLAN MODE: Always restore workspace write permissions after execution
+                if mode == "plan":
+                    logger.info("[CodingAgent] Plan mode: restoring workspace write permissions")
+                    container.exec_run(
+                        ["sh", "-c", f"chmod -R u+w {workspace_path}"],
+                        user="root"
+                    )
+                # Restore original CLAUDE.md (or remove ours)
+                await self._restore_claude_md(container, workspace_path, original_claude_md)
+
+            stdout = result.get("output", "")
+            exit_code = result.get("exit_code", 1)
+
+            logger.info(f"[CodingAgent] CLI exit code: {exit_code}")
+            logger.info(f"[CodingAgent] CLI output length: {len(stdout)} chars")
+            # Log first 500 chars of output for debugging
+            if stdout:
+                logger.info(f"[CodingAgent] CLI output (first 500 chars): {stdout[:500]}")
+
+            # Parse the stream-json output
+            parsed = parse_claude_output(stdout)
+            logger.info(f"[CodingAgent] Parsed {len(parsed.steps)} steps from output")
+
+            # Override: if process was killed but parser didn't detect error
+            if exit_code != 0 and parsed.success:
+                logger.warning(f"[CodingAgent] Parser reported success but exit_code={exit_code} — overriding to failure")
+                parsed.success = False
+                parsed.error = parsed.error or f"Agent process exited with code {exit_code} (likely killed by signal)"
+
+            # Convert steps to serializable format
+            steps = []
+            for step in parsed.steps:
+                steps.append({
+                    "type": step.type,
+                    "tool": step.tool,
+                    "content": step.content,
+                    "input": step.input,
+                    "output": step.output,
+                })
+
+            if parsed.success:
+                return {
+                    "success": True,
+                    "summary": parsed.summary or "Task completed",
+                    "files_modified": parsed.files_modified,
+                    "files_created": parsed.files_created,
+                    "steps": steps,
+                    "total_tokens": parsed.total_tokens,
+                    "total_cost_usd": parsed.total_cost_usd,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": parsed.error or f"CLI exited with code {exit_code}",
+                    "summary": parsed.summary,
+                    "steps": steps,
+                    "files_modified": parsed.files_modified,
+                    "files_created": parsed.files_created,
+                    "total_cost_usd": parsed.total_cost_usd,
+                }
+
+        except asyncio.TimeoutError:
+            # Update progress file to indicate timeout before re-raising
+            logger.error(f"[CodingAgent] Execution timed out after {self.EXECUTION_TIMEOUT}s")
+            try:
+                # Extract partial cost/tokens from progress store if available
+                store_key = f"{self.user_id}:{self.chat_id}"
+                partial_progress = _progress_store.get(store_key, {})
+                partial_cost = partial_progress.get("total_cost_usd", 0.0)
+                partial_tokens = partial_progress.get("total_tokens", 0)
+
+                # Write timeout status to progress file so UI can show proper state
+                timeout_progress = json.dumps({
+                    "step_count": partial_progress.get("step_count", 0),
+                    "total_steps": partial_progress.get("total_steps", 0),
+                    "completed": True,
+                    "exit_code": 124,  # Standard timeout exit code
+                    "files_created": partial_progress.get("files_created", []),
+                    "files_modified": partial_progress.get("files_modified", []),
+                    "files_read": partial_progress.get("files_read", []),
+                    "files_deleted": [],
+                    "steps": partial_progress.get("steps", []),
+                    "error": f"Execution timed out after {self.EXECUTION_TIMEOUT}s",
+                    "summary": None,
+                    "total_cost_usd": partial_cost,
+                    "total_tokens": partial_tokens,
+                })
+                cmd = f"cat > {progress_file} << 'PROGRESSEOF'\n{timeout_progress}\nPROGRESSEOF"
+                container.exec_run(["sh", "-c", cmd], user="sandboxuser")
+            except Exception as progress_err:
+                logger.warning(f"[CodingAgent] Failed to update progress file on timeout: {progress_err}")
+            raise
+        except Exception as e:
+            logger.error(f"[CodingAgent] Run error: {e}", exc_info=True)
+            # Extract partial cost from progress store
+            partial_cost = 0.0
+            store_key = f"{self.user_id}:{self.chat_id}"
+            progress = _progress_store.get(store_key, {})
+            if progress:
+                partial_cost = progress.get("total_cost_usd", 0.0)
+            return {"success": False, "error": str(e), "total_cost_usd": partial_cost}
+
+    async def _execute_with_streaming(
+        self,
+        container,
+        cmd: str,
+        workspace_path: str,
+        env: Dict[str, str],
+        progress_file: str,
+    ) -> Dict[str, Any]:
+        """
+        Execute Claude CLI with streaming output for real-time progress tracking.
+
+        Args:
+            container: Docker container to run in
+            cmd: Command to execute
+            workspace_path: Working directory
+            env: Environment variables
+            progress_file: Path to write progress JSON for monitoring
+
+        Returns:
+            Dict with output and exit_code
+        """
+        def _run_streaming():
+            """Run the streaming execution in a thread."""
+            parser = ClaudeOutputParser()
+            all_output = []
+            step_count = 0
+
+            try:
+                # Write initial progress file to indicate agent is starting
+                logger.info(f"[CodingAgent] Writing initial progress file: {progress_file}")
+                self._write_progress_file(container, progress_file, parser, 0)
+
+                # Execute with streaming enabled
+                # Use tty=True to disable output buffering (critical for real-time streaming)
+                exec_id = container.client.api.exec_create(
+                    container.id,
+                    ["sh", "-c", cmd],
+                    workdir=workspace_path,
+                    user="sandboxuser",
+                    environment=env,
+                    tty=False,  # Keep False since we use stdbuf for line buffering
+                )
+
+                logger.info(f"[CodingAgent] Started exec {exec_id['Id'][:12]}, streaming output...")
+
+                # Start execution with stream=True
+                output_stream = container.client.api.exec_start(
+                    exec_id["Id"],
+                    stream=True,
+                    demux=True,
+                )
+
+                # Buffer for incomplete lines
+                line_buffer = ""
+                chunks_received = 0
+
+                # Process output as it comes
+                for stdout_chunk, stderr_chunk in output_stream:
+                    chunks_received += 1
+                    if chunks_received <= 5 or chunks_received % 50 == 0:
+                        logger.info(f"[CodingAgent] Received chunk {chunks_received}: stdout={len(stdout_chunk) if stdout_chunk else 0}b, stderr={len(stderr_chunk) if stderr_chunk else 0}b")
+                    # Handle stdout
+                    if stdout_chunk:
+                        chunk_text = stdout_chunk.decode('utf-8', errors='replace')
+                        all_output.append(chunk_text)
+
+                        # Parse complete lines
+                        line_buffer += chunk_text
+                        while '\n' in line_buffer:
+                            line, line_buffer = line_buffer.split('\n', 1)
+                            if line.strip():
+                                step = parser.parse_line(line)
+                                if step:
+                                    parser.steps.append(step)
+                                    step_count += 1
+
+                                    # Write progress to file for real-time monitoring
+                                    self._write_progress_file(
+                                        container,
+                                        progress_file,
+                                        parser,
+                                        step_count
+                                    )
+
+                    # Handle stderr (usually errors or warnings)
+                    if stderr_chunk:
+                        stderr_text = stderr_chunk.decode('utf-8', errors='replace')
+                        all_output.append(stderr_text)
+                        logger.info(f"[CodingAgent] stderr ({len(stderr_text)}b): {stderr_text[:500]}")
+
+                logger.info(f"[CodingAgent] Stream completed: {chunks_received} chunks, {len(all_output)} output parts, {step_count} steps parsed")
+
+                # Process any remaining buffered line
+                if line_buffer.strip():
+                    step = parser.parse_line(line_buffer)
+                    if step:
+                        parser.steps.append(step)
+                        step_count += 1
+                        self._write_progress_file(container, progress_file, parser, step_count)
+
+                # Get exit code
+                exec_inspect = container.client.api.exec_inspect(exec_id["Id"])
+                exit_code = exec_inspect.get("ExitCode", 1)
+
+                # Final progress update
+                self._write_progress_file(
+                    container,
+                    progress_file,
+                    parser,
+                    step_count,
+                    completed=True,
+                    exit_code=exit_code
+                )
+
+                return {
+                    "output": "".join(all_output),
+                    "exit_code": exit_code,
+                }
+
+            except Exception as e:
+                logger.error(f"[CodingAgent] Streaming execution error: {e}", exc_info=True)
+                return {
+                    "output": "".join(all_output) if all_output else "",
+                    "exit_code": 1,
+                }
+
+        # Run in thread to not block the event loop
+        return await asyncio.to_thread(_run_streaming)
+
+    def _write_progress_file(
+        self,
+        container,
+        progress_file: str,
+        parser: 'ClaudeOutputParser',
+        step_count: int,
+        completed: bool = False,
+        exit_code: Optional[int] = None,
+    ):
+        """Write current progress to in-memory store and optionally to file."""
+        try:
+            # Build progress data - include ALL steps with full content
+            steps_data = []
+            for step in parser.steps:
+                step_data = {
+                    "type": step.type,
+                    "tool": step.tool,
+                    "content": step.content,  # Full content, not truncated
+                }
+                # Include tool input if available
+                if step.input:
+                    step_data["input"] = step.input
+                # Include tool output if available
+                if step.output:
+                    step_data["output"] = step.output
+                steps_data.append(step_data)
+
+            progress = {
+                "step_count": step_count,
+                "total_steps": len(parser.steps),
+                "completed": completed,
+                "exit_code": exit_code,
+                "files_created": list(parser.files_created),
+                "files_modified": list(parser.files_modified),
+                "files_read": list(parser.files_read),
+                "files_deleted": list(parser.files_deleted),
+                "steps": steps_data,  # All steps with full content
+                "error": parser.error,
+                "summary": parser.summary,  # Full summary
+                "total_cost_usd": parser.total_cost_usd,
+                "total_tokens": parser.total_tokens,
+            }
+
+            # Always update in-memory store (primary source for progress endpoint)
+            store_key = f"{self.user_id}:{self.chat_id}"
+            _progress_store[store_key] = progress
+
+            # Also try file-based write (best-effort, may fail on tmpfs mounts)
+            try:
+                progress_json = json.dumps(progress)
+                progress_dir = "/".join(progress_file.split("/")[:-1])
+                progress_filename = progress_file.split("/")[-1]
+
+                tar_buffer = io.BytesIO()
+                with tarfile.open(fileobj=tar_buffer, mode='w') as tar:
+                    data = progress_json.encode('utf-8')
+                    tarinfo = tarfile.TarInfo(name=progress_filename)
+                    tarinfo.size = len(data)
+                    tarinfo.uid = 1000
+                    tarinfo.gid = 1000
+                    tarinfo.mode = 0o644
+                    tar.addfile(tarinfo, io.BytesIO(data))
+                tar_buffer.seek(0)
+                container.put_archive(progress_dir, tar_buffer.getvalue())
+            except Exception:
+                pass  # File write is best-effort; in-memory store is the primary source
+
+        except Exception as e:
+            logger.warning(f"[CodingAgent] Failed to update progress: {e}")
+
+    async def _execute_with_file_streaming(
+        self,
+        container,
+        cmd: str,
+        workspace_path: str,
+        env: Dict[str, str],
+        output_file: str,
+        progress_file: str,
+    ) -> Dict[str, Any]:
+        """
+        Execute Claude CLI with file-based progress tracking.
+
+        Instead of relying on Docker's streaming API (which has buffering issues with piped commands),
+        this method:
+        1. Runs the command in the background with shell backgrounding
+        2. Polls the output file periodically to read new output
+        3. Parses the output and updates progress file for the frontend
+
+        Args:
+            container: Docker container to run in
+            cmd: Command to execute (should use tee to write to output_file)
+            workspace_path: Working directory
+            env: Environment variables
+            output_file: Path where command output is being written via tee
+            progress_file: Path to write progress JSON for monitoring
+
+        Returns:
+            Dict with output and exit_code
+        """
+        def _run_with_file_polling():
+            """Run command in background and poll output file for progress updates."""
+            import time as time_module
+            parser = ClaudeOutputParser()
+            step_count = 0
+            last_file_position = 0
+            # Derive control file directory from output_file location
+            # In plan mode, output_file is in job_dir (not workspace), so pid/exit-code follow
+            _control_dir = "/".join(output_file.rsplit("/", 1)[:-1]) if "/" in output_file else workspace_path
+            pid_file = f"{_control_dir}/.coding-agent-pid"
+            exit_code_file = f"{_control_dir}/.coding-agent-exit-code"
+
+            try:
+                # Write initial progress file to indicate agent is starting
+                logger.info(f"[CodingAgent] Writing initial progress file: {progress_file}")
+                self._write_progress_file(container, progress_file, parser, 0)
+
+                # Clear output file and pid file
+                container.exec_run(
+                    ["sh", "-c", f"rm -f {output_file} {pid_file} {exit_code_file}; touch {output_file}"],
+                    user="sandboxuser"
+                )
+
+                # Build environment export string for shell
+                # Docker's environment parameter doesn't always export vars to subshells
+                env_exports = " && ".join([
+                    f'export {k}="{v}"' for k, v in env.items()
+                ])
+
+                # Build background command that writes its PID and exit code
+                # The command runs in background, writes PID, and writes exit code on completion
+                bg_cmd = f'''
+                    {env_exports} && (
+                        {cmd}
+                        echo $? > {exit_code_file}
+                    ) &
+                    echo $! > {pid_file}
+                '''
+
+                logger.info("[CodingAgent] Starting background command...")
+                logger.debug(f"[CodingAgent] Environment exports: {list(env.keys())}")
+
+                # Start the background process
+                start_result = container.exec_run(
+                    ["sh", "-c", bg_cmd],
+                    workdir=workspace_path,
+                    user="sandboxuser",
+                )
+
+                if start_result.exit_code != 0:
+                    logger.error(f"[CodingAgent] Failed to start background process: {start_result.output.decode() if start_result.output else 'no output'}")
+                    return {"output": "", "exit_code": 1}
+
+                # Read the PID
+                time_module.sleep(0.1)
+                pid_result = container.exec_run(["cat", pid_file], user="sandboxuser")
+                pid = pid_result.output.decode().strip() if pid_result.exit_code == 0 and pid_result.output else None
+                logger.info(f"[CodingAgent] Background process started with PID: {pid}")
+
+                # Poll for completion and process output
+                poll_interval = 0.5  # seconds
+                max_polls = int(self.EXECUTION_TIMEOUT / poll_interval) + 10
+                poll_count = 0
+                line_buffer = ""
+
+                while poll_count < max_polls:
+                    poll_count += 1
+
+                    # Check if process completed by looking for exit code file
+                    # Fallback: also check if the PID is a zombie (process exited but
+                    # exit code file was never written, e.g. killed by signal)
+                    check_result = container.exec_run(
+                        ["sh", "-c", f"test -f {exit_code_file} && echo 'DONE' || echo 'RUNNING'"],
+                        user="sandboxuser"
+                    )
+                    is_running = check_result.output.decode().strip() == "RUNNING" if check_result.output else True
+
+                    # Fallback: if exit code file missing, check if PID is zombie or gone
+                    if is_running and poll_count > 10:
+                        pid_check = container.exec_run(
+                            ["sh", "-c", f"cat {pid_file} 2>/dev/null"],
+                            user="sandboxuser"
+                        )
+                        agent_pid = pid_check.output.decode().strip() if pid_check.output else ""
+                        if agent_pid:
+                            state_check = container.exec_run(
+                                ["sh", "-c", f"cat /proc/{agent_pid}/status 2>/dev/null | grep -m1 '^State:' || echo 'State:\tGONE'"],
+                                user="sandboxuser"
+                            )
+                            state = state_check.output.decode().strip() if state_check.output else ""
+                            if "zombie" in state.lower() or "GONE" in state:
+                                logger.warning(f"[CodingAgent] Process {agent_pid} is {state} — exit code file missing (likely killed by signal)")
+                                is_running = False
+
+                    # Read new content from output file
+                    read_cmd = f"tail -c +{last_file_position + 1} {output_file} 2>/dev/null || true"
+                    read_result = container.exec_run(
+                        ["sh", "-c", read_cmd],
+                        user="sandboxuser"
+                    )
+
+                    if read_result.exit_code == 0 and read_result.output:
+                        new_content = read_result.output.decode('utf-8', errors='replace')
+                        if new_content:
+                            last_file_position += len(read_result.output)
+
+                            # Parse complete lines
+                            line_buffer += new_content
+                            while '\n' in line_buffer:
+                                line, line_buffer = line_buffer.split('\n', 1)
+                                if line.strip():
+                                    step = parser.parse_line(line)
+                                    if step:
+                                        parser.steps.append(step)
+                                        step_count += 1
+
+                                        # Update progress file
+                                        self._write_progress_file(
+                                            container,
+                                            progress_file,
+                                            parser,
+                                            step_count
+                                        )
+
+                    # Log progress periodically (more frequently at start for debugging)
+                    if poll_count <= 5 or poll_count % 20 == 0:
+                        logger.info(f"[CodingAgent] Poll {poll_count}: {step_count} steps, {last_file_position} bytes, running={is_running}")
+
+                    # Check if process completed
+                    if not is_running:
+                        # Give it a moment to finish writing
+                        time_module.sleep(0.3)
+
+                        # Read any final content
+                        final_read_cmd = f"tail -c +{last_file_position + 1} {output_file} 2>/dev/null || true"
+                        final_result = container.exec_run(["sh", "-c", final_read_cmd], user="sandboxuser")
+                        if final_result.exit_code == 0 and final_result.output:
+                            final_content = final_result.output.decode('utf-8', errors='replace')
+                            line_buffer += final_content
+                            while '\n' in line_buffer:
+                                line, line_buffer = line_buffer.split('\n', 1)
+                                if line.strip():
+                                    step = parser.parse_line(line)
+                                    if step:
+                                        parser.steps.append(step)
+                                        step_count += 1
+
+                        # Check the final file size for debugging
+                        size_result = container.exec_run(["sh", "-c", f"wc -c < {output_file}"], user="sandboxuser")
+                        final_size = size_result.output.decode().strip() if size_result.output else "unknown"
+                        logger.info(f"[CodingAgent] Process completed after {poll_count} polls, final output size: {final_size} bytes, steps: {step_count}")
+                        break
+
+                    # Wait before next poll
+                    time_module.sleep(poll_interval)
+
+                # Process any remaining buffered line
+                if line_buffer.strip():
+                    step = parser.parse_line(line_buffer)
+                    if step:
+                        parser.steps.append(step)
+                        step_count += 1
+
+                # Read complete output file for return value
+                full_output_result = container.exec_run(
+                    ["cat", output_file],
+                    user="sandboxuser"
+                )
+                full_output = full_output_result.output.decode('utf-8', errors='replace') if full_output_result.output else ""
+
+                # Read exit code from file
+                exit_code_result = container.exec_run(["cat", exit_code_file], user="sandboxuser")
+                exit_code = 0
+                if exit_code_result.exit_code == 0 and exit_code_result.output:
+                    try:
+                        exit_code = int(exit_code_result.output.decode().strip())
+                    except ValueError:
+                        exit_code = 1
+                else:
+                    # Exit code file missing — process was likely killed by signal
+                    logger.warning("[CodingAgent] Exit code file missing — defaulting to exit_code=137 (killed)")
+                    exit_code = 137
+
+                # Write final progress
+                self._write_progress_file(
+                    container,
+                    progress_file,
+                    parser,
+                    step_count,
+                    completed=True,
+                    exit_code=exit_code
+                )
+
+                logger.info(f"[CodingAgent] Execution complete: {step_count} steps, exit code {exit_code}")
+
+                return {
+                    "output": full_output,
+                    "exit_code": exit_code,
+                }
+
+            except Exception as e:
+                logger.error(f"[CodingAgent] File streaming execution error: {e}", exc_info=True)
+                # Try to read whatever output we have
+                try:
+                    output_result = container.exec_run(["cat", output_file], user="sandboxuser")
+                    output = output_result.output.decode('utf-8', errors='replace') if output_result.output else ""
+                except Exception:
+                    output = ""
+                return {
+                    "output": output,
+                    "exit_code": 1,
+                }
+
+        # Run in thread to not block the event loop
+        return await asyncio.to_thread(_run_with_file_polling)

@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /api/
+Disallow: /app/
+Allow: /
+
+Sitemap: https://example.com/sitemap.xml

@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: brave-search
+  namespace: sterna
+  labels:
+    app: brave-search
+    app.kubernetes.io/name: brave-search
+    app.kubernetes.io/component: search
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: brave-search
+  template:
+    metadata:
+      labels:
+        app: brave-search
+        app.kubernetes.io/name: brave-search
+    spec:
+      serviceAccountName: brave-search
+      containers:
+        - name: brave-search
+          image: ghcr.io/sterna-ai/brave-search:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8004
+              protocol: TCP
+          env:
+            - name: BRAVE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-services-secrets
+                  key: BRAVE_API_KEY
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: SENTRY_DSN_BRAVE
+                  optional: true
+          envFrom:
+            - configMapRef:
+                name: common-config
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8004
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8004
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

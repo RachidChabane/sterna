@@ -1,0 +1,12 @@
+{
+  "runtimes": {
+    "runsc": {
+      "path": "/usr/local/bin/runsc",
+      "runtimeArgs": [
+        "--platform=ptrace",
+        "--network=sandbox"
+      ]
+    }
+  },
+  "default-runtime": "runc"
+}

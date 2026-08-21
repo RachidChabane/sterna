@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: sterna
+data:
+  # All frontend environment variables come from Scaleway Secret Manager
+  # via the frontend-secrets ExternalSecret:
+  # - VITE_API_URL
+  # - VITE_WS_URL
+  # - VITE_ENABLE_SANDBOX
+  # - VITE_ENABLE_MCP
+  # - VITE_ENABLE_ANALYTICS
+  #
+  # This ConfigMap only contains static, non-sensitive values
+  NODE_ENV: "production"
+---
+# Nginx configuration for Kubernetes (with correct service names)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-nginx-config
+  namespace: sterna
+data:
+  default.conf: |
+    server {
+        listen 3000;
+        server_name localhost;
+
+        # Frontend - React app
+        location / {
+            root /usr/share/nginx/html;
+            index index.html index.htm;
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Backend API proxy - route through API gateway
+        # Using variable for dynamic DNS resolution at runtime
+        # The service name pattern is: [prefix]-api-gateway where prefix is staging/prod
+        location /api {
+            resolver coredns.kube-system.svc.cluster.local valid=5s;
+            set $backend_api_gateway staging-api-gateway.sterna.svc.cluster.local;
+            proxy_pass http://$backend_api_gateway;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+        }
+
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+    }

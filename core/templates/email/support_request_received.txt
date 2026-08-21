@@ -1,0 +1,13 @@
+We received your request
+========================
+
+Hi {{ email }},
+
+Thanks for reaching out. We received your support request and will
+get back to you within 1–2 business days.
+
+Subject: {{ subject }}
+
+{{ message }}
+
+— The Sterna team

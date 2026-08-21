@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+  namespace: sterna
+  labels:
+    app: orchestrator
+    app.kubernetes.io/name: orchestrator
+    app.kubernetes.io/component: sandbox
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orchestrator
+  template:
+    metadata:
+      labels:
+        app: orchestrator
+        app.kubernetes.io/name: orchestrator
+    spec:
+      serviceAccountName: orchestrator
+      containers:
+        - name: orchestrator
+          image: ghcr.io/sterna-ai/orchestrator:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8003
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: DATABASE_URL
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: JWT_SECRET_KEY
+            - name: R2_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_ACCESS_KEY_ID
+                  optional: true
+            - name: R2_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_SECRET_ACCESS_KEY
+                  optional: true
+            - name: R2_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_BUCKET_NAME
+                  optional: true
+            - name: R2_ENDPOINT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: storage-secrets
+                  key: R2_ENDPOINT
+                  optional: true
+            # Kubernetes-specific config
+            - name: ORCHESTRATOR_MODE
+              value: "kubernetes"
+            - name: SANDBOX_NAMESPACE
+              value: "sterna-sandboxes"
+            - name: SANDBOX_RUNTIME_CLASS
+              value: "gvisor"
+            - name: SANDBOX_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: orchestrator-config
+                  key: SANDBOX_IMAGE
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: SENTRY_DSN_ORCHESTRATOR
+                  optional: true
+          envFrom:
+            - configMapRef:
+                name: common-config
+            - configMapRef:
+                name: orchestrator-config
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: orchestrator
+                topologyKey: kubernetes.io/hostname

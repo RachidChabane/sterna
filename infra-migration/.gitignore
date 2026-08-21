@@ -1,0 +1,25 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+tfplan
+*.tfplan
+
+# Secrets - ignore actual secrets but allow templates
+secrets/
+!kubernetes/base/secrets/
+kubernetes/base/secrets/secrets.yaml
+*.pem
+*.key
+
+# OS
+.DS_Store

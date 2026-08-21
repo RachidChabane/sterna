@@ -1,0 +1,54 @@
+{% extends "email/base.html" %}{% load i18n %}
+{% block content %}
+<p>{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}</p>
+<p>{% blocktrans with brand=brand_name %}Thanks for your subscription to {{ brand }}. Here is your receipt.{% endblocktrans %}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:24px 0;border-collapse:collapse;">
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;font-size:14px;">{% trans "Plan" %}</td>
+    <td style="padding:8px 0;text-align:right;font-weight:500;">{{ invoice.plan_name }}</td>
+  </tr>
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;font-size:14px;">{% trans "Subtotal" %}</td>
+    <td style="padding:8px 0;text-align:right;font-weight:500;">{{ invoice.subtotal_display }}</td>
+  </tr>
+  {% if invoice.tax_display %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;font-size:14px;">{{ invoice.tax_rate_display|default:"VAT" }}</td>
+    <td style="padding:8px 0;text-align:right;font-weight:500;">{{ invoice.tax_display }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;font-size:14px;border-top:1px solid #e5e7eb;">{% trans "Total paid" %}</td>
+    <td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #e5e7eb;">{{ invoice.amount_display }}</td>
+  </tr>
+  {% if invoice.date_paid_display %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;font-size:14px;">{% trans "Date paid" %}</td>
+    <td style="padding:8px 0;text-align:right;font-weight:500;">{{ invoice.date_paid_display }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;font-size:14px;">{% trans "Billing period" %}</td>
+    <td style="padding:8px 0;text-align:right;font-weight:500;">{{ invoice.period_start }} &mdash; {{ invoice.period_end }}</td>
+  </tr>
+  {% if invoice.next_renewal_display %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;font-size:14px;">{% trans "Next renewal" %}</td>
+    <td style="padding:8px 0;text-align:right;font-weight:500;">{{ invoice.next_renewal_display }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td style="padding:8px 0;color:#6b7280;font-size:14px;">{% trans "Invoice" %}</td>
+    <td style="padding:8px 0;text-align:right;font-weight:500;">{{ invoice.invoice_number }}</td>
+  </tr>
+</table>
+<p style="text-align:center;margin:32px 0;">
+  {% if invoice.hosted_invoice_url %}
+  <a href="{{ invoice.hosted_invoice_url }}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:500;margin-right:8px;">{% trans "View online" %}</a>
+  {% endif %}
+  {% if invoice.invoice_pdf %}
+  <a href="{{ invoice.invoice_pdf }}" style="display:inline-block;padding:12px 24px;background:#ffffff;color:#2563eb;text-decoration:none;border-radius:6px;font-weight:500;border:1px solid #2563eb;">{% trans "Download PDF" %}</a>
+  {% endif %}
+</p>
+<p style="font-size:14px;color:#6b7280;">{% blocktrans with brand=brand_name %}Manage your subscription anytime from your {{ brand }} billing page.{% endblocktrans %}</p>
+{% endblock %}

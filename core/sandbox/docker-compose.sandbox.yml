@@ -1,0 +1,297 @@
+services:
+  # Orchestrator Service
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    image: sterna-orchestrator:latest
+    container_name: sterna-orchestrator
+    user: "0:0"  # Run as root for Docker socket access (macOS)
+    # Dev-only hot reload (the image CMD is production-grade, no --reload)
+    command: uvicorn main:app --host 0.0.0.0 --port 8003 --reload
+    ports:
+      - "8003:8003"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox-user1-project1-workspace:/workspace/user1/project1:rw
+      - sandbox-ide-user1-project1-workspace:/workspace/ide-user1/project1:rw
+      - ./orchestrator:/app  # Mount source code for hot reload
+    networks:
+      sandbox-network:       # Main network - for Django backend communication only
+      sandbox-isolated:      # Isolated network - for sandbox containers
+      core_default:          # External network - for API gateway communication
+        aliases:
+          - orchestrator     # Alias so API gateway can reach us as "orchestrator"
+    environment:
+      - JWT_SECRET_KEY=django-insecure-development-key
+      - JWT_ALGORITHM=HS256
+      - DEBUG=True
+      # Workspace persistence
+      - DJANGO_API_URL=http://host.docker.internal:8000
+      # Internal service authentication (for workspace sync)
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-}
+      # Sandbox configuration
+      - SANDBOX_IDLE_TIMEOUT=900
+      - SANDBOX_MEMORY_LIMIT=2g
+      - SANDBOX_WORKSPACE_SIZE=1024M
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  # Egress proxy for sandboxed network access
+  egress-proxy:
+    build:
+      context: ./runtime
+      dockerfile: Dockerfile.egress-proxy
+    image: sterna-egress-proxy:latest
+    container_name: sterna-egress-proxy
+    user: "0:0"  # Start as root to copy CA cert, then drop to proxyuser
+    ports:
+      - "8888:8888"
+      - "8889:8889"  # Control API for dynamic whitelist
+    volumes:
+      # Share the mitmproxy CA certificate with sandbox containers
+      # This allows sandbox containers to trust the proxy for HTTPS interception
+      - proxy-ca:/shared-ca
+    # Copy CA cert to shared volume as root, then run mitmdump as proxyuser
+    command: >
+      sh -c "cp /home/proxyuser/.mitmproxy/mitmproxy-ca-cert.pem /shared-ca/ &&
+             chmod 644 /shared-ca/mitmproxy-ca-cert.pem &&
+             exec su proxyuser -c 'exec mitmdump --set confdir=/home/proxyuser/.mitmproxy -s /app/proxy.py --listen-host 0.0.0.0 --listen-port 8888 --ssl-insecure'"
+    networks:
+      sandbox-network:
+        aliases:
+          - egress-proxy
+      sandbox-isolated:
+        aliases:
+          - egress-proxy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1', 8888)); s.close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Example sandbox container (template - base runtime)
+  # In production, these will be created dynamically per user/project
+  # sandbox-example:
+  #     build:
+  #       context: ./runtime
+  #       dockerfile: Dockerfile.sandbox-base
+  #     runtime: runsc  # gVisor runtime for enhanced security
+  #     container_name: sandbox-user1-project1
+  # 
+  #     # Security: Run as non-root user
+  #     user: "1000:1000"
+  # 
+  #     # Security: Read-only root filesystem
+  #     read_only: true
+  # 
+  #     # Resource limits (CPU, Memory, PIDs)
+  #     deploy:
+  #       resources:
+  #         limits:
+  #           cpus: '1.0'          # 1 CPU core max
+  #           memory: 1G            # 1GB RAM max
+  #           pids: 100             # Max 100 processes
+  #         reservations:
+  #           cpus: '0.25'         # Guaranteed CPU
+  #           memory: 256M         # Guaranteed RAM
+  # 
+  #     # Tmpfs mounts for writable temporary storage
+  #     tmpfs:
+  #       - /tmp:size=100M,mode=1777
+  #       - /run/secrets:size=10M,mode=0700,uid=1000,gid=1000
+  # 
+  #     # Volume mounts
+  #     volumes:
+  #       # Workspace: Read-Write for project files
+  #       - sandbox-user1-project1-workspace:/workspace:rw
+  #       # App code: Read-Only (for skills/scripts)
+  #       - ./skills:/app:ro
+  # 
+  #     # Environment variables
+  #     environment:
+  #       - SANDBOX_USER_ID=user1
+  #       - SANDBOX_PROJECT_ID=project1
+  #       - HTTP_PROXY=http://egress-proxy:8888
+  #       - HTTPS_PROXY=http://egress-proxy:8888
+  #       - NO_PROXY=localhost,127.0.0.1
+  # 
+  #     # Network configuration
+  #     networks:
+  #       - sandbox-network
+  # 
+  #     # Disable network by default (can be enabled per-skill)
+  #     # network_mode: "none"
+  # 
+  #     # Security options
+  #     security_opt:
+  #       - no-new-privileges:true
+  #       - seccomp:unconfined  # Required for gVisor
+  # 
+  #     # Capabilities: Drop all, add only what's needed
+  #     cap_drop:
+  #       - ALL
+  #     # cap_add:
+  #     #   - NET_BIND_SERVICE  # Only if needed
+  # 
+  #     # Prevent privilege escalation
+  #     privileged: false
+  # 
+  #     # Command: Keep container running for exec commands
+  #     command: ["tail", "-f", "/dev/null"]
+  # 
+  #     # Healthcheck
+  #     healthcheck:
+  #       test: ["CMD", "echo", "healthy"]
+  #       interval: 30s
+  #       timeout: 3s
+  #       retries: 3
+  #       start_period: 5s
+
+  # Example IDE sandbox (OpenVSCode Server with Traefik routing)
+  # In production, created dynamically per user/project
+  # sandbox-ide-user1-project1:
+  #     build:
+  #       context: ./runtime
+  #       dockerfile: Dockerfile.sandbox-ide
+  #     runtime: runsc
+  #     container_name: sandbox-ide-user1-project1
+  # 
+  #     # Security: Run as non-root user
+  #     user: "1000:1000"
+  # 
+  #     # Security: Read-only root filesystem
+  #     read_only: true
+  # 
+  #     # Resource limits
+  #     deploy:
+  #       resources:
+  #         limits:
+  #           cpus: '2.0'          # IDE needs more resources
+  #           memory: 2G
+  #           pids: 200
+  #         reservations:
+  #           cpus: '0.5'
+  #           memory: 512M
+  # 
+  #     # Tmpfs mounts
+  #     tmpfs:
+  #       - /tmp:size=200M,mode=1777
+  #       - /run/secrets:size=10M,mode=0700,uid=1000,gid=1000
+  #
+  #     # Volume mounts
+  #     volumes:
+  #       # Persistent workspace for this user×project
+  #       - sandbox-ide-user1-project1-workspace:/workspace:rw
+  # 
+  #     # Environment
+  #     environment:
+  #       - SANDBOX_USER_ID=user1
+  #       - SANDBOX_PROJECT_ID=project1
+  #       - HTTP_PROXY=http://egress-proxy:8888
+  #       - HTTPS_PROXY=http://egress-proxy:8888
+  #       - NO_PROXY=localhost,127.0.0.1,traefik
+  # 
+  #     # Network
+  #     networks:
+  #       - sandbox-network
+  # 
+  #     # Traefik routing labels
+  #     labels:
+  #       - "traefik.enable=true"
+  #       # HTTP router
+  #       - "traefik.http.routers.ide-user1-project1.rule=PathPrefix(`/ide/user1/project1`)"
+  #       - "traefik.http.routers.ide-user1-project1.entrypoints=ide"
+  #       - "traefik.http.routers.ide-user1-project1.middlewares=auth-jwt@file,security-headers@file,ide-cors@file"
+  #       # Strip prefix before forwarding to container
+  #       - "traefik.http.middlewares.ide-user1-project1-strip.stripprefix.prefixes=/ide/user1/project1"
+  #       - "traefik.http.routers.ide-user1-project1.middlewares=ide-user1-project1-strip"
+  #       # Service
+  #       - "traefik.http.services.ide-user1-project1.loadbalancer.server.port=3000"
+  #       # WebSocket support
+  #       - "traefik.http.services.ide-user1-project1.loadbalancer.sticky.cookie=true"
+  # 
+  #     # Security options
+  #     security_opt:
+  #       - no-new-privileges:true
+  #       - seccomp:unconfined
+  # 
+  #     cap_drop:
+  #       - ALL
+  # 
+  #     privileged: false
+  # 
+  #     # Healthcheck
+  #     healthcheck:
+  #       test: ["CMD", "curl", "-f", "http://localhost:3000/healthz"]
+  #       interval: 30s
+  #       timeout: 3s
+  #       retries: 3
+  #       start_period: 10s
+
+  # Sandbox runtime base images. These are NOT long-running compose services —
+  # sandbox_executor.py spawns per-session containers from sandbox-datascience:latest
+  # by name (docker.from_env().containers.run(image="sandbox-datascience:latest", ...)),
+  # bypassing compose entirely; sandbox-base only exists as the FROM base that
+  # Dockerfile.sandbox-datascience builds on, never run directly. Both are declared
+  # here only so `docker compose --profile build-only build` is the single canonical
+  # way to build every image this stack depends on (see Makefile target
+  # `sandbox-build`); the `build-only` profile keeps them out of `docker compose up`.
+  sandbox-base:
+    build:
+      context: ./runtime
+      dockerfile: Dockerfile.sandbox-base
+    image: sandbox-base:latest
+    profiles: ["build-only"]
+
+  sandbox-datascience:
+    build:
+      context: ./runtime
+      dockerfile: Dockerfile.sandbox-datascience
+      # Dockerfile.sandbox-datascience FROMs ${BASE_IMAGE:-sandbox-base:latest};
+      # depends_on ensures sandbox-base is built first so the local tag exists.
+    image: sandbox-datascience:latest
+    profiles: ["build-only"]
+    depends_on:
+      - sandbox-base
+
+networks:
+  sandbox-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+  # Internal network for sandbox containers (NO internet access)
+  sandbox-isolated:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24
+
+  # External network for API gateway communication
+  core_default:
+    external: true
+
+volumes:
+  # Persistent workspaces per user×project
+  sandbox-user1-project1-workspace:
+    driver: local
+  sandbox-ide-user1-project1-workspace:
+    driver: local
+  # Shared volume for mitmproxy CA certificate
+  # Allows sandbox containers to trust the egress proxy for HTTPS
+  proxy-ca:
+    driver: local
+

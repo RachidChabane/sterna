@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orchestrator-config
+  namespace: sterna
+data:
+  # Orchestrator mode - kubernetes for K8s pod-based sandboxes
+  ORCHESTRATOR_MODE: "kubernetes"
+
+  # Sandbox container image (sandbox-datascience includes numpy, pandas, matplotlib, etc.)
+  SANDBOX_IMAGE: "ghcr.io/sterna-ai/sandbox-datascience:latest"
+
+  # Resource limits per sandbox
+  SANDBOX_CPU_REQUEST: "100m"
+  SANDBOX_CPU_LIMIT: "1000m"
+  SANDBOX_MEMORY_REQUEST: "256Mi"
+  SANDBOX_MEMORY_LIMIT: "1536Mi"
+
+  # Sandbox lifecycle
+  SANDBOX_IDLE_TIMEOUT: "3600"
+  SANDBOX_MAX_LIFETIME: "86400"
+  SANDBOX_CLEANUP_INTERVAL: "60"
+
+  # Network configuration
+  EGRESS_PROXY_URL: "http://egress-proxy:3128"
+  ENABLE_NETWORK_POLICY: "true"
+
+  # MCP configuration (runs inside sandbox)
+  MCP_SERVERS_ENABLED: "true"
+
+  # Storage
+  SANDBOX_STORAGE_SIZE: "5Gi"
+  SANDBOX_STORAGE_CLASS: "hcloud-volumes"

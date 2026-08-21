@@ -1,0 +1,13 @@
+{% extends "email/base.txt" %}{% load i18n %}
+{% block content %}
+{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}
+
+{% blocktrans with brand=brand_name %}Your {{ brand }} data export is ready.{% endblocktrans %}
+
+{% trans "Download:" %} {{ action_url }}
+{% trans "Expires:" %} {{ expires_at|date:"Y-m-d H:i T" }}
+
+{% trans "The zip includes profile, conversations, sparks, knowledge-base documents, usage logs, and audit log. Encrypted secrets are redacted." %}
+
+{% blocktrans with support=support_email %}If you didn't request this, please contact {{ support }}.{% endblocktrans %}
+{% endblock %}

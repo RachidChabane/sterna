@@ -1,0 +1,121 @@
+[
+    {
+        "model": "usage_quota.servicepricing",
+        "pk": "00000000-0000-0000-0000-000000000010",
+        "fields": {
+            "service": "elevenlabs_tts",
+            "model_id": "",
+            "price_per_1k_chars": "0.300000",
+            "price_per_minute": null,
+            "price_per_request": null,
+            "price_per_1m_input_tokens": null,
+            "price_per_1m_output_tokens": null,
+            "effective_from": "2025-01-01T00:00:00Z",
+            "effective_until": null,
+            "is_active": true,
+            "created_at": "2025-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "usage_quota.servicepricing",
+        "pk": "00000000-0000-0000-0000-000000000011",
+        "fields": {
+            "service": "elevenlabs_tts",
+            "model_id": "eleven_flash_v2_5",
+            "price_per_1k_chars": "0.110000",
+            "price_per_minute": null,
+            "price_per_request": null,
+            "price_per_1m_input_tokens": null,
+            "price_per_1m_output_tokens": null,
+            "effective_from": "2025-01-01T00:00:00Z",
+            "effective_until": null,
+            "is_active": true,
+            "created_at": "2025-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "usage_quota.servicepricing",
+        "pk": "00000000-0000-0000-0000-000000000012",
+        "fields": {
+            "service": "elevenlabs_tts",
+            "model_id": "eleven_turbo_v2_5",
+            "price_per_1k_chars": "0.180000",
+            "price_per_minute": null,
+            "price_per_request": null,
+            "price_per_1m_input_tokens": null,
+            "price_per_1m_output_tokens": null,
+            "effective_from": "2025-01-01T00:00:00Z",
+            "effective_until": null,
+            "is_active": true,
+            "created_at": "2025-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "usage_quota.servicepricing",
+        "pk": "00000000-0000-0000-0000-000000000020",
+        "fields": {
+            "service": "openai_tts",
+            "model_id": "",
+            "price_per_1k_chars": "0.015000",
+            "price_per_minute": null,
+            "price_per_request": null,
+            "price_per_1m_input_tokens": null,
+            "price_per_1m_output_tokens": null,
+            "effective_from": "2025-01-01T00:00:00Z",
+            "effective_until": null,
+            "is_active": true,
+            "created_at": "2025-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "usage_quota.servicepricing",
+        "pk": "00000000-0000-0000-0000-000000000021",
+        "fields": {
+            "service": "openai_tts",
+            "model_id": "tts-1-hd",
+            "price_per_1k_chars": "0.030000",
+            "price_per_minute": null,
+            "price_per_request": null,
+            "price_per_1m_input_tokens": null,
+            "price_per_1m_output_tokens": null,
+            "effective_from": "2025-01-01T00:00:00Z",
+            "effective_until": null,
+            "is_active": true,
+            "created_at": "2025-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "usage_quota.servicepricing",
+        "pk": "00000000-0000-0000-0000-000000000030",
+        "fields": {
+            "service": "deepgram_stt",
+            "model_id": "",
+            "price_per_1k_chars": null,
+            "price_per_minute": "0.004300",
+            "price_per_request": null,
+            "price_per_1m_input_tokens": null,
+            "price_per_1m_output_tokens": null,
+            "effective_from": "2025-01-01T00:00:00Z",
+            "effective_until": null,
+            "is_active": true,
+            "created_at": "2025-01-01T00:00:00Z"
+        }
+    },
+    {
+        "model": "usage_quota.servicepricing",
+        "pk": "00000000-0000-0000-0000-000000000040",
+        "fields": {
+            "service": "brave_search",
+            "model_id": "",
+            "price_per_1k_chars": null,
+            "price_per_minute": null,
+            "price_per_request": "0.005000",
+            "price_per_1m_input_tokens": null,
+            "price_per_1m_output_tokens": null,
+            "effective_from": "2025-01-01T00:00:00Z",
+            "effective_until": null,
+            "is_active": true,
+            "created_at": "2025-01-01T00:00:00Z"
+        }
+    }
+]

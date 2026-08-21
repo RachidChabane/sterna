@@ -1,0 +1,14 @@
+{% extends "email/base.txt" %}{% load i18n %}
+{% block content %}
+{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}
+
+{% blocktrans with brand=brand_name %}Your {{ brand }} subscription has been canceled.{% endblocktrans %}
+{% if invoice.period_end %}
+{% blocktrans with end=invoice.period_end %}Paid-tier features remain available until {{ end }}.{% endblocktrans %}
+{% else %}
+{% trans "Paid-tier features remain available until the end of the current billing period." %}
+{% endif %}
+{% trans "Re-subscribe:" %} {{ action_url }}
+
+{% blocktrans with brand=brand_name %}We'd love to know what we could improve. Reply to this email with any feedback.{% endblocktrans %}
+{% endblock %}

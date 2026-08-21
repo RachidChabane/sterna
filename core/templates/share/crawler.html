@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }} | Sterna AI</title>
+    <meta property="og:type" content="{{ og_type }}">
+    <meta property="og:title" content="{{ title }}">
+    <meta property="og:description" content="{{ description }}">
+    <meta property="og:url" content="{{ share_url }}">
+    {% if is_image %}
+    <meta property="og:image" content="{{ asset_url }}">
+    {% endif %}
+    {% if is_video %}
+    <meta property="og:video" content="{{ asset_url }}">
+    {% endif %}
+    <meta name="twitter:card" content="{% if is_video %}player{% else %}summary_large_image{% endif %}">
+    <meta name="twitter:title" content="{{ title }}">
+    <meta name="twitter:image" content="{{ asset_url }}">
+</head>
+<body></body>
+</html>

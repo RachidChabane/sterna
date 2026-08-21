@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: sterna
+  labels:
+    app: frontend
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        app.kubernetes.io/name: frontend
+    spec:
+      serviceAccountName: frontend
+      containers:
+        - name: frontend
+          image: ghcr.io/sterna-ai/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: VITE_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: frontend-secrets
+                  key: VITE_API_URL
+            - name: VITE_WS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: frontend-secrets
+                  key: VITE_WS_URL
+            - name: VITE_ENABLE_SANDBOX
+              valueFrom:
+                secretKeyRef:
+                  name: frontend-secrets
+                  key: VITE_ENABLE_SANDBOX
+            - name: VITE_ENABLE_MCP
+              valueFrom:
+                secretKeyRef:
+                  name: frontend-secrets
+                  key: VITE_ENABLE_MCP
+            - name: VITE_ENABLE_ANALYTICS
+              valueFrom:
+                secretKeyRef:
+                  name: frontend-secrets
+                  key: VITE_ENABLE_ANALYTICS
+          envFrom:
+            - configMapRef:
+                name: frontend-config
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: frontend-nginx-config
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: frontend
+                topologyKey: kubernetes.io/hostname

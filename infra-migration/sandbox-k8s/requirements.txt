@@ -1,0 +1,11 @@
+# Kubernetes client
+kubernetes>=28.1.0
+
+# Async support
+aiohttp>=3.9.0
+
+# Logging and monitoring
+structlog>=24.1.0
+
+# Type hints
+typing-extensions>=4.9.0

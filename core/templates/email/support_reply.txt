@@ -1,0 +1,14 @@
+Reply from Sterna support
+============================
+
+Hi {{ email }},
+
+We're following up on your support request: {{ subject }}
+
+---
+
+{{ reply_body }}
+
+---
+
+— The Sterna team

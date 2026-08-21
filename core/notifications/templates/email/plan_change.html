@@ -1,0 +1,13 @@
+{% extends "email/base.html" %}{% load i18n %}
+{% block content %}
+<p>{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}</p>
+{% if is_first_subscription %}
+<p>{% blocktrans with to=to_plan_name %}Welcome. Your subscription is now active on the <strong>{{ to }}</strong> plan.{% endblocktrans %}</p>
+{% else %}
+<p>{% blocktrans with from=from_plan_name to=to_plan_name %}Your plan has been changed from <strong>{{ from }}</strong> to <strong>{{ to }}</strong>.{% endblocktrans %}</p>
+<p>{% trans "Your weekly usage window is preserved." %}</p>
+{% endif %}
+<p style="text-align:center;margin:32px 0;">
+  <a href="{{ action_url }}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:500;">{% trans "View pricing" %}</a>
+</p>
+{% endblock %}

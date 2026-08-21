@@ -1,0 +1,134 @@
+Sterna
+Copyright 2026 Rachid Chabane
+
+This product includes software developed by Rachid Chabane
+(https://github.com/RachidChabane), licensed under the Apache License,
+Version 2.0. See the LICENSE file for the full license text.
+
+================================================================================
+Third-party attributions
+================================================================================
+
+Most third-party assets used by this project are pulled from public package
+registries at build time rather than vendored into the source tree; the
+obligations for those attach to the *built, distributed* frontend release
+artifact (`core/frontend`, produced by `pnpm build`). One exception is
+vendored directly in source (see below). All are listed here, as required
+by the licenses in question, for anyone who builds or redistributes this
+software.
+
+--------------------------------------------------------------------------
+MIT License — vendored in source
+--------------------------------------------------------------------------
+
+- Provider brand icon SVGs
+  `core/frontend/src/assets/provider-icons/{mono,color}/*.svg`
+  Extracted from `@lobehub/icons-static-svg` (npm, MIT License)
+  Copyright (c) 2023 LobeHub
+  https://github.com/lobehub/lobe-icons
+  See `core/frontend/src/assets/provider-icons/README.md` for the full
+  attribution and a description of how these files were derived.
+
+--------------------------------------------------------------------------
+Apache License, Version 2.0
+--------------------------------------------------------------------------
+
+The following components are included unmodified under the Apache
+License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0). No
+modifications have been made to these components, so no "changed files"
+notice under License §4(b) applies.
+
+- pdfjs-dist
+  Copyright the PDF.js contributors (Mozilla Foundation and others)
+  https://github.com/mozilla/pdf.js
+
+- DOMPurify
+  Copyright (c) Dr.-Ing. Mario Heiderich, Cure53 and contributors
+  https://github.com/cure53/DOMPurify
+  Dual-licensed (MPL-2.0 OR Apache-2.0); this project elects the
+  Apache-2.0 term.
+
+--------------------------------------------------------------------------
+SIL Open Font License, Version 1.1 (OFL-1.1)
+--------------------------------------------------------------------------
+
+The following font families are bundled into the built frontend as
+variable-font files and are used, unmodified and under their original
+names, under the SIL Open Font License 1.1 (https://openfontlicense.org).
+The OFL requires that its license text accompany any redistribution of
+the font software. Vite's production build (`pnpm build`, `core/frontend/dist/`)
+does not currently copy that text into the output on its own — the source
+of truth for it is each font's own `LICENSE` file, shipped in the
+corresponding npm package (`@fontsource-variable/bricolage-grotesque/LICENSE`,
+`@fontsource-variable/hanken-grotesk/LICENSE`). Anyone distributing the
+built frontend must include those files (or this NOTICE) alongside it.
+
+- Bricolage Grotesque
+  Copyright 2022 The Bricolage Grotesque Project Authors
+  (https://github.com/ateliertriay/bricolage)
+
+- Hanken Grotesk
+  Copyright 2021 The Hanken Grotesk Project Authors
+  (https://github.com/marcologous/hanken-grotesk)
+
+--------------------------------------------------------------------------
+MIT License
+--------------------------------------------------------------------------
+
+- KaTeX (including its bundled math fonts)
+  Copyright (c) 2013-2020 Khan Academy and other contributors
+  https://github.com/KaTeX/KaTeX
+
+- JSZip
+  Copyright (c) 2009-2016 Stuart Knightley and JSZip contributors
+  https://github.com/Stuk/jszip
+  Dual-licensed (MIT OR GPL-3.0-or-later); this project elects the MIT
+  term.
+
+--------------------------------------------------------------------------
+Creative Commons Attribution 4.0 International (CC-BY-4.0)
+--------------------------------------------------------------------------
+
+- caniuse-lite (browser-compatibility data, consumed at build time via
+  Browserslist/Autoprefixer to target supported browsers; not itself
+  application logic)
+  Data by Ben Briggs and the caniuse.com contributors
+  https://github.com/browserslist/caniuse-lite
+  https://creativecommons.org/licenses/by/4.0/
+
+--------------------------------------------------------------------------
+A full, generated inventory of every runtime dependency's license
+(backend and frontend) can be produced with `pip-licenses` (per Python
+service) and `pnpm licenses list --prod` (frontend); none of those
+dependencies are GPL, AGPL, or SSPL licensed.
+
+================================================================================
+Trademarks
+================================================================================
+
+"Sterna" and the Sterna logo are used here to identify this project; no
+separate trademark rights are asserted beyond the copyright above.
+
+Product and provider names, logos, and brands referenced or displayed by
+this software — including but not limited to OpenAI, Anthropic, Google,
+OpenRouter, Mistral, DeepSeek, and xAI — are trademarks of their
+respective owners. They are used solely to identify which AI provider or
+model a given feature connects to (nominative use); this project is not
+affiliated with, sponsored by, or endorsed by any of those trademark
+owners. The Google sign-in icon (`core/frontend/src/assets/logos/google-icon.svg`)
+is Google's official, unmodified brand asset, used per Google's Identity
+brand guidelines for the "Sign in with Google" button.
+
+================================================================================
+Third-party runtime dependency (not distributed with this software)
+================================================================================
+
+The optional coding-agent feature shells out, at runtime, to Anthropic's
+Claude Code CLI (`@anthropic-ai/claude-code`), installed from npm at
+container build time (see `core/sandbox/runtime/Dockerfile.sandbox-base`).
+That CLI is Anthropic's proprietary software, distributed under
+Anthropic's own commercial terms, and is not part of this repository or
+this NOTICE's Apache-2.0 grant. Operators enabling that feature are
+responsible for complying with Anthropic's terms for their own use of the
+CLI (or for routing requests through OpenRouter instead, which this
+codebase does by default).

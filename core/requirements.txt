@@ -1,0 +1,130 @@
+# Django and core dependencies
+Django==5.2.16
+djangorestframework==3.16.1
+django-cors-headers==4.8.0
+django-environ==0.12.0
+django-ratelimit==4.1.0
+dj-database-url==2.3.0
+django-extensions==4.1
+django-redis==6.0.0
+
+# Django Channels for WebSocket support
+channels==4.0.0
+channels-redis==4.2.0
+daphne==4.1.0
+
+# Authentication
+PyJWT==2.10.1
+cryptography==43.0.3
+djangorestframework-simplejwt==5.3.1
+django-allauth==0.57.0
+dj-rest-auth==5.0.2
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+
+# Database
+psycopg2-binary==2.9.10
+
+# Redis and caching
+redis==6.4.0
+
+# Celery
+celery==5.5.3
+django-celery-beat==2.8.1
+flower==2.0.1
+
+# Web server
+gunicorn==22.0.0
+uvicorn==0.35.0
+
+# Storage
+boto3==1.40.46
+aioboto3==15.5.0
+aiofiles==24.1.0
+# Mock S3/R2 for tests (storage app — task 22)
+moto[s3]==5.0.28
+
+# Data processing
+pandas==2.2.3
+pyarrow==17.0.0
+openpyxl==3.1.5
+chardet==5.2.0
+
+# Document processing
+PyPDF2==3.0.1
+python-docx==1.1.2
+python-pptx==1.0.2
+
+# Image processing
+Pillow==10.4.0
+
+# Validation
+pydantic==2.10.5
+
+# ML and embeddings
+scikit-learn==1.5.2
+# sentence-transformers==3.3.1  # Temporarily disabled - depends on hdbscan which has ARM64 issues
+numpy==1.26.4
+scipy==1.16.2
+# hdbscan==0.8.29  # Temporarily disabled - compilation issues on ARM64
+
+# LLM
+openai==1.59.2
+langchain==0.3.14
+langchain-openai==0.2.14
+langchain-core>=0.3.29
+beautifulsoup4==4.12.3
+trafilatura==2.0.0
+httpx==0.28.1
+
+# Stripe billing
+stripe>=10.0,<11.0
+
+# MCP (Model Context Protocol)
+websockets==14.1
+
+# Testing
+pytest==8.3.4
+pytest-django==4.10.0
+pytest-cov==6.0.0
+pytest-xdist==3.6.1
+factory-boy==3.3.1
+faker==33.1.0
+responses==0.25.3
+
+# Code quality
+ruff==0.8.6
+mypy==1.14.1
+django-stubs==5.1.1
+djangorestframework-stubs==3.15.1
+types-redis==4.6.0.20241004
+types-requests==2.32.0.20240914
+
+# Development tools
+ipython==8.31.0
+django-debug-toolbar==4.4.6
+
+# Monitoring and logging
+python-json-logger==3.2.1
+sentry-sdk==2.20.0
+
+# API documentation
+drf-spectacular==0.28.0
+# drf-yasg==1.21.7  # Replaced with drf-spectacular
+jsonschema==4.25.1
+
+# Load testing
+locust==2.20.1
+gevent==24.11.1
+greenlet==3.2.0
+
+# Knowledge Base / RAG
+pgvector==0.3.6
+pypdf==5.1.0
+tiktoken==0.8.0
+langchain-text-splitters>=0.3.3
+tenacity==9.0.0
+
+# Transactional email (Resend)
+resend==2.4.0

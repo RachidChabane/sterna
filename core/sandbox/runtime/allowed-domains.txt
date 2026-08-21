@@ -1,0 +1,19 @@
+# PyPI - Python Package Index
+^pypi\.org$
+^files\.pythonhosted\.org$
+^.*\.pythonhosted\.org$
+
+# GitHub (for git clones of public repos)
+^github\.com$
+^raw\.githubusercontent\.com$
+^.*\.githubusercontent\.com$
+
+# Documentation sites
+^docs\.python\.org$
+^numpy\.org$
+^.*\.numpy\.org$
+^pandas\.pydata\.org$
+^matplotlib\.org$
+^.*\.matplotlib\.org$
+^scikit-learn\.org$
+^.*\.scikit-learn\.org$

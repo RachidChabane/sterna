@@ -1,0 +1,67 @@
+#!/bin/bash
+set -euo pipefail
+
+# --- Resolve private-network NIC + IP via the routing table ---
+PRIV_IFACE="$(ip -4 -o route show to ${private_cidr} | awk '{print $3}' | head -n1)"
+if [ -z "$PRIV_IFACE" ]; then
+  echo "FATAL: could not resolve private NIC for ${private_cidr}" >&2
+  exit 1
+fi
+PRIV_IP="$(ip -4 -o addr show "$PRIV_IFACE" | awk '{print $4}' | cut -d/ -f1)"
+
+%{ if install_gvisor ~}
+# --- Stage the containerd config template BEFORE k3s starts ---
+mkdir -p /var/lib/rancher/k3s/agent/etc/containerd
+cat <<'TMPL' >/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+{{ template "base" . }}
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
+  runtime_type = "io.containerd.runsc.v1"
+TMPL
+
+# --- Install gVisor (runsc) binary ---
+# Pinned to release/20240115; keep in sync with the server template.
+# SHA-256 verification fails fast if the upstream object changes
+# underneath us.
+# Keep in sync with k3s-server.sh.tftpl. gVisor release tree path
+# uses `release/<YYYYMMDD>/<uname-arch>/runsc`. SHA-256s are pinned;
+# the install fails fast if the upstream object changes.
+GVISOR_RELEASE="release/20240115"
+GVISOR_SHA256_X86_64="9ae176da972b288880e69b1a438052eea2c502b6292aea8a1a33fbcf65e135dd"
+GVISOR_SHA256_AARCH64="7b2ce18408212542477c31cc1bd0ddddf6fbf7439d57e56f6884091f62c81cd8"
+
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64)  GVISOR_SHA256="$${GVISOR_SHA256_X86_64}" ;;
+  aarch64) GVISOR_SHA256="$${GVISOR_SHA256_AARCH64}" ;;
+  *) echo "unsupported arch $ARCH"; exit 1 ;;
+esac
+URL="https://storage.googleapis.com/gvisor/releases/$${GVISOR_RELEASE}/$${ARCH}"
+curl -fsSL "$${URL}/runsc" -o /usr/local/bin/runsc
+echo "$${GVISOR_SHA256}  /usr/local/bin/runsc" | sha256sum -c -
+chmod +x /usr/local/bin/runsc
+%{ endif ~}
+
+# --- Install k3s agent ---
+# `--node-label` is the supported way to set node labels at install
+# time. The previous draft used a `kubectl --token=$K3S_TOKEN` loop,
+# which is wrong: the K3S token is a node-join shared secret, not an
+# API bearer token. The k3s install script accepts `--node-label`
+# natively.
+export INSTALL_K3S_CHANNEL="${k3s_version}"
+export K3S_TOKEN="${k3s_token}"
+export K3S_URL="${k3s_server_url}"
+
+%{ if install_gvisor ~}
+curl -sfL https://get.k3s.io | sh -s - agent \
+  --flannel-iface="$PRIV_IFACE" \
+  --node-ip="$PRIV_IP" \
+  --kubelet-arg=cloud-provider=external \
+  --node-label=sternaway.ai/gvisor=true
+%{ else ~}
+curl -sfL https://get.k3s.io | sh -s - agent \
+  --flannel-iface="$PRIV_IFACE" \
+  --node-ip="$PRIV_IP" \
+  --kubelet-arg=cloud-provider=external \
+  --node-label=sternaway.ai/gvisor=false
+%{ endif ~}

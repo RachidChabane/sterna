@@ -1,0 +1,12 @@
+{% extends "email/base.html" %}{% load i18n %}
+{% block content %}
+<p>{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}</p>
+<p>{% blocktrans with brand=brand_name %}Your {{ brand }} trial ends in 3 days.{% endblocktrans %}</p>
+{% if trial_end %}
+<p>{% blocktrans %}On {{ trial_end }}, your subscription will convert to paid using the payment method on file.{% endblocktrans %}</p>
+{% endif %}
+<p style="text-align:center;margin:32px 0;">
+  <a href="{{ action_url }}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:500;">{% trans "Manage subscription" %}</a>
+</p>
+<p style="font-size:14px;color:#6b7280;">{% trans "Cancel anytime before your trial ends and you won't be charged." %}</p>
+{% endblock %}

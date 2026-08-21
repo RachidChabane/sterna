@@ -1,0 +1,41 @@
+# =============================================================================
+# Production ExternalSecrets-only overlay (cold bring-up step 6)
+# =============================================================================
+# Applied standalone during the production cold bring-up, AFTER the
+# External Secrets Operator Helm install (which provides the CRDs) and
+# BEFORE the full production overlay:
+#
+#   kubectl apply -k infra-migration/kubernetes/overlays/production-external-secrets/
+#
+# It builds ONLY the SecretStore + ExternalSecret manifests, with the
+# exact same names the full overlays/production build produces
+# (namePrefix production-, secretStoreRef production-scaleway-secret-store,
+# sternaway-production-* remoteRefs), so the later full-overlay apply is
+# a no-op for these resources instead of creating duplicates.
+#
+# See docs/migration/cold-bring-up-runbook.md §F.1.d Step 6 and
+# infra-migration/README.md for the sternaway-production-* secrets that
+# must exist in Scaleway Secret Manager.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sterna
+
+namePrefix: production-
+
+resources:
+  - ../../base/external-secrets
+
+# Rewrite sternaway-staging-* remoteRefs to sternaway-production-*
+components:
+  - ../../components/production-secret-names
+
+patches:
+  # Fix ExternalSecrets secretStoreRef to use the prefixed name
+  # (mirrors the same patch in overlays/production/kustomization.yaml)
+  - patch: |-
+      - op: replace
+        path: /spec/secretStoreRef/name
+        value: production-scaleway-secret-store
+    target:
+      kind: ExternalSecret

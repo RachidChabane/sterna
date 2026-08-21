@@ -1,0 +1,15 @@
+---
+title: My Spark deploy failed
+category: Troubleshooting
+last_updated: 2026-05-21
+---
+
+Spark deploys can fail for a few common reasons:
+
+- **Build error** — check the deploy log for TypeScript or bundler errors. Fix the code and retry.
+- **Missing environment variables** — if your Spark uses `process.env` values, set them in the Spark settings before deploying.
+- **Timeout** — complex Sparks that take more than 60 seconds to build will timeout. Simplify or split the component.
+
+You can retry a failed deploy from the Sparks panel by clicking **Redeploy**. The previous version stays live until a new deploy succeeds.
+
+If the log shows an infrastructure error (not a code error), contact us with the Spark ID shown in the deploy log.

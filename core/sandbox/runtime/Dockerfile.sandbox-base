@@ -1,0 +1,64 @@
+# Sandbox Base Image with gVisor support
+# This image serves as the foundation for all user sandbox environments
+# Security hardening: non-root user, read-only rootfs, resource quotas
+
+FROM python:3.11-slim
+
+# Install minimal system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js (required for Coding Agent CLI)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI globally
+# This enables autonomous coding agent capabilities via OpenRouter
+RUN npm install -g @anthropic-ai/claude-code && \
+    npm cache clean --force
+
+# Install mitmproxy CA certificate for egress proxy HTTPS support
+COPY mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy-ca-cert.crt
+RUN update-ca-certificates
+
+# Configure Python/pip to use system certificates (includes mitmproxy CA)
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
+# Create sandboxuser (non-root) with fixed UID/GID for consistency
+RUN groupadd -g 1000 sandboxuser && \
+    useradd -u 1000 -g sandboxuser -m -s /bin/bash sandboxuser
+
+# Create workspace directory (will be mounted RW)
+RUN mkdir -p /workspace && \
+    chown sandboxuser:sandboxuser /workspace
+
+# Create tmpfs mount points
+RUN mkdir -p /tmp /run/secrets && \
+    chown sandboxuser:sandboxuser /tmp /run/secrets
+
+# Set working directory
+WORKDIR /workspace
+
+# Switch to non-root user
+USER sandboxuser
+
+# Configure git with default identity for commits
+# This prevents "Please tell me who you are" errors when the AI makes commits
+RUN git config --global user.name "Sterna Agent" && \
+    git config --global user.email "agent@example.com" && \
+    git config --global init.defaultBranch main && \
+    git config --global core.autocrlf input && \
+    git config --global pull.rebase false
+
+# Default command (will be overridden)
+CMD ["/bin/bash"]
+
+# Metadata
+LABEL org.opencontainers.image.title="Sterna Sandbox Base"
+LABEL org.opencontainers.image.description="Secure isolated environment for code execution"
+LABEL org.opencontainers.image.vendor="Sterna"

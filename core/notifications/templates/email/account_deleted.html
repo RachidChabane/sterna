@@ -1,0 +1,8 @@
+{% extends "email/base.html" %}{% load i18n %}
+{% block content %}
+<p>{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}</p>
+<p>{% blocktrans with brand=brand_name %}Your {{ brand }} account has been permanently deleted.{% endblocktrans %}</p>
+<p>{% trans "All personal data — conversations, sparks, knowledge-base documents, voice rooms, MCP credentials — has been removed." %}</p>
+<p>{% trans "For tax and accounting compliance, anonymized monthly billing totals are retained (GDPR Art. 17(3)(e)). They cannot be linked back to you." %}</p>
+<p>{% trans "This is the last email you will receive from us. Thank you." %}</p>
+{% endblock %}

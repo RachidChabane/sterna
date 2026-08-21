@@ -1,0 +1,465 @@
+# =============================================================================
+# Single-VPS production compose — the cheapest credible deployment path
+# =============================================================================
+# Runbook: docs/operations/single-vps-deploy.md
+# Env file: .env.production (template: .env.production.example)
+#
+# ALWAYS pass the env file explicitly so ${VAR} interpolation below works:
+#
+#   docker compose --env-file .env.production -f docker-compose.prod.yml config
+#   docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+#
+# Ingress: the ONLY way in is the Cloudflare tunnel (cloudflared service).
+# No service maps a host port — the tunnel reaches containers over this
+# compose network. Tunnel public-hostname targets (configured in the
+# Cloudflare Zero Trust dashboard, see runbook step 6):
+#   app.<domain>            -> http://frontend:80
+#   api.<domain>  /ws/*     -> http://web:8000        (Django Channels WS;
+#                                                      the gateway does not
+#                                                      route /ws paths)
+#   api.<domain>  /*        -> http://api-gateway:8080
+#
+# Memory budget (CX43 = 8 vCPU / 16 GB): limits below sum to ~12.9 GB
+# with the default profile (sandbox profile adds ~1.3 GB), leaving
+# headroom for the OS and page cache.
+#
+# Database: defaults to the local postgres service. To use Neon instead,
+# set DATABASE_URL in .env.production and (optionally) stop the postgres
+# service — every consumer resolves DATABASE_URL first.
+
+name: sterna-prod
+
+services:
+  # ---------------------------------------------------------------------
+  # Ingress — Cloudflare tunnel (the only path from the internet)
+  # ---------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in .env.production}
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - api-gateway
+    # No healthcheck: cloudflared has no unauthenticated local health
+    # endpoint by default; the restart policy plus Cloudflare-side
+    # connector status (dashboard) cover it.
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ---------------------------------------------------------------------
+  # Data stores
+  # ---------------------------------------------------------------------
+  postgres:
+    # Same image as dev — pgvector is required by the knowledge base.
+    # OPTIONAL: replace with Neon by setting DATABASE_URL in
+    # .env.production; this service can then be removed/stopped.
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sterna}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sterna}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # appendonly = survive restarts; maxmemory guard mirrors the k8s
+    # production Redis args (1gb there; 512mb here to fit the VPS).
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  # ---------------------------------------------------------------------
+  # Application services
+  # ---------------------------------------------------------------------
+  web:
+    image: ghcr.io/${GHCR_OWNER:-sterna-ai}/sterna-web:${IMAGE_TAG:-master-latest}
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    # Image CMD (gunicorn -k uvicorn.workers.UvicornWorker
+    # sterna.asgi:application) is production-grade: ASGI so Django
+    # Channels WebSockets work. NO command override, NO bind mounts.
+    env_file:
+      - .env.production
+    environment:
+      # Mirrors infra-migration/kubernetes/base/web/deployment.yaml
+      # (env + common-config/web-config) with compose-network hostnames.
+      DJANGO_ENV: prod
+      DJANGO_SETTINGS_MODULE: sterna.settings.prod
+      ENVIRONMENT: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sterna}}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ORCHESTRATOR_URL: http://orchestrator:8003
+      BRAVE_SEARCH_URL: http://brave-search:8004
+      USER_PREFERENCES_URL: http://user-preferences:8000
+      GOOGLE_MAPS_SERVICE_URL: http://google-maps:8005
+      # task-29 H1/H4 hardening (same as the k8s deployment): traffic
+      # arrives via the Cloudflare tunnel, so CF-Connecting-IP is set.
+      CF_REQUIRE_HEADER: "true"
+      DEV_TOKEN_BYPASS: "false"
+      DEBUG: "false"
+    volumes:
+      # Media uploads persist across container replacement. Unused when
+      # R2/S3 storage credentials are configured (then media goes there).
+      - web_media_prod:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # k8s liveness probe path (base/web/deployment.yaml)
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/health/live/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  celery-worker:
+    image: ghcr.io/${GHCR_OWNER:-sterna-ai}/sterna-web:${IMAGE_TAG:-master-latest}
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    # Same queues/concurrency as base/celery-worker/deployment.yaml.
+    # NOTE: no docker.sock here — code_jobs that need the sandbox
+    # require the "sandbox" profile services below.
+    command: celery -A sterna worker -l INFO -Q celery,code_jobs --concurrency=4
+    env_file:
+      - .env.production
+    environment:
+      DJANGO_ENV: prod
+      DJANGO_SETTINGS_MODULE: sterna.settings.prod
+      ENVIRONMENT: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sterna}}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ORCHESTRATOR_URL: http://orchestrator:8003
+      BRAVE_SEARCH_URL: http://brave-search:8004
+      USER_PREFERENCES_URL: http://user-preferences:8000
+      GOOGLE_MAPS_SERVICE_URL: http://google-maps:8005
+      DEV_TOKEN_BYPASS: "false"
+      DEBUG: "false"
+    volumes:
+      - web_media_prod:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A sterna inspect ping -d celery@$$HOSTNAME --timeout 10 || exit 1"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+
+  celery-beat:
+    image: ghcr.io/${GHCR_OWNER:-sterna-ai}/sterna-web:${IMAGE_TAG:-master-latest}
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    command: celery -A sterna beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    env_file:
+      - .env.production
+    environment:
+      DJANGO_ENV: prod
+      DJANGO_SETTINGS_MODULE: sterna.settings.prod
+      ENVIRONMENT: production
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sterna}}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      DEV_TOKEN_BYPASS: "false"
+      DEBUG: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # No healthcheck: beat exposes no probe endpoint (same as the k8s
+    # deployment); restart policy covers crashes.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  api-gateway:
+    image: ghcr.io/${GHCR_OWNER:-sterna-ai}/sterna-api-gateway:${IMAGE_TAG:-master-latest}
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Mirrors base/api-gateway/deployment.yaml + api-gateway-config,
+      # with compose-network hostnames and CONTAINER ports (the k8s
+      # routes use Service ports, e.g. brave-search:8000 -> here 8004).
+      GATEWAY_JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      GATEWAY_ENVIRONMENT: production
+      GATEWAY_DEBUG: "false"
+      GATEWAY_RATE_LIMIT_ENABLED: "true"
+      GATEWAY_DEFAULT_RATE_LIMIT: "1000"
+      # JSON array — pydantic-settings' env parsing for list fields (same
+      # convention as GATEWAY_PUBLIC_PATHS below). Credentialed CORS
+      # requires an explicit origin list; the gateway refuses to start
+      # otherwise (gateway/config.py).
+      GATEWAY_CORS_ORIGINS: '${GATEWAY_CORS_ORIGINS:-["https://sternaway.ai","https://app.sternaway.ai"]}'
+      GATEWAY_REDIS_URL: redis://redis:6379/1
+      CF_REQUIRE_HEADER: "true"
+      SENTRY_DSN: ${SENTRY_DSN_API_GATEWAY:-}
+      # /api/v1/sandbox only works with the "sandbox" profile enabled;
+      # without it the gateway returns 502 for those routes (harmless).
+      # No consigliere service in this compose path (k8s-only for now).
+      GATEWAY_ROUTES: >-
+        {"/api/v1/auth": "http://web:8000",
+         "/api/v1/users": "http://web:8000",
+         "/api/v1/llm": "http://web:8000",
+         "/api/v1/rooms": "http://web:8000",
+         "/api/v1/voice-rooms": "http://web:8000",
+         "/api/v1/sandbox": "http://orchestrator:8003",
+         "/api/v1/search": "http://brave-search:8004",
+         "/api/v1/preferences": "http://user-preferences:8000",
+         "/api/v1/maps": "http://google-maps:8005"}
+      GATEWAY_PUBLIC_PATHS: '["/health","/ready","/api/v1/auth/login","/api/v1/auth/register","/api/v1/auth/refresh","/api/v1/auth/google","/api/v1/auth/google/callback"]'
+      GATEWAY_ENDPOINT_LIMITS: >-
+        {"/api/v1/llm": {"limit": 100, "window": 60},
+         "/api/v1/auth/login": {"limit": 10, "window": 60},
+         "/api/v1/auth/register": {"limit": 5, "window": 60},
+         "/api/v1/sandbox": {"limit": 30, "window": 60}}
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    healthcheck:
+      # k8s liveness path /health (image has httpx, no curl)
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8080/health', timeout=5).raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  user-preferences:
+    image: ghcr.io/${GHCR_OWNER:-sterna-ai}/sterna-user-preferences:${IMAGE_TAG:-master-latest}
+    build:
+      context: ./user-preferences-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Mirrors base/user-preferences/deployment.yaml
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sterna}}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      CORS_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      SENTRY_DSN: ${SENTRY_DSN_USER_PREFS:-}
+      DEBUG: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # k8s probe path /health
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  brave-search:
+    image: ghcr.io/${GHCR_OWNER:-sterna-ai}/sterna-brave-search:${IMAGE_TAG:-master-latest}
+    build:
+      context: ./brave-search
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Mirrors base/brave-search/deployment.yaml
+      BRAVE_API_KEY: ${BRAVE_API_KEY:-}
+      SENTRY_DSN: ${SENTRY_DSN_BRAVE:-}
+    healthcheck:
+      # k8s probe path / on 8004 (image has httpx, no curl)
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8004/', timeout=5).raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  google-maps:
+    image: ghcr.io/${GHCR_OWNER:-sterna-ai}/sterna-google-maps:${IMAGE_TAG:-master-latest}
+    build:
+      context: ./google-maps
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Mirrors base/google-maps/deployment.yaml
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      CACHE_TTL: "86400"
+      SENTRY_DSN: ${SENTRY_DSN_MAPS:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # k8s probe path / on 8005
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8005/', timeout=5).raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER:-sterna-ai}/sterna-frontend:${IMAGE_TAG:-master-latest}
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      # nginx static-serving stage (listens on 80, /health endpoint,
+      # proxies /api, /admin, /static, /media straight to web:8000 —
+      # see docker/nginx.conf).
+      target: production
+    restart: unless-stopped
+    # NOTE: VITE_* values are baked at BUILD time (static bundle).
+    # For same-origin deployments behind app.<domain> the defaults work;
+    # to point the bundle at api.<domain>, set frontend/.env.production
+    # before `docker compose build` (see runbook step 5).
+    depends_on:
+      - web
+    healthcheck:
+      # k8s probe path /health (nginx:alpine has wget, no curl)
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ---------------------------------------------------------------------
+  # OPT-IN sandbox / coding-agent services — `--profile sandbox`
+  # ---------------------------------------------------------------------
+  # Disabled by default. Enable with:
+  #   docker compose --env-file .env.production -f docker-compose.prod.yml \
+  #     --profile sandbox up -d
+  #
+  # SECURITY TRADEOFF (read before enabling): the orchestrator mounts
+  # /var/run/docker.sock, which is root-equivalent on the host. A
+  # compromise of the orchestrator = compromise of the whole VPS,
+  # including every other container and .env.production. On k8s this
+  # runs with pod-based isolation + gVisor + NetworkPolicies; a single
+  # VPS has none of that. Only enable if the coding-agent feature is
+  # actually needed on this box, and treat the host as blast radius.
+  orchestrator:
+    image: ghcr.io/${GHCR_OWNER:-sterna-ai}/sterna-orchestrator:${IMAGE_TAG:-master-latest}
+    build:
+      context: ./sandbox/orchestrator
+      dockerfile: Dockerfile
+    profiles: ["sandbox"]
+    restart: unless-stopped
+    user: "0:0" # root needed for the docker socket — see tradeoff above
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      JWT_ALGORITHM: HS256
+      DEBUG: "false"
+      DJANGO_API_URL: http://web:8000
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      EGRESS_PROXY_URL: http://egress-proxy:8888
+      SANDBOX_IDLE_TIMEOUT: "900"
+      SANDBOX_MEMORY_LIMIT: 2g
+      SANDBOX_WORKSPACE_SIZE: 1024M
+      SENTRY_DSN: ${SENTRY_DSN_ORCHESTRATOR:-}
+    depends_on:
+      - web
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  egress-proxy:
+    image: ghcr.io/${GHCR_OWNER:-sterna-ai}/sterna-egress-proxy:${IMAGE_TAG:-master-latest}
+    build:
+      context: ./sandbox/runtime
+      dockerfile: Dockerfile.egress-proxy
+    profiles: ["sandbox"]
+    restart: unless-stopped
+    user: "0:0" # copies the CA cert as root, then drops to proxyuser
+    volumes:
+      # mitmproxy CA shared with sandbox containers for TLS interception
+      - proxy_ca_prod:/shared-ca
+    command: >
+      sh -c "cp /home/proxyuser/.mitmproxy/mitmproxy-ca-cert.pem /shared-ca/ &&
+             chmod 644 /shared-ca/mitmproxy-ca-cert.pem &&
+             exec su proxyuser -c 'exec mitmdump --set confdir=/home/proxyuser/.mitmproxy -s /app/proxy.py --listen-host 0.0.0.0 --listen-port 8888 --ssl-insecure'"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1', 8888)); s.close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  postgres_data_prod:
+  redis_data_prod:
+  web_media_prod:
+  proxy_ca_prod:

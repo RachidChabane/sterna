@@ -1,0 +1,142 @@
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    scaleway = {
+      source  = "scaleway/scaleway"
+      version = "~> 2.0"
+    }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.20"
+    }
+    neon = {
+      source  = "kislerdm/neon"
+      version = "~> 0.6"
+    }
+  }
+
+  # Backend configuration in backend.tf
+}
+
+# Get shared environment state for Neon project info
+# Uses Cloudflare R2 as S3-compatible backend
+data "terraform_remote_state" "shared" {
+  backend = "s3"
+  config = {
+    bucket                      = "sternaway-tfstate"
+    key                         = "shared/terraform.tfstate"
+    region                      = "us-east-1" # Required but ignored by R2
+    endpoints                   = { s3 = "https://${var.cloudflare_account_id}.r2.cloudflarestorage.com" }
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    skip_s3_checksum            = true
+    use_path_style              = true
+  }
+}
+
+# Scaleway Provider for root module resources
+provider "scaleway" {
+  access_key      = var.scaleway_access_key
+  secret_key      = var.scaleway_secret_key
+  project_id      = var.scaleway_project_id
+  organization_id = var.scaleway_organization_id
+  region          = "fr-par"
+}
+
+# Neon provider for root module
+provider "neon" {
+  api_key = var.neon_api_key
+}
+
+# Scaleway Kapsule (Managed Kubernetes)
+module "scaleway" {
+  source = "../../modules/scaleway"
+
+  scaleway_access_key      = var.scaleway_access_key
+  scaleway_secret_key      = var.scaleway_secret_key
+  scaleway_project_id      = var.scaleway_project_id
+  scaleway_organization_id = var.scaleway_organization_id
+  environment              = "staging"
+  region                   = "fr-par"
+  zone                     = "fr-par-1"
+
+  kapsule_config = {
+    kubernetes_version = "1.31"
+    cni                = "cilium"
+    node_pools = [
+      {
+        name        = "main"
+        node_type   = "PLAY2-NANO" # 1 vCPU, 2GB RAM - cost effective for staging
+        size        = 1            # Reduced from 2 - no active users yet
+        min_size    = 1            # Reduced from 2 - scale to 1 for cost savings
+        max_size    = 2            # Reduced from 4 - sufficient for low traffic
+        autoscaling = true
+      }
+    ]
+  }
+
+  registry_config = {
+    is_public = false
+  }
+
+  tags = [
+    "project:sternaway",
+    "environment:staging",
+    "managed-by:terraform"
+  ]
+}
+
+# Cloudflare
+module "cloudflare" {
+  source = "../../modules/cloudflare"
+
+  cloudflare_api_token  = var.cloudflare_api_token
+  cloudflare_account_id = var.cloudflare_account_id
+  domain                = var.domain
+  environment           = "staging"
+  # Cloudflare Tunnel connects to Kubernetes ingress, no direct IP needed
+  origin_ip = "" # Tunnel handles routing
+
+  # Tunnel enabled - adopted into state via `terraform import` (see README.md)
+  enable_tunnel = true
+  # R2 bucket for user-generated content (optional)
+  r2_bucket_name = ""
+  # WAF disabled - managed by shared environment (zone-level resources)
+  enable_waf = false
+}
+
+# Neon PostgreSQL Branch (uses shared project)
+module "neon_branch" {
+  source = "../../modules/neon-branch"
+
+  neon_api_key       = var.neon_api_key
+  project_id         = data.terraform_remote_state.shared.outputs.neon_project_id
+  default_branch_id  = data.terraform_remote_state.shared.outputs.neon_default_branch_id
+  parent_branch_id   = data.terraform_remote_state.shared.outputs.neon_default_branch_id
+  database_user      = data.terraform_remote_state.shared.outputs.neon_database_user
+  database_password  = data.terraform_remote_state.shared.outputs.neon_database_password
+  branch_name        = "staging"
+  use_default_branch = false # Create a new branch for staging
+  database_name      = "sternaway"
+  max_compute_units  = 1
+}
+
+# =============================================================================
+# Sync Neon DATABASE_URL to Scaleway Secret Manager
+# =============================================================================
+# This ensures the database-secrets in Scaleway always has the correct
+# connection string from Neon, including the password.
+
+resource "scaleway_secret_version" "database_secrets" {
+  secret_id = module.scaleway.secret_ids.database_secrets
+  data = jsonencode({
+    DATABASE_URL = module.neon_branch.connection_uri
+  })
+  description = "Auto-synced from Neon Terraform output"
+
+  depends_on = [module.neon_branch, module.scaleway]
+}
+

@@ -1,0 +1,10 @@
+Hi {{ user.get_short_name }},
+
+{% if is_first_subscription %}Welcome. Your subscription is now active on the "{{ to_plan_name }}" plan.
+{% else %}Your plan has been changed from "{{ from_plan_name }}" to "{{ to_plan_name }}".
+
+Your weekly usage window is preserved.
+{% endif %}
+View pricing: {{ action_url }}
+
+{{ brand_name }}

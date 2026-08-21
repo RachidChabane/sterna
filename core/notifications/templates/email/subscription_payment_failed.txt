@@ -1,0 +1,12 @@
+{% extends "email/base.txt" %}{% load i18n %}
+{% block content %}
+{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}
+
+{% blocktrans with brand=brand_name %}We were unable to charge your card for your {{ brand }} subscription.{% endblocktrans %}
+
+{% trans "We'll retry automatically over the next 14 days. To avoid an interruption, please update your payment method:" %}
+
+{{ action_url }}
+
+{% trans "If we cannot charge a payment method after several attempts, your subscription will be canceled." %}
+{% endblock %}

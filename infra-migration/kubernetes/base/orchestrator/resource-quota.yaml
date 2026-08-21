@@ -1,0 +1,26 @@
+# Resource quota for sandboxes namespace
+# Limits total resources that can be consumed by all sandboxes
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: sandbox-quota
+  namespace: sterna-sandboxes
+spec:
+  hard:
+    # Total pods (sandboxes)
+    pods: "100"
+    # CPU limits
+    requests.cpu: "50"
+    limits.cpu: "100"
+    # Memory limits (100 sandboxes * 1.5GB = 150GB max)
+    requests.memory: "50Gi"
+    limits.memory: "150Gi"
+    # Storage
+    requests.storage: "500Gi"
+    persistentvolumeclaims: "100"
+    # Services
+    services: "100"
+    # Secrets
+    secrets: "200"
+    # ConfigMaps
+    configmaps: "200"

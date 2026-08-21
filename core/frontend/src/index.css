@@ -1,0 +1,1121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+}
+
+@layer base {
+  /* ==========================================================
+   * "Chart & Tern" identity — Sterna paradisaea, the arctic
+   * tern, flies pole to pole. The system borrows the language
+   * of nautical charts: midnight-sea dark, chart-paper light,
+   * cobalt ink, signal-yellow stamps. Flat color only — no
+   * gradients, no glow, no glass. Hard offset shadows.
+   * ========================================================== */
+
+  /* Midnight Sea (dark, default) */
+  :root {
+    --background: 228 20% 8%;          /* Deep navy-black — midnight sea */
+    --foreground: 45 22% 90%;          /* Chart paper */
+
+    --surface: 228 17% 11%;            /* Elevated surface */
+    --surface-hover: 228 15% 15%;      /* Hover state */
+
+    --card: 228 17% 11%;               /* Card background */
+    --card-foreground: 45 22% 90%;
+
+    --popover: 228 17% 13%;            /* Popover - slightly elevated */
+    --popover-foreground: 45 22% 90%;
+
+    --primary: 228 96% 69%;            /* Cobalt, lifted for dark contrast */
+    --primary-foreground: 228 20% 8%;
+
+    --secondary: 228 14% 16%;          /* Subtle secondary bg */
+    --secondary-foreground: 45 15% 76%;
+
+    --muted: 228 13% 17%;              /* Muted backgrounds */
+    --muted-foreground: 228 10% 60%;
+
+    --accent: 228 13% 20%;             /* Neutral hover state - NOT brand */
+    --accent-foreground: 45 22% 90%;
+
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 228 12% 19%;             /* Visible borders */
+    --input: 228 17% 13%;
+    --ring: 228 96% 69%;
+    --radius: 0.25rem;                 /* Near-square — engineered, not soft */
+
+    /* Brand accent — cobalt */
+    --accent-brand: 228 96% 69%;
+    --accent-brand-foreground: 228 20% 8%;
+
+    /* Signal yellow — stamps and highlighter marks only */
+    --highlight: 43 96% 56%;
+    --highlight-foreground: 228 20% 8%;
+
+    /* Hard shadows cast pure ink */
+    --shadow-ink: 228 25% 3%;
+
+    /* Glow retired — kept as vars so legacy refs resolve to nothing */
+    --glow-primary: 228 96% 69%;
+    --glow-opacity: 0;
+  }
+
+  /* Chart Paper (light) */
+  .light {
+    --background: 46 23% 91%;          /* Chart paper — warm, not white */
+    --foreground: 228 20% 12%;         /* Navy ink */
+
+    --surface: 46 20% 87%;             /* Subtle surface */
+    --surface-hover: 46 18% 83%;       /* Hover state */
+
+    --card: 46 21% 88%;                /* Sidebar/cards */
+    --card-foreground: 228 20% 12%;
+
+    --popover: 46 25% 94%;             /* Popovers - clean */
+    --popover-foreground: 228 20% 12%;
+
+    --primary: 229 76% 50%;            /* Cobalt ink */
+    --primary-foreground: 46 25% 95%;
+
+    --secondary: 46 18% 84%;           /* Soft secondary */
+    --secondary-foreground: 228 18% 20%;
+
+    --muted: 46 16% 83%;               /* Soft muted */
+    --muted-foreground: 228 10% 38%;
+
+    --accent: 46 18% 80%;              /* Neutral hover state */
+    --accent-foreground: 228 20% 12%;
+
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 46 14% 72%;              /* Visible borders */
+    --input: 46 22% 88%;
+    --ring: 229 76% 50%;
+
+    /* Brand accent — cobalt ink for paper */
+    --accent-brand: 229 76% 50%;
+    --accent-brand-foreground: 46 25% 95%;
+
+    --highlight: 43 96% 56%;
+    --highlight-foreground: 228 20% 12%;
+
+    --shadow-ink: 228 20% 12%;
+
+    --glow-primary: 229 76% 50%;
+    --glow-opacity: 0;
+  }
+}
+
+@layer base {
+  /* ========================================
+   * MOBILE NATIVE EXPERIENCE
+   * ======================================== */
+
+  :root {
+    /* Safe area insets - fallback to 0 for non-notched devices */
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
+
+    /* Bottom nav height - disabled */
+    --mobile-bottom-nav-height: 0px;
+  }
+
+  html, body, #root {
+    height: 100%;
+    height: 100dvh; /* Dynamic viewport height - accounts for mobile browser UI */
+    overflow: hidden;
+  }
+
+  /* Enable momentum scrolling on iOS */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent text selection on UI elements (native feel) */
+  button, a, nav, [role="button"], [role="tab"] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Overscroll bounce effect (iOS native) */
+  @supports (-webkit-touch-callout: none) {
+    .overscroll-bounce {
+      overscroll-behavior-y: auto;
+    }
+  }
+
+  /* Prevent pull-to-refresh on Android when not wanted */
+  .overscroll-none {
+    overscroll-behavior: none;
+  }
+
+  /* Custom Scrollbar - Webkit browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: hsl(var(--accent-brand) / 0.5);
+    background-clip: padding-box;
+  }
+
+  /* Light mode scrollbar - more visible */
+  .light ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    background-clip: padding-box;
+  }
+
+  .light ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.35);
+    background-clip: padding-box;
+  }
+
+  .light ::-webkit-scrollbar-thumb:active {
+    background: hsl(var(--accent-brand) / 0.6);
+    background-clip: padding-box;
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+
+  .light * {
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer utilities {
+  /* Legacy gradient utilities — the identity is flat color only.
+   * Class names kept so existing call sites keep working; every
+   * definition now resolves to a solid fill. */
+  .gradient-primary {
+    @apply bg-card;
+  }
+
+  .light .gradient-primary {
+    @apply bg-card;
+  }
+
+  .gradient-secondary {
+    @apply bg-secondary;
+  }
+
+  .light .gradient-secondary {
+    @apply bg-secondary;
+  }
+
+  .gradient-accent {
+    @apply bg-accent-brand/10;
+  }
+
+  .text-gradient {
+    @apply text-foreground;
+  }
+
+  .light .text-gradient {
+    @apply text-foreground;
+  }
+
+  /* Legacy glass utility — no blur; solid surface with a real border */
+  .glass {
+    @apply bg-popover border border-border;
+  }
+
+  .light .glass {
+    @apply bg-popover border-border;
+  }
+
+  /* Surfaces - Cards and containers */
+  .surface {
+    @apply bg-card text-card-foreground border border-border;
+  }
+
+  .surface-hover {
+    @apply hover:bg-secondary transition-colors;
+  }
+
+  /* Hover states for cards */
+  .hover-card {
+    @apply transition-all duration-200;
+    @apply hover:bg-white/5;
+  }
+
+  .light .hover-card {
+    @apply hover:bg-black/5;
+  }
+
+  /* Hover states for list items / links */
+  .hover-item {
+    @apply transition-colors duration-200;
+    @apply hover:bg-white/5 hover:text-foreground;
+  }
+
+  .light .hover-item {
+    @apply hover:bg-black/5;
+  }
+
+  /* Hover for interactive elements with scale */
+  .hover-scale {
+    @apply transition-all duration-200;
+    @apply hover:scale-105;
+  }
+
+  /* Hover for links with underline only (no bg change) */
+  .hover-link {
+    @apply transition-all duration-200;
+    @apply hover:underline hover:text-foreground;
+  }
+
+  /* Interactive elements */
+  .interactive-secondary {
+    @apply bg-white/5 text-white/80;
+    @apply hover:bg-white/10 hover:text-white;
+    @apply transition-colors;
+  }
+
+  .light .interactive-secondary {
+    @apply bg-black/5 text-black/80;
+    @apply hover:bg-black/10 hover:text-black;
+  }
+
+  /* Tab states */
+  .tab-inactive {
+    @apply text-muted-foreground;
+    @apply hover:text-foreground hover:bg-white/5;
+    @apply transition-all;
+  }
+
+  .light .tab-inactive {
+    @apply hover:bg-black/5;
+  }
+
+  .tab-active {
+    @apply bg-white/10 text-foreground;
+  }
+
+  .light .tab-active {
+    @apply bg-black/5;
+  }
+
+  /* Input states */
+  .input-dark {
+    @apply bg-white/5 border-white/10 text-foreground;
+    @apply placeholder:text-white/30;
+    @apply focus:border-brand-500/50 focus:ring-1 focus:ring-brand-500/30;
+  }
+
+  .light .input-dark {
+    @apply bg-black/5 border-black/10;
+    @apply placeholder:text-black/30;
+  }
+
+  /* Shadows */
+  .shadow-glow {
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  }
+
+  .light .shadow-glow {
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  }
+
+  .shadow-glow-sm {
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.3);
+  }
+
+  .light .shadow-glow-sm {
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Animations */
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Radial glow - smooth and modern pulsation */
+  .radial-glow {
+    animation: softGlow 3s ease-in-out infinite;
+  }
+
+  @keyframes softGlow {
+    0%, 100% {
+      opacity: 0.4;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.8;
+      transform: scale(1.1);
+    }
+  }
+
+  /* Streaming model icon — breathing pulse */
+  @keyframes iconBreathe {
+    0%, 100% {
+      transform: scale(1);
+      filter: brightness(1);
+    }
+    50% {
+      transform: scale(1.06);
+      filter: brightness(1.15);
+    }
+  }
+
+  .streaming-icon-breathe {
+    animation: iconBreathe 2s ease-in-out infinite;
+  }
+
+  /* Message slide-in animation - iOS style */
+  @keyframes messageSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Collapsible animations */
+  @keyframes slideDown {
+    from {
+      height: 0;
+      opacity: 0;
+    }
+    to {
+      height: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      height: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+    to {
+      height: 0;
+      opacity: 0;
+    }
+  }
+
+  [data-radix-collapsible-content] {
+    overflow: hidden;
+  }
+
+  [data-radix-collapsible-content][data-state="open"] {
+    animation: slideDown 300ms cubic-bezier(0.87, 0, 0.13, 1);
+  }
+
+  [data-radix-collapsible-content][data-state="closed"] {
+    animation: slideUp 300ms cubic-bezier(0.87, 0, 0.13, 1);
+  }
+
+  /* Primary CTA — flat cobalt, ink border, hard shadow, press effect */
+  .btn-premium {
+    background: hsl(var(--accent-brand));
+    color: hsl(var(--accent-brand-foreground));
+    border: 2px solid hsl(var(--shadow-ink));
+    box-shadow: 3px 3px 0 0 hsl(var(--shadow-ink));
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+
+  .btn-premium:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 0 hsl(var(--shadow-ink));
+  }
+
+  .btn-premium:active {
+    transform: translate(3px, 3px);
+    box-shadow: 0 0 0 0 hsl(var(--shadow-ink));
+  }
+
+  .light .btn-premium {
+    box-shadow: 3px 3px 0 0 hsl(var(--shadow-ink));
+  }
+
+  .light .btn-premium:hover {
+    box-shadow: 4px 4px 0 0 hsl(var(--shadow-ink));
+  }
+
+  /* Secondary premium button - Ghost with border */
+  .btn-premium-secondary {
+    background: transparent;
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+  }
+
+  .btn-premium-secondary:hover {
+    background: hsl(var(--muted) / 0.5);
+    border-color: hsl(var(--muted-foreground) / 0.3);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Accent utilities for brand identity */
+  .text-accent-brand {
+    color: hsl(var(--accent-brand));
+  }
+
+  .bg-accent-brand {
+    background-color: hsl(var(--accent-brand));
+  }
+
+  .border-accent-brand {
+    border-color: hsl(var(--accent-brand));
+  }
+
+  /* Legacy glow class — glow is retired; resolves to a hard shadow */
+  .shadow-glow-brand {
+    box-shadow: 2px 2px 0 0 hsl(var(--shadow-ink));
+  }
+
+  .light .shadow-glow-brand {
+    box-shadow: 2px 2px 0 0 hsl(var(--shadow-ink));
+  }
+
+  /* Premium card with subtle depth */
+  .card-elevated {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.12),
+      0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .light .card-elevated {
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.06),
+      0 4px 12px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Legacy brand-gradient class — flat cobalt now */
+  .gradient-brand {
+    background: hsl(var(--accent-brand));
+  }
+
+  /* Sign In CTA animations */
+  @keyframes signin-pulse {
+    0%, 100% {
+      border-color: hsl(var(--accent-brand) / 0.2);
+      box-shadow: 0 0 0 0 hsl(var(--accent-brand) / 0);
+    }
+    50% {
+      border-color: hsl(var(--accent-brand) / 0.4);
+      box-shadow: 0 0 12px 0 hsl(var(--accent-brand) / 0.2);
+    }
+  }
+
+  @keyframes signin-shimmer {
+    0% {
+      background-position: -200% center;
+    }
+    100% {
+      background-position: 200% center;
+    }
+  }
+
+  .signin-cta {
+    position: relative;
+    overflow: hidden;
+    animation: signin-pulse 3s ease-in-out infinite;
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      transparent 40%,
+      hsl(var(--accent-brand) / 0.1) 50%,
+      transparent 60%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: signin-pulse 3s ease-in-out infinite, signin-shimmer 5s ease-in-out infinite;
+  }
+
+  .signin-cta:hover {
+    animation-play-state: paused;
+    transform: scale(1.02);
+    background-color: hsl(var(--accent-brand) / 0.1);
+    border-color: hsl(var(--accent-brand) / 0.5);
+    box-shadow: 0 0 25px hsl(var(--accent-brand) / 0.25);
+  }
+
+  /* Custom Sonner Toast Styles - Premium & Clean */
+  [data-sonner-toast] {
+    background: hsl(var(--card)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    border-radius: 0.75rem !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+    padding: 14px 18px !important;
+  }
+
+  .light [data-sonner-toast] {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  /* Success toast - subtle teal accent */
+  [data-sonner-toast][data-type='success'] [data-icon] {
+    color: hsl(var(--accent-brand)) !important;
+  }
+
+  /* Error toast - subtle red accent */
+  [data-sonner-toast][data-type='error'] [data-icon] {
+    color: hsl(var(--destructive)) !important;
+  }
+
+  /* Toast text */
+  [data-sonner-toast] [data-title] {
+    color: hsl(var(--foreground)) !important;
+    font-weight: 500 !important;
+    font-size: 0.875rem !important;
+  }
+
+  [data-sonner-toast] [data-description] {
+    color: hsl(var(--muted-foreground)) !important;
+    font-size: 0.8125rem !important;
+    margin-top: 2px !important;
+  }
+
+  /* Close button - minimal and correctly positioned */
+  [data-sonner-toast] [data-close-button] {
+    /* Visuals */
+    background: transparent !important;
+    border: none !important;
+    color: hsl(var(--muted-foreground)) !important;
+    opacity: 0.6 !important;
+    transition: opacity 0.15s ease !important;
+
+    /* Positioning: place X inside the toast */
+    position: absolute !important;
+    top: 8px !important;
+    right: 10px !important;
+    left: auto !important;
+    transform: none !important;
+    height: 20px !important;
+    width: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 1 !important;
+  }
+
+  /* Ensure content doesn't sit under the close button */
+  [data-sonner-toast] {
+    padding-right: 40px !important;
+  }
+
+  [data-sonner-toast] [data-close-button]:hover {
+    opacity: 1 !important;
+    background: transparent !important;
+  }
+
+  /* Action button - teal accent */
+  [data-sonner-toast] [data-button] {
+    background: transparent !important;
+    color: hsl(var(--accent-brand)) !important;
+    border: none !important;
+    font-weight: 500 !important;
+    padding: 0 !important;
+    text-decoration: underline !important;
+    text-underline-offset: 2px !important;
+    transition: opacity 0.15s ease !important;
+  }
+
+  [data-sonner-toast] [data-button]:hover {
+    opacity: 0.8 !important;
+  }
+
+  /* Subtle animations */
+  [data-sonner-toast][data-mounted='true'] {
+    animation: toast-fade-in 0.2s ease-out forwards !important;
+  }
+
+  [data-sonner-toast][data-removed='true'] {
+    animation: toast-fade-out 0.15s ease-in forwards !important;
+  }
+
+  @keyframes toast-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes toast-fade-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+  }
+
+  /* Monaco Editor - Fix z-index for tooltips, suggestions, and widgets */
+  /* Ensure they appear above header (z-50) and other UI elements */
+
+  /* Autocomplete suggestions widget */
+  .monaco-editor .suggest-widget,
+  .suggest-widget {
+    z-index: 100 !important;
+  }
+
+  /* Parameter hints widget */
+  .monaco-editor .parameter-hints-widget,
+  .parameter-hints-widget {
+    z-index: 100 !important;
+  }
+
+  /* Hover tooltips */
+  .monaco-editor .monaco-hover,
+  .monaco-hover {
+    z-index: 100 !important;
+  }
+
+  /* Context menus */
+  .monaco-editor .monaco-menu,
+  .monaco-menu {
+    z-index: 100 !important;
+  }
+
+  /* Context views (general overlay container) - often mounted in body */
+  .monaco-editor .context-view,
+  .context-view {
+    z-index: 100 !important;
+  }
+
+  /* Quick input widget (Ctrl+P, Ctrl+Shift+P) */
+  .monaco-editor .quick-input-widget,
+  .quick-input-widget {
+    z-index: 100 !important;
+  }
+
+  /* Find/Replace widget */
+  .monaco-editor .find-widget,
+  .find-widget {
+    z-index: 100 !important;
+  }
+
+  /* Content widgets (inline widgets like parameter hints) */
+  .monaco-editor .contentWidgets,
+  .contentWidgets {
+    z-index: 100 !important;
+  }
+
+  /* Overlay widgets (floating widgets like suggest) */
+  .monaco-editor .overlayWidgets,
+  .overlayWidgets {
+    z-index: 100 !important;
+  }
+
+  /* Editor decorations overlays */
+  .monaco-editor .decorationsOverviewRuler,
+  .decorationsOverviewRuler {
+    z-index: 100 !important;
+  }
+
+  /* Lightbulb actions (code actions) */
+  .monaco-editor .lightbulb-glyph,
+  .lightbulb-glyph {
+    z-index: 100 !important;
+  }
+
+  /* Monaco aria container (accessibility announcements) */
+  .monaco-aria-container {
+    z-index: 100 !important;
+  }
+
+  /* Editor widgets container */
+  .editor-widget {
+    z-index: 100 !important;
+  }
+
+  /* Shimmer animation for executing tool group text */
+  @keyframes shimmer {
+    0% {
+      background-position: -100% center;
+    }
+    100% {
+      background-position: 200% center;
+    }
+  }
+
+  .shimmer-text {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--accent-brand) / 0.8) 0%,
+      hsl(var(--accent-brand) / 0.8) 40%,
+      hsl(var(--accent-brand) / 1) 50%,
+      hsl(var(--accent-brand) / 0.8) 60%,
+      hsl(var(--accent-brand) / 0.8) 100%
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 3s ease-in-out infinite;
+  }
+
+  /* Gradient shift animation for premium card borders */
+  @keyframes gradient-shift {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+
+  .animate-gradient-shift {
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease infinite;
+  }
+
+  /* ========================================
+   * SETTINGS-CONTROLLED STYLES
+   * ======================================== */
+
+  /* Reduce Motion - Disable all animations when enabled */
+  .reduce-motion,
+  .reduce-motion * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* High Contrast Mode - Increase contrast in backgrounds and text */
+  .high-contrast {
+    /* Darker backgrounds for more separation */
+    --background: 220 15% 3%;
+    --card: 220 12% 6%;
+    --surface: 220 12% 6%;
+    --popover: 220 12% 8%;
+    --muted: 220 8% 12%;
+    --secondary: 220 10% 10%;
+    --input: 220 12% 8%;
+
+    /* Brighter text for better readability */
+    --foreground: 0 0% 98%;
+    --card-foreground: 0 0% 98%;
+    --popover-foreground: 0 0% 98%;
+    --muted-foreground: 220 8% 70%;
+    --secondary-foreground: 0 0% 90%;
+
+    /* More visible borders */
+    --border: 220 8% 25%;
+
+    /* Slightly brighter accents */
+    --primary: 168 60% 52%;
+    --accent-brand: 168 60% 52%;
+  }
+
+  .high-contrast.light {
+    /* Softened backgrounds - less harsh than pure white */
+    --background: 220 14% 96%;
+    --card: 220 14% 93%;
+    --surface: 220 14% 93%;
+    --popover: 220 14% 97%;
+    --muted: 220 12% 88%;
+    --secondary: 220 14% 90%;
+    --input: 220 14% 98%;
+
+    /* Darker text for better readability */
+    --foreground: 220 20% 10%;
+    --card-foreground: 220 20% 10%;
+    --popover-foreground: 220 20% 10%;
+    --muted-foreground: 220 12% 35%;
+    --secondary-foreground: 220 20% 15%;
+
+    /* More visible borders */
+    --border: 220 14% 70%;
+
+    /* Darker accents for light mode */
+    --primary: 168 55% 32%;
+    --accent-brand: 168 55% 32%;
+  }
+
+  /* Compact mode for chat messages */
+  .chat-compact .message-container {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .chat-compact .message-content {
+    margin-top: 0.25rem;
+  }
+
+  .chat-compact .message-gap {
+    gap: 0.5rem;
+  }
+
+  /* ========================================
+   * MOBILE TOUCH INTERACTIONS
+   * ======================================== */
+
+  /* Touch target size - minimum 44px for accessibility */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Active state feedback for touch */
+  .touch-feedback {
+    transition: transform 0.1s ease, opacity 0.1s ease, background-color 0.15s ease;
+  }
+
+  .touch-feedback:active {
+    transform: scale(0.96);
+    opacity: 0.8;
+  }
+
+  /* Stronger feedback for buttons */
+  .touch-feedback-strong:active {
+    transform: scale(0.92);
+    opacity: 0.7;
+  }
+
+  /* Bottom navigation styles */
+  .mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: hsl(var(--card) / 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid hsl(var(--border) / 0.5);
+    padding-bottom: var(--safe-area-inset-bottom);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .light .mobile-bottom-nav {
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Bottom nav item */
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 8px 4px;
+    min-width: 64px;
+    min-height: 48px;
+    border-radius: 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+  }
+
+  .bottom-nav-item:active {
+    transform: scale(0.92);
+  }
+
+  /* Active indicator pill */
+  .bottom-nav-item.active::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 32px;
+    height: 3px;
+    background: hsl(var(--accent-brand));
+    border-radius: 2px;
+    opacity: 0;
+    animation: navIndicatorIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  @keyframes navIndicatorIn {
+    from {
+      opacity: 0;
+      width: 0;
+    }
+    to {
+      opacity: 1;
+      width: 32px;
+    }
+  }
+
+  .bottom-nav-item .nav-icon {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease;
+  }
+
+  .bottom-nav-item.active .nav-icon {
+    transform: scale(1.1);
+    color: hsl(var(--accent-brand));
+  }
+
+  .bottom-nav-item .nav-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    transition: color 0.2s ease;
+  }
+
+  .bottom-nav-item.active .nav-label {
+    color: hsl(var(--accent-brand));
+  }
+
+  /* Safe area padding utilities */
+  .pb-safe {
+    padding-bottom: var(--safe-area-inset-bottom);
+  }
+
+  .pt-safe {
+    padding-top: var(--safe-area-inset-top);
+  }
+
+  .px-safe {
+    padding-left: var(--safe-area-inset-left);
+    padding-right: var(--safe-area-inset-right);
+  }
+
+  /* Bottom nav content offset */
+  .pb-bottom-nav {
+    padding-bottom: calc(var(--mobile-bottom-nav-height) + var(--safe-area-inset-bottom));
+  }
+
+  /* Haptic-like visual feedback */
+  @keyframes hapticPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+  }
+
+  .haptic-feedback {
+    animation: hapticPulse 0.15s ease-out;
+  }
+
+  /* Hide scrollbar but keep functionality (mobile) */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Hide scrollbar on mobile only, show on desktop (md+) */
+  .scrollbar-none-mobile {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none-mobile::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    .scrollbar-none-mobile {
+      -ms-overflow-style: auto;
+      scrollbar-width: thin;
+    }
+
+    .scrollbar-none-mobile::-webkit-scrollbar {
+      display: block;
+      height: 6px;
+    }
+  }
+
+  /* Smooth scroll for containers */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+  }
+
+  /* iOS-style rubber band scroll indicator */
+  .overscroll-indicator {
+    position: relative;
+  }
+
+  .overscroll-indicator::before,
+  .overscroll-indicator::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 40px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .overscroll-indicator::before {
+    top: 0;
+    background: linear-gradient(to bottom, hsl(var(--accent-brand) / 0.1), transparent);
+  }
+
+  .overscroll-indicator::after {
+    bottom: 0;
+    background: linear-gradient(to top, hsl(var(--accent-brand) / 0.1), transparent);
+  }
+
+  /* Mobile floating action area */
+  .mobile-fab-area {
+    position: fixed;
+    bottom: calc(var(--mobile-bottom-nav-height) + var(--safe-area-inset-bottom) + 16px);
+    right: 16px;
+    z-index: 40;
+  }
+}

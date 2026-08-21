@@ -1,0 +1,10 @@
+{% extends "email/base.html" %}{% load i18n %}
+{% block content %}
+<p>{% blocktrans with name=user.get_short_name %}Hi {{ name }},{% endblocktrans %}</p>
+<p>{% blocktrans with brand=brand_name %}Please confirm your email so you can start using {{ brand }}.{% endblocktrans %}</p>
+<p style="text-align:center;margin:32px 0;">
+  <a href="{{ action_url }}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:500;">{% trans "Verify email" %}</a>
+</p>
+<p style="font-size:14px;color:#6b7280;">{% trans "Or paste this link into your browser:" %}<br><a href="{{ action_url }}" style="color:#2563eb;word-break:break-all;">{{ action_url }}</a></p>
+<p style="font-size:14px;color:#6b7280;">{% trans "This link expires in 24 hours." %}</p>
+{% endblock %}

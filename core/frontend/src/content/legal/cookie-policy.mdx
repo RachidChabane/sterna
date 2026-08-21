@@ -1,0 +1,44 @@
+---
+title: Cookie Policy
+last_updated: 2026-05-21
+version: 1.0.0
+---
+
+This Cookie Policy explains how Sterna uses cookies and similar technologies (localStorage, sessionStorage, IndexedDB) when you visit our site or use the Service.
+
+## What are cookies
+
+Cookies are small text files that a website stores in your browser. They let the site remember things across page loads, such as that you are logged in. We also use similar browser-side storage: **localStorage** for preferences and **IndexedDB** for cached attachments. Throughout this policy we use "cookies" loosely to cover all of these.
+
+## Categories we use
+
+We group our use into three categories.
+
+- **Strictly necessary** — required for the Service to work at all. They cannot be switched off. Examples: the JWT access token and refresh token that keep you signed in, and the CSRF token used to protect forms.
+- **Functional** — improve your experience but are not strictly necessary. Examples: theme preference (light or dark), sidebar collapse state, last-viewed conversation. You can clear these by signing out, which removes the user-scoped storage keys.
+- **Analytics** — measure how the Service is used so we can improve it. These are only set if you opt in via the consent banner. Examples: aggregate counts of which pages are visited, anonymized error reports. [FIXME — lawyer review needed: finalize analytics provider (Plausible or PostHog) and update this section].
+
+## Per-cookie table
+
+| Name | Provider | Purpose | Retention | Category |
+|---|---|---|---|---|
+| `access_token` | Sterna | Authenticates API requests | Session, refreshed automatically | Strictly necessary |
+| `refresh_token` | Sterna | Issues new access tokens | Up to 30 days | Strictly necessary |
+| `theme` | Sterna | Light or dark mode | 1 year | Functional |
+| `nav-order` | Sterna | Sidebar layout | 1 year | Functional |
+
+This table is not exhaustive. [FIXME — lawyer review needed: complete the per-cookie table after a full localStorage / sessionStorage audit].
+
+## How to manage cookies
+
+You can clear cookies and local storage at any time through your browser settings:
+
+- **Chrome / Edge** — Settings → Privacy and security → Clear browsing data.
+- **Firefox** — Settings → Privacy & Security → Cookies and Site Data → Clear Data.
+- **Safari** — Settings → Privacy → Manage Website Data.
+
+If you opt out of analytics cookies through our in-app consent banner (when published), we stop setting those keys. Strictly necessary cookies cannot be opted out of because the Service would stop functioning. [FIXME — lawyer review needed: ship the consent banner; cross-reference with the cookie-banner task].
+
+## Updates to this policy
+
+We will email you at least 30 days before a material change to this Cookie Policy takes effect. The version and "Last updated" badge at the top of the page identifies the current text.

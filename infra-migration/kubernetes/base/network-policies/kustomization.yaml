@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - default-deny.yaml
+  - orchestrator-to-sandboxes.yaml
+  - allow-tunnel-to-services.yaml
+  # Note: sandbox-egress.yaml is for sterna-sandboxes namespace
+  # and should be applied separately to avoid namespace override issues

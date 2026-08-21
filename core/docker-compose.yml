@@ -1,0 +1,295 @@
+services:
+  # API Gateway - handles auth, rate limiting, and routing
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: sterna-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - GATEWAY_JWT_SECRET_KEY=${JWT_SECRET_KEY:-django-insecure-development-key}
+      # The dev-stack secret above shares Django's "django-insecure-…"
+      # placeholder marker, so the gateway's fail-closed startup check
+      # (gateway/config.py) would otherwise refuse to boot. Explicitly
+      # opt in to local dev only — never set this in staging/production,
+      # where GATEWAY_JWT_SECRET_KEY must be a real generated secret.
+      - GATEWAY_ALLOW_INSECURE_JWT_SECRET=true
+      - GATEWAY_REDIS_URL=redis://redis:6379/0
+      - GATEWAY_ENVIRONMENT=development
+      - GATEWAY_DEBUG=true
+      - GATEWAY_RATE_LIMIT_ENABLED=true
+      # JSON array — cors_origins has no built-in default, so every
+      # environment (this one included) must set it explicitly.
+      - GATEWAY_CORS_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+    volumes:
+      - ./api-gateway:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8080/health', timeout=5).raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - default
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: sterna_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    # Use Uvicorn for ASGI support (WebSocket via Django Channels) with hot reload
+    command: uvicorn sterna.asgi:application --host 0.0.0.0 --port 8000 --reload --reload-dir /app
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DJANGO_ENV=dev
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=sterna_dev
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SECRET_KEY=django-insecure-development-key
+      - DEBUG=True
+      # Frontend URL for OAuth callbacks and HTTP-Referer headers
+      - FRONTEND_URL=http://localhost:5173
+      # Backend URL for MCP OAuth callbacks
+      - SITE_URL=http://localhost:8000
+      # Voice Room API Keys (previously in voice-room service)
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Reaches the orchestrator (when the optional sandbox stack is also
+    # running) via its "orchestrator" alias on this network — see
+    # sandbox/docker-compose.sandbox.yml, which joins core_default as
+    # an external network for that purpose. `web` itself does not need
+    # to join sandbox-network directly, which keeps this compose file
+    # bootable on its own on a fresh clone.
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      target: development
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Prevent overwriting node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      # Vite proxy runs on server-side, so it needs to use Docker service name
+      # The proxy forwards /api requests to API Gateway for auth, rate limiting, and routing
+      - VITE_API_URL=http://api-gateway:8080
+      # Backend URL for client-side browser redirects (OAuth callbacks)
+      # Must use localhost since browser can't resolve Docker service names
+      - VITE_BACKEND_URL=http://localhost:8000
+    depends_on:
+      - web
+    command: npm run dev -- --host 0.0.0.0
+
+  user-preferences:
+    build:
+      context: ./user-preferences-service
+      dockerfile: Dockerfile
+    # Dev-only hot reload (the image CMD is production-grade, no --reload)
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8002:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/sterna_dev
+      - JWT_SECRET_KEY=django-insecure-development-key
+      - JWT_ALGORITHM=HS256
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:8000
+      - DEBUG=True
+    volumes:
+      - ./user-preferences-service/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  brave-search:
+    build:
+      context: ./brave-search
+      dockerfile: Dockerfile
+    container_name: brave-search
+    # Dev-only hot reload (the image CMD is production-grade, no --reload)
+    command: uvicorn main:app --host 0.0.0.0 --port 8004 --reload
+    ports:
+      - "8004:8004"
+    environment:
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+    volumes:
+      - ./brave-search:/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8004/', timeout=5).raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  google-maps:
+    build:
+      context: ./google-maps
+      dockerfile: Dockerfile
+    container_name: google-maps
+    # Dev-only hot reload (the image CMD is production-grade, no --reload)
+    command: uvicorn main:app --host 0.0.0.0 --port 8005 --reload
+    ports:
+      - "8005:8005"
+    environment:
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CACHE_TTL=86400
+    volumes:
+      - ./google-maps:/app
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8005/', timeout=5).raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # NOTE: voice-room FastAPI service has been removed
+  # Voice room functionality is now handled by Django Channels in the 'web' service
+  # WebSocket endpoint: ws://localhost:8000/ws/voice-rooms/{room_id}/
+
+  # Celery worker for background task processing (code jobs)
+  celery-worker:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    command: celery -A sterna worker -l INFO -Q celery,code_jobs --concurrency=4
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - .env
+    environment:
+      - DJANGO_ENV=dev
+      - DJANGO_SETTINGS_MODULE=sterna.settings.dev
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=sterna_dev
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SECRET_KEY=django-insecure-development-key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Celery Beat scheduler for periodic tasks
+  celery-beat:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    command: celery -A sterna beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - DJANGO_ENV=dev
+      - DJANGO_SETTINGS_MODULE=sterna.settings.dev
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=sterna_dev
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SECRET_KEY=django-insecure-development-key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: core_default
+    # No "sandbox-network" here on purpose: this compose file is
+    # self-contained. The optional coding-agent sandbox stack
+    # (sandbox/docker-compose.sandbox.yml) joins this network
+    # externally to reach `web`/`api-gateway`, instead of this file
+    # depending on a network that stack owns — that would be a
+    # circular "external: true" dependency neither stack could
+    # satisfy on a first boot. See core/sandbox/README.md.
