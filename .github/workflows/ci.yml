@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master, develop]
+    branches: [main]
   pull_request:
-    branches: [master, develop]
+    branches: [main]
   workflow_dispatch:
 
 # Least-privilege default: read-only. Jobs that need more (version-bump
