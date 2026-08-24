@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/RachidChabane/sterna/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/RachidChabane/sterna/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
+  <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg"></a>
   <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-3776ab.svg">
   <img alt="Django 5.2" src="https://img.shields.io/badge/django-5.2-092e20.svg">
   <img alt="React 19" src="https://img.shields.io/badge/react-19-61dafb.svg">
@@ -228,7 +228,7 @@ before enabling the coding agent on a host you care about.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+GNU AGPL-3.0: run it, change it, contribute; if you offer a modified version as a service, share your changes. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 Copyright © Rachid Chabane ([@RachidChabane](https://github.com/RachidChabane)).
 
 Provider names and logos shown in the UI (OpenAI, Anthropic, Google, Mistral,

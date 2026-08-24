@@ -128,7 +128,7 @@ version and vice versa. Use a real prefix even for small changes —
   project, not a funded team. If a PR sits without a response, a polite
   ping after a week or two is fine.
 - By submitting a contribution, you agree it's licensed under this
-  project's [Apache License, Version 2.0](LICENSE) (inbound = outbound),
+  project's [GNU AGPL-3.0](LICENSE) license (inbound = outbound),
   consistent with the license grant in that file.
 
 ## Reporting bugs

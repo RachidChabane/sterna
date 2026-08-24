@@ -19,7 +19,7 @@
 [project]
 name = "sterna-web"
 version = "0.0.0"
-license = {text = "Apache-2.0"}
+license = {text = "AGPL-3.0-only"}
 
 [tool.ruff.lint.per-file-ignores]
 # Django settings modules: `from .base import *` plus section-local imports

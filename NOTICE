@@ -2,8 +2,8 @@ Sterna
 Copyright 2026 Rachid Chabane
 
 This product includes software developed by Rachid Chabane
-(https://github.com/RachidChabane), licensed under the Apache License,
-Version 2.0. See the LICENSE file for the full license text.
+(https://github.com/RachidChabane), licensed under the GNU Affero General
+Public License v3.0. See the LICENSE file for the full license text.
 
 ================================================================================
 Third-party attributions
@@ -30,10 +30,10 @@ MIT License — vendored in source
   attribution and a description of how these files were derived.
 
 --------------------------------------------------------------------------
-Apache License, Version 2.0
+GNU AGPL-3.0
 --------------------------------------------------------------------------
 
-The following components are included unmodified under the Apache
+The following components are included unmodified under their original permissive
 License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0). No
 modifications have been made to these components, so no "changed files"
 notice under License §4(b) applies.
@@ -128,7 +128,7 @@ Claude Code CLI (`@anthropic-ai/claude-code`), installed from npm at
 container build time (see `core/sandbox/runtime/Dockerfile.sandbox-base`).
 That CLI is Anthropic's proprietary software, distributed under
 Anthropic's own commercial terms, and is not part of this repository or
-this NOTICE's Apache-2.0 grant. Operators enabling that feature are
+this project's license. Operators enabling that feature are
 responsible for complying with Anthropic's terms for their own use of the
 CLI (or for routing requests through OpenRouter instead, which this
 codebase does by default).

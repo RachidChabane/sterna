@@ -8,9 +8,9 @@ version = "1.0.0"
 description = "Kubernetes-based sandbox executor for Sterna AI"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "Apache-2.0"}
+license = {text = "AGPL-3.0-only"}
 classifiers = [
-    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
 ]
 dependencies = [
     "kubernetes>=28.1.0",
