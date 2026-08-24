@@ -1,7 +1,7 @@
 {
-  "api-gateway": "6.2.1",
+  "api-gateway": "6.2.2",
   "web": "6.2.1",
-  "frontend": "6.2.1",
+  "frontend": "6.2.2",
   "orchestrator": "6.2.1",
   "egress-proxy": "6.2.1",
   "brave-search": "4.2.1",
