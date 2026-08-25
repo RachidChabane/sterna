@@ -633,23 +633,21 @@ class VideoModelCatalog(models.Model):
         return cost
 
 
-class OpenRouterUsageLog(models.Model):
+class OpenRouterGenerationRecord(models.Model):
     """
-    Tracks OpenRouter API usage per user for monitoring and billing.
+    Per-request OpenRouter provider analytics, keyed by user and model.
 
-    This provides centralized usage tracking regardless of where
-    in the codebase the OpenRouter API is called. Enables:
-    - Per-user cost tracking
-    - Usage analytics by model/source
-    - Rate limiting enforcement
-    - Billing and quota management
+    Scope is analytics only: token counts, cost, and source breakdowns
+    for OpenRouter generations. Billing of record lives in
+    usage_quota.UsageLog; this model must never be read for quota or
+    invoicing decisions.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='openrouter_usage_logs',
+        related_name='openrouter_generation_records',
         db_index=True,
     )
 
@@ -685,8 +683,8 @@ class OpenRouterUsageLog(models.Model):
 
     class Meta:
         ordering = ['-timestamp']
-        verbose_name = 'OpenRouter Usage Log'
-        verbose_name_plural = 'OpenRouter Usage Logs'
+        verbose_name = 'OpenRouter Generation Record'
+        verbose_name_plural = 'OpenRouter Generation Records'
         indexes = [
             models.Index(fields=['user', 'timestamp']),
             models.Index(fields=['user', 'model_id']),
