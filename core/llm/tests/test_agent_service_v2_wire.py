@@ -65,8 +65,10 @@ class V2WireGoldenParityTests(unittest.TestCase):
                 "v2_catalog_tool_round_trip",
                 "v2_file_and_catalog_tools_in_one_turn",
                 "v2_file_tool_round_trip",
+                "v2_image_output_turn",
                 "v2_plain_text_completion",
                 "v2_provider_error_mid_stream",
+                "v2_reasoning_turn",
             ],
         )
 

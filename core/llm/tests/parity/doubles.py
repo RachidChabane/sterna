@@ -31,6 +31,8 @@ from llm.agent_core.provider import (
     ProviderContentDeltaChunk,
     ProviderDoneChunk,
     ProviderGenerationIdChunk,
+    ProviderImageChunk,
+    ProviderReasoningDeltaChunk,
     ProviderToolCallDeltaChunk,
     ProviderUsageChunk,
 )
@@ -193,6 +195,14 @@ def generation_id_chunk(generation_id: str) -> ProviderGenerationIdChunk:
 
 def content_chunk(text: str) -> ProviderContentDeltaChunk:
     return ProviderContentDeltaChunk(content=text)
+
+
+def reasoning_chunk(text: str) -> ProviderReasoningDeltaChunk:
+    return ProviderReasoningDeltaChunk(content=text)
+
+
+def image_chunk(image_url: str) -> ProviderImageChunk:
+    return ProviderImageChunk(image=image_url)
 
 
 def tool_call_chunk(

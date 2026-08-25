@@ -140,6 +140,49 @@ def tool_call_chunk(call_id, name, arguments, generation_id=None):
     )
 
 
+def direct_client_stream(*iteration_chunks):
+    """Bind a `stream_sequence`-shaped side effect onto `OpenRouterClient.complete_stream`.
+
+    A reasoning or image-output turn bypasses the LangChain chat model
+    entirely (`direct_client.py`'s "CRITICAL" branch) and streams from
+    `OpenRouterClient.complete_stream` instead, so those two goldens
+    patch the class method rather than `create_chat_model`.
+    """
+    remaining = list(iteration_chunks)
+
+    def _complete_stream(_self, **_kwargs):
+        chunks = remaining.pop(0) if remaining else []
+        return iter(chunks)
+
+    return _complete_stream
+
+
+def direct_content_chunk(text):
+    return {"event": "content", "data": {"content": text}}
+
+
+def direct_reasoning_chunk(text):
+    return {"event": "reasoning", "data": {"content": text}}
+
+
+def direct_image_chunk(image_url):
+    return {"event": "image", "data": {"image": image_url}}
+
+
+def direct_generation_id_chunk(generation_id):
+    return {"event": "generation_id", "data": {"generation_id": generation_id}}
+
+
+def direct_done_chunk(finish_reason="stop", prompt_tokens=120, completion_tokens=40):
+    return {
+        "event": "done",
+        "data": {
+            "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens},
+            "finish_reason": finish_reason,
+        },
+    }
+
+
 class V2StreamCompleteLangchainGoldenTests(APITestCase):
     """Byte-exact transcripts of `stream_complete_langchain`."""
 
@@ -150,7 +193,7 @@ class V2StreamCompleteLangchainGoldenTests(APITestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
-    def _post(self, chat_model, **overrides):
+    def _post(self, chat_model, *, extra_patches=(), **overrides):
         payload = {
             "model": MODEL_ID,
             "messages": [{"role": "user", "content": "Summarize the notes."}],
@@ -177,6 +220,7 @@ class V2StreamCompleteLangchainGoldenTests(APITestCase):
             # The loop pauses after announcing tool calls to leave a cancel
             # window; the wall clock is not part of the transcript.
             patch("llm.agent.streaming.langchain_path.asyncio.sleep", new=AsyncMock()),
+            *extra_patches,
         ]
         started = []
         try:
@@ -313,3 +357,56 @@ class V2StreamCompleteLangchainGoldenTests(APITestCase):
 
         assert_stream_is_substantive(self, raw, ["content", "error"])
         assert_matches_golden(self, "v2_provider_error_mid_stream", raw)
+
+    # --- (d) native reasoning / image output ---------------------------
+    #
+    # A reasoning or image-output turn never reaches the LangChain chat
+    # model: `direct_client.py`'s "CRITICAL" branch routes it straight to
+    # `OpenRouterClient.complete_stream` instead, since LangChain does not
+    # surface OpenRouter's `reasoning_details`/`images` fields. These two
+    # scenarios patch that class method rather than `create_chat_model`.
+
+    def test_reasoning_turn_transcript(self):
+        raw = self._post(
+            FakeStreamingLLM([]),
+            enable_reasoning=True,
+            extra_patches=[
+                patch(
+                    "llm.client.OpenRouterClient.complete_stream",
+                    new=direct_client_stream([
+                        direct_generation_id_chunk(GENERATION_ID),
+                        direct_reasoning_chunk("The notes mention two open items."),
+                        direct_content_chunk("There are two open items."),
+                        direct_done_chunk(),
+                    ]),
+                )
+            ],
+        )
+
+        assert_stream_is_substantive(
+            self, raw, ["generation_id", "reasoning", "content", "done"]
+        )
+        assert_matches_golden(self, "v2_reasoning_turn", raw)
+
+    def test_image_output_turn_transcript(self):
+        seed_model_catalog(["text", "image"])
+
+        raw = self._post(
+            FakeStreamingLLM([]),
+            extra_patches=[
+                patch(
+                    "llm.client.OpenRouterClient.complete_stream",
+                    new=direct_client_stream([
+                        direct_generation_id_chunk(GENERATION_ID),
+                        direct_content_chunk("Here is the requested image."),
+                        direct_image_chunk("https://example.invalid/golden-fixture.png"),
+                        direct_done_chunk(),
+                    ]),
+                )
+            ],
+        )
+
+        assert_stream_is_substantive(
+            self, raw, ["generation_id", "content", "image", "done"]
+        )
+        assert_matches_golden(self, "v2_image_output_turn", raw)

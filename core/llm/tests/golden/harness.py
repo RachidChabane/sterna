@@ -53,8 +53,12 @@ PROVIDER_ERROR_MESSAGE = "Upstream provider returned 502 Bad Gateway"
 BILLING_PLAN_NAME = "golden-transcripts-plan"
 
 
-def seed_model_catalog():
-    """Insert the catalog row every golden scenario prices against."""
+def seed_model_catalog(output_modalities=None):
+    """Insert the catalog row every golden scenario prices against.
+
+    `output_modalities` defaults to text-only; a scenario exercising
+    model-native image output passes `["text", "image"]`.
+    """
     from llm.models import ModelCatalog
 
     cache.clear()
@@ -71,7 +75,7 @@ def seed_model_catalog():
             "supports_streaming": True,
             "supports_functions": True,
             "is_available": True,
-            "output_modalities": ["text"],
+            "output_modalities": output_modalities or ["text"],
             "input_modalities": ["text"],
             "fetched_at": timezone.now(),
         },
