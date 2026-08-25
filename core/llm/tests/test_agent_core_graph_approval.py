@@ -16,6 +16,7 @@ from llm.agent_core.graph import (
     ApprovalDecision,
     LocalApprovals,
     ToolApprovalDecision,
+    TurnNotPausedError,
 )
 from llm.agent_core.registry import ToolApproval
 from llm.tests.agent_core_doubles import (
@@ -314,6 +315,37 @@ class ApprovalResumeTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(search_a.calls, [{"query": "sterna streaming"}])
+
+    async def test_resuming_a_thread_that_was_never_started_is_refused(self):
+        loop, _, _ = _gated_loop()
+
+        with self.assertRaises(TurnNotPausedError):
+            await collect(
+                loop.resume(
+                    [
+                        ToolApprovalDecision(
+                            tool_call_id="call-search", decision=ApprovalDecision.APPROVED
+                        )
+                    ],
+                    thread_id="thread-never-started",
+                )
+            )
+
+    async def test_a_decision_arriving_twice_is_refused_without_rerunning_the_tool(self):
+        loop, provider, search = _gated_loop()
+        await run_turn(loop, thread_id=THREAD)
+        decisions = [
+            ToolApprovalDecision(
+                tool_call_id="call-search", decision=ApprovalDecision.APPROVED
+            )
+        ]
+        await collect(loop.resume(decisions, thread_id=THREAD))
+
+        with self.assertRaises(TurnNotPausedError):
+            await collect(loop.resume(decisions, thread_id=THREAD))
+
+        self.assertEqual(search.calls, [{"query": "sterna streaming"}])
+        self.assertEqual(provider.call_count, 2)
 
     async def test_a_decision_delivered_as_a_plain_mapping_is_understood(self):
         loop, _, search = _gated_loop()

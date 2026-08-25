@@ -59,6 +59,20 @@ anything the run does with it.
 """
 
 
+class TurnNotPausedError(RuntimeError):
+    """A turn was resumed on a thread that is not waiting for approval.
+
+    Raised for a thread nothing was ever started on, and for one whose
+    turn already finished — a decision arriving twice, or against a
+    stale link. Naming the condition keeps a caller from having to
+    tell an unknown thread apart from an internal failure.
+    """
+
+    def __init__(self, thread_id: str) -> None:
+        super().__init__(f"no turn is paused on thread {thread_id!r}")
+        self.thread_id = thread_id
+
+
 class AgentLoop:
     """One configured agent loop, runnable over many turns."""
 
@@ -91,13 +105,18 @@ class AgentLoop:
 
         A decision arriving over a JSON transport may be given as the
         plain mapping it deserialized into, rather than as a
-        `ToolApprovalDecision`.
+        `ToolApprovalDecision`. Raises `TurnNotPausedError` on the
+        first iteration if the thread holds no paused turn.
         """
 
-        return self._run(Command(resume=list(decisions)), thread_id)
+        return self._run(Command(resume=list(decisions)), thread_id, require_pause=True)
 
-    async def _run(self, entry: Any, thread_id: str) -> AsyncIterator[StreamEvent]:
+    async def _run(
+        self, entry: Any, thread_id: str, *, require_pause: bool = False
+    ) -> AsyncIterator[StreamEvent]:
         config = cast(RunnableConfig, {"configurable": {"thread_id": thread_id}})
+        if require_pause and not (await self._graph.aget_state(config)).interrupts:
+            raise TurnNotPausedError(thread_id)
         pause: Optional[ApprovalRequest] = None
         async for mode, chunk in self._graph.astream(
             entry, config=config, stream_mode=list(_STREAM_MODES)

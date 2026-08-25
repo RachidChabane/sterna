@@ -33,7 +33,7 @@ from .ports import (
     UnboundedContextWindow,
 )
 from .routing import Node
-from .runner import AgentLoop
+from .runner import AgentLoop, TurnNotPausedError
 from .state import AgentTurnState, ApprovalRequest, GenerationAccounting, initial_state
 
 __all__ = [
@@ -58,6 +58,7 @@ __all__ = [
     "RetryPolicy",
     "ToolApprovalDecision",
     "ToolResultEventsPort",
+    "TurnNotPausedError",
     "UnboundedContextWindow",
     "build_agent_graph",
     "initial_state",
