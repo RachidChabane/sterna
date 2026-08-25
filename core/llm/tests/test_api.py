@@ -257,8 +257,33 @@ class TestCompletionAPI(APITestCase):
     @patch("llm.views.CatalogService")
     def test_estimate_batch_cost_builds_prompt_through_prompts_v2(self, mock_catalog_service):
         """Both the global and per-model system prompts route through the
-        prompts_v2 builder with every feature flag on, exercising the same
-        code path the LangChain agent uses in production."""
+        prompts_v2 builder, exercising the same code path the LangChain
+        agent uses in production; the per-model prompt has every feature
+        flag on.
+
+        Pins the prompt source: it spies on OptimizedPromptBuilder.build_full_prompt
+        (delegating to the real implementation) and asserts prompts_v2-distinctive
+        markers are present in what it actually built -- the toggleable_capabilities
+        section (STATIC_CORE_PROMPTS, present in both prompts) plus, in the
+        per-model prompt, one CONDITIONAL_PROMPTS notice per enabled feature flag."""
+        from ..prompts_v2.optimized_builder import OptimizedPromptBuilder
+
+        capabilities_marker = "## Available Capabilities"
+        feature_markers = {
+            "mcp_tools": "[CONNECTORS ENABLED]",
+            "reasoning": "[REASONING ENABLED]",
+            "file_tools": "[FILE TOOLS ENABLED]",
+            "image_generation": "[IMAGE GENERATION & EDITING ENABLED]",
+            "video_generation": "[VIDEO GENERATION ENABLED]",
+        }
+        captured_prompts = []
+        real_build_full_prompt = OptimizedPromptBuilder.build_full_prompt
+
+        def _capturing_build_full_prompt(self, *args, **kwargs):
+            prompt_text, metadata = real_build_full_prompt(self, *args, **kwargs)
+            captured_prompts.append(prompt_text)
+            return prompt_text, metadata
+
         mock_catalog = mock_catalog_service.return_value
         mock_catalog.get_model.return_value = {
             "name": "GPT-4",
@@ -267,28 +292,48 @@ class TestCompletionAPI(APITestCase):
         }
         mock_catalog.estimate_cost.return_value = Decimal("0.01")
 
-        response = self.client.post(
-            "/api/llm/completions/estimate-batch-cost/",
-            {
-                "model_ids": ["openai/gpt-4"],
-                "typed_text": "Summarize this document for me.",
-                "system_prompt": "You are a helpful assistant.",
-                "enable_mcp_tools": True,
-                "features_by_model": {
-                    "openai/gpt-4": {
-                        "enable_mcp_tools": True,
-                        "enable_reasoning": True,
-                        "enable_file_tools": True,
-                        "enable_image_generation": True,
-                        "enable_video_generation": True,
-                        "system_prompt": "Custom per-model instructions.",
-                    }
+        with patch.object(
+            OptimizedPromptBuilder, "build_full_prompt", _capturing_build_full_prompt
+        ):
+            response = self.client.post(
+                "/api/llm/completions/estimate-batch-cost/",
+                {
+                    "model_ids": ["openai/gpt-4"],
+                    "typed_text": "Summarize this document for me.",
+                    "system_prompt": "You are a helpful assistant.",
+                    "enable_mcp_tools": True,
+                    "features_by_model": {
+                        "openai/gpt-4": {
+                            "enable_mcp_tools": True,
+                            "enable_reasoning": True,
+                            "enable_file_tools": True,
+                            "enable_image_generation": True,
+                            "enable_video_generation": True,
+                            "system_prompt": "Custom per-model instructions.",
+                        }
+                    },
                 },
-            },
-            format="json",
-        )
+                format="json",
+            )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["costs"]), 1)
         self.assertEqual(response.data["costs"][0]["model_id"], "openai/gpt-4")
         self.assertGreater(response.data["prompt_tokens"], 0)
+
+        # Pin the prompt source: build_full_prompt (the prompts_v2 API) must
+        # actually have been called -- once for the global estimate, once for
+        # the per-model override -- and every prompt it built must carry the
+        # shared capabilities marker.
+        self.assertEqual(len(captured_prompts), 2)
+        global_prompt, per_model_prompt = captured_prompts
+        for prompt_text in captured_prompts:
+            self.assertIn(capabilities_marker, prompt_text)
+
+        # The global estimate only had enable_mcp_tools set.
+        self.assertIn(feature_markers["mcp_tools"], global_prompt)
+
+        # The per-model estimate had every feature flag set -- each must
+        # have produced its own distinctive CONDITIONAL_PROMPTS notice.
+        for marker in feature_markers.values():
+            self.assertIn(marker, per_model_prompt)

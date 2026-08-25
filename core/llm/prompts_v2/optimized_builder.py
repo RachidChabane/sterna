@@ -399,10 +399,11 @@ CRITICAL: The project MUST be at `./spark-app-{spark_id}/` in the workspace root
 
         Used by llm/client.py's `_inject_system_prompt`, which serves
         direct completion and streaming requests outside the LangChain
-        agent. Reuses only the universal core content (datetime/language/
-        app-context/confidentiality plus the intellectual-perspective
-        section), not the agent-specific STATIC_CORE_PROMPTS sections
-        (tool discovery, tool naming, etc.), which don't apply here.
+        agent. Reuses the universal core content (datetime/language/
+        app-context/confidentiality, the intellectual-perspective section,
+        and the toggleable-capabilities notice), not the agent-specific
+        STATIC_CORE_PROMPTS sections (tool discovery, tool naming, etc.),
+        which don't apply here.
         """
         parts = [self.build_datetime_section()]
 
@@ -412,6 +413,13 @@ CRITICAL: The project MUST be at `./spark-app-{spark_id}/` in the workspace root
         )
         if intellectual_perspective:
             parts.append(intellectual_perspective)
+
+        toggleable_capabilities = next(
+            (s.content for s in STATIC_CORE_PROMPTS if s.id == "toggleable_capabilities"),
+            "",
+        )
+        if toggleable_capabilities:
+            parts.append(toggleable_capabilities)
 
         if custom_prompt and custom_prompt.strip():
             parts.append(custom_prompt.strip())
