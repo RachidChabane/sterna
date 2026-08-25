@@ -253,3 +253,42 @@ class TestCompletionAPI(APITestCase):
         self.assertEqual(response.data["model_id"], "openai/gpt-4")
         self.assertEqual(response.data["rate_per_second"], 20)
         self.assertTrue(response.data["tokens_available"])
+
+    @patch("llm.views.CatalogService")
+    def test_estimate_batch_cost_builds_prompt_through_prompts_v2(self, mock_catalog_service):
+        """Both the global and per-model system prompts route through the
+        prompts_v2 builder with every feature flag on, exercising the same
+        code path the LangChain agent uses in production."""
+        mock_catalog = mock_catalog_service.return_value
+        mock_catalog.get_model.return_value = {
+            "name": "GPT-4",
+            "max_tokens": 8192,
+            "max_completion_tokens": 2048,
+        }
+        mock_catalog.estimate_cost.return_value = Decimal("0.01")
+
+        response = self.client.post(
+            "/api/llm/completions/estimate-batch-cost/",
+            {
+                "model_ids": ["openai/gpt-4"],
+                "typed_text": "Summarize this document for me.",
+                "system_prompt": "You are a helpful assistant.",
+                "enable_mcp_tools": True,
+                "features_by_model": {
+                    "openai/gpt-4": {
+                        "enable_mcp_tools": True,
+                        "enable_reasoning": True,
+                        "enable_file_tools": True,
+                        "enable_image_generation": True,
+                        "enable_video_generation": True,
+                        "system_prompt": "Custom per-model instructions.",
+                    }
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["costs"]), 1)
+        self.assertEqual(response.data["costs"][0]["model_id"], "openai/gpt-4")
+        self.assertGreater(response.data["prompt_tokens"], 0)
