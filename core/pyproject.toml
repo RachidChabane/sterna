@@ -31,6 +31,3 @@ license = {text = "AGPL-3.0-only"}
 # ASGI entrypoint must initialize Django (get_asgi_application) before
 # importing the websocket routing modules that touch the ORM.
 "sterna/asgi.py" = ["E402"]
-# Monkey-patches langchain_openai's streaming chunk converter at import time;
-# the patch must be installed before importing the tool modules that use it.
-"llm/langchain_agent.py" = ["E402"]

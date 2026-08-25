@@ -16,7 +16,7 @@ from decimal import Decimal
 from typing import Any, Dict, Literal, Optional
 
 from asgiref.sync import sync_to_async
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from llm.image_providers import (

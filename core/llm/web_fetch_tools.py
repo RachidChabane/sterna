@@ -9,7 +9,7 @@ Strategy (hybrid, best quality + resilience):
   3. Both strip navigation, ads, footers, cookie banners automatically
 """
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 from typing import Optional
 import httpx

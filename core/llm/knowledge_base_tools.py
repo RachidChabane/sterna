@@ -9,7 +9,7 @@ Usage tracking:
     User context is passed via context variable.
 """
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from contextvars import ContextVar

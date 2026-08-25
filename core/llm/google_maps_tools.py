@@ -4,7 +4,7 @@ Google Maps LangChain Tools
 Provides LangChain tools for all Google Maps APIs via the google-maps service.
 """
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 import httpx
 import json

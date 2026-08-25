@@ -9,7 +9,7 @@ Usage tracking:
     BRAVE_SEARCH_USER_CONTEXT contextvars set by the caller (e.g., LangChain agent).
 """
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 from typing import Optional, Literal, Dict, Any
 from contextvars import ContextVar

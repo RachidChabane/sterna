@@ -15,7 +15,7 @@ import json
 import logging
 from typing import Optional
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 # Reuse knowledge base context for user info
