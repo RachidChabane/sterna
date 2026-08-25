@@ -48,6 +48,36 @@ export interface PaginatedResponse<T> {
 // Model catalog comparison (feature-based) types
 export type PriorityLevel = 'off' | 'nice' | 'important' | 'critical'
 
+export interface CatalogComparisonRequest {
+  model_ids: string[]
+  priorities?: {
+    cost?: PriorityLevel
+    context?: PriorityLevel
+    capabilities?: PriorityLevel
+    multimodality?: PriorityLevel
+    availability?: PriorityLevel
+  }
+  constraints?: {
+    mustSupportFunctions?: boolean
+    mustSupportStructuredOutputs?: boolean
+    mustSupportReasoning?: boolean
+    mustSupportPromptCaching?: boolean
+    mustSupportStreamCancellation?: boolean
+    mustBeAvailable?: boolean
+    mustBeMultimodal?: boolean
+    minContextTokens?: number | null
+    maxCostPer1MTokens?: number | null
+  }
+  costDirection?: 'lower' | 'higher'
+  capabilityWeights?: Partial<{
+    functions: number
+    structured_outputs: number
+    reasoning: number
+    prompt_caching: number
+    stream_cancellation: number
+  }>
+}
+
 interface CatalogModelScoreBreakdown {
   cost: number
   context: number
@@ -68,6 +98,12 @@ export interface CatalogModelScore {
   context_str: string
   capabilities: string[]
   is_best: boolean
+}
+
+export interface CatalogComparisonResponse {
+  scores: CatalogModelScore[]
+  best_model_id: string | null
+  considered: number
 }
 
 // Usage Quota types
