@@ -51,6 +51,13 @@ class MCPToolSource:
     Every tool produced this way requires approval before it runs —
     the platform never auto-executes a call against a third-party MCP
     server, unlike the built-in catalog tools under `tools/`.
+
+    A produced tool's handler calls back through the `MCPToolPort` this
+    source was built with, not through the `LegacyToolInvoker` on its
+    `ToolExecutionContext`: the port is already scoped to one MCP
+    routing target at construction time, where `LegacyToolInvoker`
+    dispatches by tool id across the unrelated catalog and
+    http_tool_executor sources.
     """
 
     def __init__(self, port: MCPToolPort):

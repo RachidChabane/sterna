@@ -4,15 +4,19 @@ Diffs the registry's discovered tool ids against the two legacy
 sources named in the migration — every `ToolDefinition` module-level
 constant in `llm.tool_catalog.core_tools`, and the handler dict
 `HTTPToolExecutor.execute_tool_call` dispatches through in
-`llm.http_tool_executor` — so a tool dropped from either source, or
-left out of the registry, fails loudly rather than silently. The
-catalog side is read by introspecting the module's namespace rather
-than trusting its `CORE_TOOL_DEFINITIONS` list, since that list is
-itself just one more place a defined tool can be left out of by
-mistake. The handler dict is read by parsing the source rather than
-importing the module, since `llm.http_tool_executor` pulls in Django
-through `sterna.middleware.request_id` and this test must not require
-a live sandbox connection to run.
+`llm.http_tool_executor` — so a tool present in either legacy source
+but missing a registry entry fails loudly rather than silently. This
+checks coverage in one direction only: the registry may hold more
+tools than these two sources name (an MCP-discovered tool, or one
+added directly under `tools/` with no legacy counterpart, is exactly
+what the package is for) without failing this test. The catalog side
+is read by introspecting the module's namespace rather than trusting
+its `CORE_TOOL_DEFINITIONS` list, since that list is itself just one
+more place a defined tool can be left out of by mistake. The handler
+dict is read by parsing the source rather than importing the module,
+since `llm.http_tool_executor` pulls in Django through
+`sterna.middleware.request_id` and this test must not require a live
+sandbox connection to run.
 
 It also checks each catalog tool's transcribed `prompt_snippet`
 against `llm.tool_catalog.core_tools`'s current
@@ -86,15 +90,6 @@ class ToolCoverageTests(unittest.TestCase):
         missing = self.http_handler_ids - set(self.discovered)
         self.assertEqual(
             missing, set(), f"http_tool_executor handler(s) missing a registry entry: {sorted(missing)}"
-        )
-
-    def test_registry_has_no_tool_beyond_the_two_legacy_sources(self):
-        expected = self.catalog_ids | self.http_handler_ids
-        extra = set(self.discovered) - expected
-        self.assertEqual(
-            extra,
-            set(),
-            f"registry has tool(s) not traceable to the catalog or http_tool_executor: {sorted(extra)}",
         )
 
     def test_catalog_tool_prompt_snippets_match_the_legacy_source(self):

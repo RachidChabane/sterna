@@ -7,10 +7,6 @@ from llm.tool_catalog.core_tools import CODING_AGENT as _LEGACY
 from ..registry import ToolApproval, ToolDefinition, ToolDisplay
 from ._legacy import delegate_to_invoker
 
-# Transcribed from `_LEGACY.system_prompt_section` at wrap time — kept as an
-# independent literal so a coverage test can catch drift from the source of
-# truth in `llm.tool_catalog.core_tools`, rather than compare a value against
-# itself.
 PROMPT_SNIPPET = 'Coding Agent for complex multi-step coding tasks. Delegates to an autonomous AI that can explore codebases, write/edit code, run commands, and iterate. Use for tasks requiring multiple operations across files.'
 
 TOOL = ToolDefinition(
