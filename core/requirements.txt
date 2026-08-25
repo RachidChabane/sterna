@@ -20,8 +20,6 @@ djangorestframework-simplejwt==5.3.1
 django-allauth==0.57.0
 dj-rest-auth==5.0.2
 google-auth==2.23.4
-google-auth-oauthlib==1.1.0
-google-auth-httplib2==0.1.1
 
 # Database
 psycopg2-binary==2.9.10
@@ -32,7 +30,6 @@ redis==6.4.0
 # Celery
 celery==5.5.3
 django-celery-beat==2.8.1
-flower==2.0.1
 
 # Web server
 gunicorn==22.0.0
@@ -47,9 +44,7 @@ moto[s3]==5.0.28
 
 # Data processing
 pandas==2.2.3
-pyarrow==17.0.0
 openpyxl==3.1.5
-chardet==5.2.0
 
 # Document processing
 PyPDF2==3.0.1
@@ -63,10 +58,8 @@ Pillow==10.4.0
 pydantic==2.10.5
 
 # ML and embeddings
-scikit-learn==1.5.2
 # sentence-transformers==3.3.1  # Temporarily disabled - depends on hdbscan which has ARM64 issues
 numpy==1.26.4
-scipy==1.16.2
 # hdbscan==0.8.29  # Temporarily disabled - compilation issues on ARM64
 
 # LLM
@@ -88,7 +81,6 @@ websockets==14.1
 pytest==8.3.4
 pytest-django==4.10.0
 pytest-cov==6.0.0
-pytest-xdist==3.6.1
 factory-boy==3.3.1
 faker==33.1.0
 responses==0.25.3

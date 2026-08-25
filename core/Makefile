@@ -179,10 +179,6 @@ beat: ## Start Celery beat
 	@echo '${BLUE}Starting Celery beat...${NC}'
 	docker compose exec web celery -A sterna beat -l info
 
-flower: ## Open Flower monitoring
-	@echo '${BLUE}Opening Flower monitoring...${NC}'
-	open http://localhost:5555
-
 ##@ Utilities
 
 clean: ## Clean up generated files
