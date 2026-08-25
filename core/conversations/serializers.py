@@ -3,12 +3,48 @@ Serializers for conversation models.
 
 Provides serialization for Conversation, Chat, and Message models
 with support for nested representations and bulk operations.
+
+This module has no import-time dependency on other apps: a message or
+chat's nested "sparks" is rendered through a serializer registered by
+whichever app owns that concept (see register_spark_serializer below),
+keeping the dependency edge one-directional.
 """
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import Conversation, Chat, Message
-from sparks.serializers import MessageSparkSerializer
 from .prompt_protection import validate_instructions
+
+_spark_serializer_class = None
+
+
+def register_spark_serializer(serializer_class):
+    """
+    Register the serializer used to render sparks nested under a chat
+    or message.
+
+    Intended to be called once, by the app that owns the spark concept,
+    from its AppConfig.ready(). Also annotates the OpenAPI schema for
+    the nested "sparks" fields so generated docs describe the actual
+    item type instead of an opaque method field.
+    """
+    global _spark_serializer_class
+    _spark_serializer_class = serializer_class
+    MessageSerializer.get_sparks = extend_schema_field(serializer_class(many=True))(
+        MessageSerializer.get_sparks
+    )
+    ChatSerializer.get_sparks = extend_schema_field(serializer_class(many=True))(
+        ChatSerializer.get_sparks
+    )
+
+
+def _serialize_sparks(related_manager, context):
+    """Render a sparks related manager with the registered serializer."""
+    if _spark_serializer_class is None:
+        return []
+    return _spark_serializer_class(
+        related_manager.all(), many=True, context=context
+    ).data
 
 
 def validate_chat_instructions(value):
@@ -29,7 +65,11 @@ def validate_chat_instructions(value):
 
 class MessageSerializer(serializers.ModelSerializer):
     """Serializer for Message model."""
-    sparks = MessageSparkSerializer(many=True, read_only=True)
+    sparks = serializers.SerializerMethodField()
+
+    def get_sparks(self, obj):
+        """Render sparks attached to this message (see register_spark_serializer)."""
+        return _serialize_sparks(obj.sparks, self.context)
 
     class Meta:
         model = Message
@@ -87,12 +127,16 @@ class ChatSerializer(serializers.ModelSerializer):
 
     message_count = serializers.IntegerField(read_only=True)
     messages = MessageSerializer(many=True, read_only=True)
-    sparks = MessageSparkSerializer(many=True, read_only=True)
+    sparks = serializers.SerializerMethodField()
     instructions = serializers.JSONField(
         required=False,
         allow_null=True,
         validators=[validate_chat_instructions]
     )
+
+    def get_sparks(self, obj):
+        """Render sparks attached to this chat (see register_spark_serializer)."""
+        return _serialize_sparks(obj.sparks, self.context)
 
     class Meta:
         model = Chat

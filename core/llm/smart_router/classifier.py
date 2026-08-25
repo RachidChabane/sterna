@@ -156,8 +156,8 @@ def classify_message(messages: list, user=None) -> Optional[ClassificationResult
 
     try:
         start_time = time.time()
-        # request_source value is persisted verbatim on OpenRouterUsageLog rows
-        # (core/llm/models.py) and used for billing/quota attribution — kept
+        # request_source value is persisted verbatim on OpenRouterGenerationRecord
+        # rows (core/llm/models.py) for provider analytics attribution — kept
         # unchanged by the engine rename so historical rows stay queryable.
         client = OpenRouterClient(user=user, request_source='sterna_classifier')
         result = client.complete(

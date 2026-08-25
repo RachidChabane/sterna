@@ -6,6 +6,7 @@ import logging
 import hashlib
 import json
 import os
+from typing import Any, Dict, Optional
 
 import httpx as httpx_sync
 
@@ -1141,6 +1142,33 @@ class VideoModelViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
 
+def _estimate_system_prompt(custom_prompt: Optional[str], features: Dict[str, Any]) -> str:
+    """System prompt used to approximate prompt-token cost for the given features.
+
+    Built through the same prompts_v2 builder the LangChain agent uses in
+    production, so the estimate reflects what the agent will actually send.
+
+    Args:
+        custom_prompt: User-provided system prompt override, if any
+        features: Mapping with any of enable_mcp_tools, enable_reasoning,
+            enable_file_tools, enable_image_generation, enable_video_generation
+    """
+    from .prompts_v2 import get_prompt_builder
+
+    feature_keys = (
+        "mcp_tools", "reasoning", "file_tools", "image_generation", "video_generation",
+    )
+    enabled_features = {
+        key for key in feature_keys
+        if features.get(f"enable_{key}", False)
+    }
+    system_prompt, _metadata = get_prompt_builder().build_full_prompt(
+        custom_prompt=custom_prompt or None,
+        enabled_features=enabled_features,
+    )
+    return system_prompt
+
+
 class CompletionViewSet(viewsets.ViewSet):
     """
     ViewSet for OpenRouter completions.
@@ -1314,8 +1342,9 @@ class CompletionViewSet(viewsets.ViewSet):
                     mcp_tools_payload = mcp_tools_to_openai_functions(mcp_tools)
                     has_mcp_tools = True
 
-                    # Note: System prompt injection is now handled centrally in llm/client.py
-                    # via build_system_prompt() which calls mcp.prompts.build_mcp_system_prompt()
+                    # Note: System prompt injection is handled centrally in
+                    # llm/client.py's _inject_system_prompt(), which calls
+                    # mcp.prompts.build_mcp_system_prompt() for the tool list.
 
                     logger.info(f"MCP enabled: {len(mcp_tools)} tools available for user {request.user.id}")
                 else:
@@ -1823,15 +1852,8 @@ class CompletionViewSet(viewsets.ViewSet):
         features_by_model = data.get("features_by_model") or {}
 
         # Build complete system prompt with all enabled features (global fallback)
-        from .prompt_builder import build_system_prompt
-        global_system_prompt = build_system_prompt(
-            custom_prompt=base_system_prompt if base_system_prompt else None,
-            enable_mcp_tools=data.get("enable_mcp_tools", False),
-            enable_reasoning=data.get("enable_reasoning", False),
-            enable_file_tools=data.get("enable_file_tools", False),
-            enable_image_generation=data.get("enable_image_generation", False),
-            enable_video_generation=data.get("enable_video_generation", False),
-            has_mcp_tools=data.get("enable_mcp_tools", False),
+        global_system_prompt = _estimate_system_prompt(
+            base_system_prompt if base_system_prompt else None, data
         )
         # Choose alpha/beta: request override > task-derived > defaults
         if data.get("alpha") is not None and data.get("beta") is not None:
@@ -1961,14 +1983,9 @@ class CompletionViewSet(viewsets.ViewSet):
                 if model_id in features_by_model:
                     model_features = features_by_model[model_id]
                     has_file_tools = model_features.get("enable_file_tools", False)
-                    model_system_prompt = build_system_prompt(
-                        custom_prompt=model_features.get("system_prompt") or base_system_prompt or None,
-                        enable_mcp_tools=model_features.get("enable_mcp_tools", False),
-                        enable_reasoning=model_features.get("enable_reasoning", False),
-                        enable_file_tools=has_file_tools,
-                        enable_image_generation=model_features.get("enable_image_generation", False),
-                        enable_video_generation=model_features.get("enable_video_generation", False),
-                        has_mcp_tools=model_features.get("enable_mcp_tools", False),
+                    model_system_prompt = _estimate_system_prompt(
+                        model_features.get("system_prompt") or base_system_prompt or None,
+                        model_features,
                     )
                     model_prompt_tokens = calc_prompt_tokens(model_system_prompt, include_file_tools=has_file_tools)
                 else:

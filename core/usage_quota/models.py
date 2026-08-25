@@ -382,10 +382,12 @@ BILLING_ORIGIN_CHOICES = [
 
 class UsageLog(models.Model):
     """
-    Unified usage log for all billable services.
+    Append-only ledger of record for every billable service usage event.
 
-    Replaces the OpenRouterUsageLog model with a service-agnostic design.
-    All costs normalized to USD for consistent quota tracking.
+    This is the sole source of truth for billing and quota decisions,
+    service-agnostic and normalized to USD. Provider-specific analytics
+    (e.g. OpenRouter generation records) are a separate concern and must
+    never be read for billing or quota purposes.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 

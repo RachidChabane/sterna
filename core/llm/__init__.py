@@ -30,7 +30,6 @@ package-level imports (from llm import Class) where possible.
 __all__ = [
     # Available at package level (backward compatibility)
     "LangChainStreamingAgent",
-    "build_system_prompt",
     # Utilities
     "CatalogService",
 ]
@@ -46,14 +45,6 @@ def __getattr__(name):
     if name == "LangChainStreamingAgent":
         from .langchain_agent import LangChainStreamingAgent
         return LangChainStreamingAgent
-
-    if name == "build_system_prompt":
-        from .prompt_builder import build_system_prompt
-        return build_system_prompt
-
-    if name == "SystemPromptBuilder":
-        from .prompt_builder import SystemPromptBuilder
-        return SystemPromptBuilder
 
     if name == "CatalogService":
         from .catalog_service import CatalogService

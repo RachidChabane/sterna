@@ -91,11 +91,6 @@ TOOL_HEARTBEAT_INTERVAL_SECONDS = 10  # seconds between heartbeats
 # When False, all tools are included in system prompt (legacy behavior)
 ENABLE_TOOL_DISCOVERY = True  # V2 ENABLED
 
-# Enable Optimized Prompts (V2 prompt system)
-# When True, uses the layered prompt system with caching
-# When False, uses legacy prompt_builder.py
-ENABLE_OPTIMIZED_PROMPTS = True  # V2 ENABLED
-
 # Enable PTC (Programmatic Tool Calling)
 # When True, allows LLM to generate code that orchestrates multiple tools
 # When False, uses standard single-tool calling

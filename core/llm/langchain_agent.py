@@ -4,8 +4,8 @@ LangChain Agent for File Tools
 This is the live, production streaming agent (LangChainStreamingAgent),
 used directly by llm/views.py. It handles streaming chat with an
 automatic tool calling loop, and integrates with the on-demand tool
-discovery and optimized prompt systems (see ENABLE_TOOL_DISCOVERY and
-ENABLE_OPTIMIZED_PROMPTS in llm/constants.py).
+discovery system (see ENABLE_TOOL_DISCOVERY in llm/constants.py) and
+the prompts_v2 optimized prompt builder.
 """
 
 # Logging convention: error/critical/exception calls use the

@@ -1,9 +1,10 @@
 """
-OpenRouter Usage Tracking Service.
+OpenRouter Generation Analytics Service.
 
-Provides centralized usage logging for all OpenRouter API calls.
-This enables monitoring, billing, and analytics regardless of
-where in the codebase the API is called.
+Records per-request OpenRouter generation analytics (tokens, cost,
+source) independently of where in the codebase the API is called.
+This is an analytics feed, not the billing ledger: quota enforcement
+and invoicing are the responsibility of usage_quota.BillingService.
 """
 
 import logging
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class UsageTracker:
     """
-    Tracks OpenRouter API usage for monitoring and billing.
+    Records OpenRouter generation analytics for monitoring and reporting.
 
     Usage:
         tracker = get_tracker()
@@ -72,9 +73,9 @@ class UsageTracker:
             return True
 
         try:
-            from llm.models import OpenRouterUsageLog
+            from llm.models import OpenRouterGenerationRecord
 
-            OpenRouterUsageLog.objects.create(
+            OpenRouterGenerationRecord.objects.create(
                 user=user,
                 model_id=model_id,
                 prompt_tokens=prompt_tokens,
@@ -116,11 +117,11 @@ class UsageTracker:
         from django.db.models import Sum, Count
         from django.utils import timezone
         from datetime import timedelta
-        from llm.models import OpenRouterUsageLog
+        from llm.models import OpenRouterGenerationRecord
 
         cutoff = timezone.now() - timedelta(days=days)
 
-        logs = OpenRouterUsageLog.objects.filter(
+        logs = OpenRouterGenerationRecord.objects.filter(
             user=user,
             timestamp__gte=cutoff,
         )
@@ -183,11 +184,11 @@ class UsageTracker:
         from django.db.models import Sum, Count
         from django.utils import timezone
         from datetime import timedelta
-        from llm.models import OpenRouterUsageLog
+        from llm.models import OpenRouterGenerationRecord
 
         cutoff = timezone.now() - timedelta(days=days)
 
-        logs = OpenRouterUsageLog.objects.filter(timestamp__gte=cutoff)
+        logs = OpenRouterGenerationRecord.objects.filter(timestamp__gte=cutoff)
 
         total = logs.aggregate(
             total_tokens=Sum('total_tokens'),
