@@ -33,4 +33,4 @@ docker volume prune -f
 echo -e "${GREEN}✅ Nettoyage terminé!${NC}\n"
 echo -e "${BLUE}Pour reconstruire le projet, exécutez:${NC}"
 echo -e "${GREEN}docker-compose build --no-cache${NC}"
-echo -e "${GREEN}./start-dev.sh${NC}"
+echo -e "${GREEN}make dev${NC}"
