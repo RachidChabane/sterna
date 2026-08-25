@@ -143,7 +143,7 @@ class V1StreamCompleteGoldenTests(APITestCase):
 
         provider = ScriptedProvider(script)
         patches = [
-            patch("llm.views.RateLimiter", NoWaitRateLimiter),
+            patch("llm.views.completions.RateLimiter", NoWaitRateLimiter),
             patch(
                 "llm.services.api_key_resolver.resolve_endpoint",
                 return_value=("sk-golden-fixture", None, "platform", None),

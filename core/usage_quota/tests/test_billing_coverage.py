@@ -975,7 +975,7 @@ class TestGoogleMapsPhotoProxy(BillingCoverageBase):
 
     def test_success_records_usage_for_request_user(self):
         client = self._authed_client()
-        with patch("llm.views.httpx_sync.Client") as mock_client_cls:
+        with patch("llm.services.google_maps_photo_service.httpx_sync.Client") as mock_client_cls:
             self._mock_upstream(mock_client_cls)
             response = client.post(
                 self.URL,
@@ -995,7 +995,7 @@ class TestGoogleMapsPhotoProxy(BillingCoverageBase):
 
     def test_upstream_failure_does_not_bill(self):
         client = self._authed_client()
-        with patch("llm.views.httpx_sync.Client") as mock_client_cls:
+        with patch("llm.services.google_maps_photo_service.httpx_sync.Client") as mock_client_cls:
             self._mock_upstream(
                 mock_client_cls,
                 body={"success": False, "error": "no photo"},
@@ -1034,7 +1034,7 @@ class TestConnectionEndpointSecurity(BillingCoverageBase):
             with patch(
                 "django_ratelimit.core._get_window",
                 return_value=1_999_999_999,
-            ), patch("llm.views.OpenRouterClient") as mock_client_cls:
+            ), patch("llm.views.model_catalog.OpenRouterClient") as mock_client_cls:
                 mock_client_cls.return_value.complete.return_value = {}
                 mock_client_cls.return_value.list_models.return_value = []
                 for i in range(10):
@@ -1063,7 +1063,7 @@ class TestStreamCompleteRateLimitError(BillingCoverageBase):
 
         client = APIClient()
         client.force_authenticate(user=self.user)
-        with patch("llm.views.RateLimiter") as mock_rl:
+        with patch("llm.views.completions.RateLimiter") as mock_rl:
             mock_rl.return_value.wait_if_needed.side_effect = Exception(
                 "rate limited",
             )

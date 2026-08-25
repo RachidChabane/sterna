@@ -14,6 +14,7 @@ from .modular_prompts import (
 from .optimized_builder import (
     OptimizedPromptBuilder,
     get_prompt_builder,
+    estimate_system_prompt,
 )
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "CONDITIONAL_PROMPTS",
     "OptimizedPromptBuilder",
     "get_prompt_builder",
+    "estimate_system_prompt",
 ]

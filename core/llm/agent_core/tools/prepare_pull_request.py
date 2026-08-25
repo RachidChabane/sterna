@@ -5,7 +5,7 @@ schema is transcribed verbatim from the `prepare_pull_request` entry
 of `FILE_TOOLS` in `sandbox.orchestrator.file_tools` — the
 model-facing tool contract legacy V1 sends the model via
 `get_file_tools()` (`llm.file_tools_integration`, called from
-`llm.views.stream_complete`). Execution delegates to that same tool
+`llm.views.completions.stream_complete`). Execution delegates to that same tool
 id via the injected legacy invoker; it never reaches the sandbox,
 since that handler only assembles the PR title and body for the
 caller to use. `test_agent_core_file_tools_drift.py` guards this

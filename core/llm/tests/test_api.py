@@ -88,7 +88,7 @@ class TestModelCatalogAPI(APITestCase):
         self.assertIn("openai/gpt-4", model_ids)
         self.assertNotIn("anthropic/claude-3", model_ids)
 
-    @patch("llm.views.CatalogService")
+    @patch("llm.views.model_catalog.CatalogService")
     def test_check_model_availability(self, mock_catalog_service):
         """Test checking model availability endpoint."""
         mock_service = mock_catalog_service.return_value
@@ -102,7 +102,7 @@ class TestModelCatalogAPI(APITestCase):
         self.assertTrue(response.data["is_available"])
         self.assertEqual(response.data["model_id"], "openai/gpt-4")
 
-    @patch("llm.views.CatalogService")
+    @patch("llm.views.model_catalog.CatalogService")
     def test_refresh_catalog(self, mock_catalog_service):
         """Test refreshing model catalog."""
         mock_service = mock_catalog_service.return_value
@@ -119,7 +119,7 @@ class TestModelCatalogAPI(APITestCase):
         self.assertTrue(response.data["success"])
         self.assertEqual(response.data["total_models"], 10)
 
-    @patch("llm.views.CatalogService")
+    @patch("llm.views.model_catalog.CatalogService")
     def test_get_model_tiers(self, mock_catalog_service):
         """Test getting model tiers."""
         mock_service = mock_catalog_service.return_value
@@ -148,8 +148,8 @@ class TestCompletionAPI(APITestCase):
         )
         self.client.force_authenticate(user=self.user)
 
-    @patch("llm.views.OpenRouterClient")
-    @patch("llm.views.RateLimiter")
+    @patch("llm.views.completions.OpenRouterClient")
+    @patch("llm.views.completions.RateLimiter")
     def test_complete(self, mock_rate_limiter, mock_client_class):
         """Test single model completion."""
         mock_client = mock_client_class.return_value
@@ -178,7 +178,7 @@ class TestCompletionAPI(APITestCase):
         self.assertEqual(response.data["content"], "Test response")
         self.assertEqual(response.data["model"], "openai/gpt-3.5-turbo")
 
-    @patch("llm.views.OpenRouterClient")
+    @patch("llm.views.completions.OpenRouterClient")
     def test_complete_with_fallback(self, mock_client_class):
         """Test completion with fallback models."""
         mock_client = mock_client_class.return_value
@@ -208,7 +208,7 @@ class TestCompletionAPI(APITestCase):
         self.assertEqual(response.data["model_used"], "openai/gpt-3.5-turbo")
         self.assertEqual(response.data["fallback_attempts"], 1)
 
-    @patch("llm.views.CatalogService")
+    @patch("llm.services.cost_estimation_service.CatalogService")
     def test_estimate_cost(self, mock_catalog_service):
         """Test cost estimation endpoint."""
         mock_service = mock_catalog_service.return_value
@@ -232,7 +232,7 @@ class TestCompletionAPI(APITestCase):
         self.assertEqual(float(response.data["total_cost"]), 0.045)
         self.assertEqual(response.data["currency"], "USD")
 
-    @patch("llm.views.RateLimiter")
+    @patch("llm.views.completions.RateLimiter")
     def test_rate_limit_info(self, mock_rate_limiter):
         """Test getting rate limit information."""
         mock_limiter = mock_rate_limiter.return_value
@@ -254,7 +254,7 @@ class TestCompletionAPI(APITestCase):
         self.assertEqual(response.data["rate_per_second"], 20)
         self.assertTrue(response.data["tokens_available"])
 
-    @patch("llm.views.CatalogService")
+    @patch("llm.services.cost_estimation_service.CatalogService")
     def test_estimate_batch_cost_builds_prompt_through_prompts_v2(self, mock_catalog_service):
         """Both the global and per-model system prompts route through the
         prompts_v2 builder, exercising the same code path the LangChain

@@ -132,7 +132,7 @@ class V1StreamingEndpointTests(APITestCase):
         }
         payload.update(overrides)
         self.provider = ScriptedProvider(script)
-        with patch("llm.views.RateLimiter", NoWaitRateLimiter), \
+        with patch("llm.views.completions.RateLimiter", NoWaitRateLimiter), \
                 patch(
                     "llm.services.api_key_resolver.resolve_endpoint",
                     return_value=("sk-fixture", None, "platform", None),

@@ -147,9 +147,9 @@ class V2StreamCompleteAgentCoreGoldenTests(APITestCase):
 
         provider = ScriptedProvider(script)
         patches = [
-            patch("llm.views.RateLimiter", NoWaitRateLimiter),
+            patch("llm.views.streaming.RateLimiter", NoWaitRateLimiter),
             patch(
-                "llm.views.get_user_instructions",
+                "llm.views.streaming.get_user_instructions",
                 return_value={"enabled": False, "content": ""},
             ),
             patch(

@@ -61,7 +61,6 @@
       "core/llm/tool_catalog/core_tools.py": 1575,
       "core/llm/tool_catalog/registry.py": 827,
       "core/llm/video_tools.py": 1082,
-      "core/llm/views.py": 2503,
       "core/mcp/client.py": 1050,
       "core/mcp/management/commands/seed_preconfigured_servers.py": 1335,
       "core/mcp/models.py": 849,
