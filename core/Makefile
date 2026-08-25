@@ -1,4 +1,4 @@
-.PHONY: help install dev build test coverage lint format clean migrate shell logs down up restart
+.PHONY: help install dev build test coverage lint format clean migrate shell logs down up restart verify bootstrap
 
 # Colors for output
 BLUE := \033[0;34m
@@ -11,6 +11,14 @@ help: ## Show this help message
 	@echo '${BLUE}Sterna - Available Commands${NC}'
 	@echo ''
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make ${GREEN}<target>${NC}\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  ${GREEN}%-15s${NC} %s\n", $$1, $$2 } /^##@/ { printf "\n${YELLOW}%s${NC}\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Deterministic Verification
+
+bootstrap: ## Create/reuse the local dev environment (delegates to script/bootstrap)
+	@../script/bootstrap
+
+verify: ## Run the full deterministic verification suite (delegates to script/verify)
+	@../script/verify
 
 ##@ Development
 

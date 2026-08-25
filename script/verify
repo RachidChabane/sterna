@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Full deterministic verification: bootstrap, lint, typecheck, test, and
+# (once they exist) the schema-diff and ratchet gates. e2e is not part
+# of this chain — it runs on its own via script/e2e.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+echo "==> [1/4] Bootstrap"
+"$repo_root/script/bootstrap"
+
+echo "==> [2/4] Lint"
+"$repo_root/script/lint"
+
+echo "==> [3/4] Typecheck"
+"$repo_root/script/typecheck"
+
+echo "==> [4/4] Test"
+"$repo_root/script/test"
+
+if [ -x "$repo_root/script/schema-diff" ]; then
+  echo "==> Schema diff"
+  "$repo_root/script/schema-diff"
+fi
+
+if [ -x "$repo_root/script/ratchet" ]; then
+  echo "==> Ratchet"
+  "$repo_root/script/ratchet"
+fi
+
+echo "==> Verify complete"

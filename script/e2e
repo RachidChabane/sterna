@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Run the Playwright @smoke suite when its backend prerequisite is
+# reachable locally. Playwright's own webServer block boots the frontend
+# dev server; the backend (Django) is not something this script starts —
+# it must already be running, exactly as CI's frontend-e2e job runs it
+# via docker compose. When it is not reachable, this exits 0 with a
+# single line: the suite still runs in CI. Never hangs: --reporter=line
+# skips the interactive HTML report server, and --global-timeout bounds
+# total run time.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+backend_health_url="http://localhost:8000/health"
+
+if ! curl -sf --max-time 3 "$backend_health_url" >/dev/null 2>&1; then
+  echo "e2e runs in CI (backend not reachable at ${backend_health_url})"
+  exit 0
+fi
+
+echo "==> Backend reachable; running Playwright @smoke suite"
+cd "$repo_root/core/frontend"
+pnpm exec playwright test \
+  --project=chromium \
+  --grep @smoke \
+  --reporter=line \
+  --global-timeout=600000

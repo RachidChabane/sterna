@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Run the backend and frontend unit test suites. Stops at the first
+# failing stage.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+echo "==> Backend tests (pytest)"
+(cd "$repo_root/core" && "$repo_root/.venv/bin/python" -m pytest)
+
+echo "==> Frontend tests (vitest)"
+(
+  cd "$repo_root/core/frontend"
+  export VITE_API_BASE_URL="${VITE_API_BASE_URL:-http://localhost:8000}"
+  export VITE_FRONTEND_ENV="${VITE_FRONTEND_ENV:-ci}"
+  pnpm vitest run
+)
+
+echo "==> All tests passed"

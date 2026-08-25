@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Create (or reuse) the local dev environment: backend virtualenv and
+# frontend node_modules. Safe to run repeatedly.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+venv_python="$repo_root/.venv/bin/python"
+
+if [ ! -x "$venv_python" ]; then
+  echo "==> Creating Python virtual environment (.venv)"
+  uv venv --python 3.12 "$repo_root/.venv"
+fi
+
+echo "==> Installing backend dependencies (core/requirements.txt)"
+uv pip install --python "$venv_python" -r "$repo_root/core/requirements.txt"
+
+echo "==> Installing frontend dependencies (pnpm)"
+(cd "$repo_root/core/frontend" && pnpm install)
+
+echo "==> Bootstrap complete"

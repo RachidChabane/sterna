@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# tsc is the enforced type gate for the frontend. mypy runs alongside it
+# in report-only mode over the Django app tree (the standalone
+# microservices under core/ — api-gateway, brave-search, google-maps,
+# user-preferences-service, sandbox — carry their own dependency stacks
+# and are excluded to avoid cross-service module clashes): its error
+# count is printed in a stable `RATCHET` line for the mypy ratchet to
+# consume, but a nonzero mypy result does not fail this script.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+echo "==> mypy (report-only)"
+mypy_output="$(
+  cd "$repo_root/core" \
+    && "$repo_root/.venv/bin/mypy" \
+      --exclude '^(api-gateway|brave-search|google-maps|user-preferences-service|sandbox)/' \
+      . 2>&1 || true
+)"
+mypy_errors="$(printf '%s\n' "$mypy_output" | grep -c ': error:' || true)"
+echo "RATCHET mypy_errors=${mypy_errors}"
+
+echo "==> tsc --noEmit (frontend, gates)"
+(cd "$repo_root/core/frontend" && pnpm exec tsc -b --noEmit)
+
+echo "==> Typecheck complete"

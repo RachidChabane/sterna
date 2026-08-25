@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# ruff is the enforced lint gate, matching CI's `ruff check .` run from the
+# repo root. eslint runs alongside it in report-only mode: its error and
+# warning counts are printed in a stable `RATCHET` line for the dead-code
+# and TS-`any` ratchets to consume, but a nonzero eslint result does not
+# fail this script.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+echo "==> ruff check (gates)"
+"$repo_root/.venv/bin/ruff" check .
+
+echo "==> eslint (report-only)"
+set +e
+eslint_json="$(cd "$repo_root/core/frontend" && pnpm exec eslint . --format json 2>/dev/null)"
+set -e
+
+eslint_counts="$(printf '%s' "$eslint_json" | "$repo_root/.venv/bin/python3" -c '
+import json, sys
+try:
+    data = json.loads(sys.stdin.read() or "[]")
+    errors = sum(f.get("errorCount", 0) for f in data)
+    warnings = sum(f.get("warningCount", 0) for f in data)
+    ts_any = sum(
+        1
+        for f in data
+        for m in f.get("messages", [])
+        if m.get("ruleId") == "@typescript-eslint/no-explicit-any"
+    )
+except Exception:
+    errors, warnings, ts_any = 0, 0, 0
+print(errors, warnings, ts_any)
+')"
+read -r eslint_errors eslint_warnings ts_any_count <<< "$eslint_counts"
+echo "RATCHET eslint_errors=${eslint_errors} eslint_warnings=${eslint_warnings} ts_any_count=${ts_any_count}"
+
+echo "==> Lint complete (ruff gates; eslint is informational)"
