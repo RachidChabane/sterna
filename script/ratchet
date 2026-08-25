@@ -11,6 +11,15 @@
 # counter look better while covering less code. The line-count cap also
 # blocks any file not listed in loc_caps.files from growing past the
 # global line ceiling recorded in the baseline.
+#
+# Two further guards fail fast on a scope or rule change none of the
+# counters above can see on their own: a knip configuration file or
+# package.json#knip key appearing under core/frontend (which would
+# narrow knip's default project scope out from under the frontend
+# dead-code baseline), and an edit to core/frontend/eslint.config.js
+# (tracked by its sha256, since a rule change there can silently zero
+# ts_explicit_any). Either one fails the ratchet until the baseline is
+# consciously re-approved against the new configuration.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -57,6 +66,38 @@ else
   exit 1
 fi
 echo "  mypy_errors=${mypy_errors} mypy_checked_files=${mypy_checked_files}"
+
+# ---- eslint config integrity -------------------------------------------
+# An edit to core/frontend/eslint.config.js — disabling or narrowing
+# @typescript-eslint/no-explicit-any, for instance — can zero
+# ts_explicit_any without any file under lint changing at all. The file's
+# sha256 is tracked in the baseline; any change to the file fails the
+# ratchet until the baseline is consciously re-approved against the new
+# config.
+echo "==> eslint config integrity"
+eslint_config_path="$repo_root/core/frontend/eslint.config.js"
+if [ ! -f "$eslint_config_path" ]; then
+  echo "core/frontend/eslint.config.js is missing; treating as a harness fault." >&2
+  exit 1
+fi
+eslint_config_sha256="$("$venv_python" -c "
+import hashlib
+print(hashlib.sha256(open('$eslint_config_path', 'rb').read()).hexdigest())
+")"
+baseline_eslint_config_sha256="$("$venv_python" -c "
+import json
+data = json.load(open('$ratchet_baseline'))
+print(data.get('eslint_config_sha256', ''))
+")"
+if [ -z "$baseline_eslint_config_sha256" ]; then
+  echo "baselines/ratchet.json has no eslint_config_sha256 entry; record the current hash (${eslint_config_sha256}) as a conscious baseline approval before the ratchet can trust ts_explicit_any." >&2
+  exit 1
+fi
+if [ "$eslint_config_sha256" != "$baseline_eslint_config_sha256" ]; then
+  echo "core/frontend/eslint.config.js changed (sha256 ${baseline_eslint_config_sha256} -> ${eslint_config_sha256}); a lint-rule edit can silently zero ts_explicit_any, so baselines/ratchet.json's eslint_config_sha256 (and the ts_explicit_any baseline) must be consciously re-approved." >&2
+  exit 1
+fi
+echo "  eslint_config_sha256=${eslint_config_sha256} (matches baseline)"
 
 # ---- eslint error/warning/any counts + linted-file denominator --------
 # Independent invocation of the same command script/lint runs
@@ -170,6 +211,28 @@ echo "  backend_vulture=${backend_dead_code} backend_files_scanned=${backend_fil
 # knip's default project scope draws from. It is independent of the
 # eslint file count above so neither counter's scope can hide behind
 # the other's.
+echo "==> Frontend knip-scope guard"
+# knip resolves its configuration from [.]knip.json[c], knip.(js|ts),
+# knip.config.(js|ts), or a "knip" key in package.json, relative to the
+# directory it runs in. Any of those narrows knip's default project
+# scope, moving frontend_dead_code and frontend_files_scanned out from
+# under the recorded baseline without either counter showing it, so
+# their presence fails the ratchet until the baseline is consciously
+# re-approved. The file-name match deliberately spans more than that
+# list: an unrecognized knip* file in this directory fails closed.
+knip_config_files="$(find "$repo_root/core/frontend" -maxdepth 1 -type f \
+  \( -iname 'knip*' -o -iname '.knip*' \) -print)"
+knip_config_key="$("$venv_python" -c "
+import json
+data = json.load(open('$repo_root/core/frontend/package.json'))
+print('yes' if 'knip' in data else 'no')
+")"
+if [ -n "$knip_config_files" ] || [ "$knip_config_key" = "yes" ]; then
+  echo "a knip configuration was found under core/frontend (files: ${knip_config_files:-none}; package.json#knip: ${knip_config_key}); this narrows knip's default project scope, so baselines/ratchet.json's dead_code.frontend_knip and dead_code.frontend_files_scanned must be consciously re-approved against the new scope before the ratchet can trust them." >&2
+  exit 1
+fi
+echo "  no knip configuration found; default project scope applies"
+
 echo "==> Frontend unused-export count (knip)"
 frontend_files_scanned="$(
   find "$repo_root/core/frontend" -type f \( -iname '*.ts' -o -iname '*.tsx' -o -iname '*.js' -o -iname '*.jsx' \) \
@@ -233,8 +296,8 @@ print(json.load(open('$ratchet_baseline'))['loc_caps']['global_new_file_max_line
 
 # Every file over the global cap must carry its own entry in
 # loc_caps.files; a file that exceeds the cap without one fails here.
-# This pass scans every candidate file once and counts the scan itself
-# as the loc_files_scanned denominator.
+# This pass scans every candidate file once, repo-wide, and counts the
+# scan itself as the loc_files_scanned denominator.
 echo "==> Global ${global_cap}-line cap (files without an explicit entry)"
 new_file_violations="$work_dir/new_file_violations.txt"
 : >"$new_file_violations"
@@ -255,9 +318,10 @@ while IFS= read -r -d '' path; do
       echo "${rel_path}: ${lines} lines" >>"$new_file_violations"
     fi
   fi
-done < <(find "$repo_root/core" -type f \( -iname '*.py' -o -iname '*.ts' -o -iname '*.tsx' \) \
-  -not -path '*/migrations/*' -not -path '*/node_modules/*' \
-  -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' \
+done < <(find "$repo_root" -type f \( -iname '*.py' -o -iname '*.ts' -o -iname '*.tsx' \) \
+  -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.venv/*' \
+  -not -path '*/migrations/*' -not -path '*/__pycache__/*' \
+  -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/baselines/*' \
   -print0)
 
 if [ "$loc_files_scanned" -eq 0 ]; then
