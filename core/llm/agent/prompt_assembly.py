@@ -1,11 +1,16 @@
 """System-prompt assembly for one chat turn.
 
-Builds the system prompt from the layered prompts_v2 builder, then
-appends the media-generation hints that an `@mention` may have carried.
+Two steps, and the endpoint uses both. `build_effective_system_prompt`
+folds what the user configured -- the global instructions, the chat's
+own, the chat's custom prompt, and the priority an `@mention` implies
+-- into the one custom prompt a turn is created with.
+`build_agent_system_prompt` then builds the full prompt from the
+layered prompts_v2 builder around it and appends the
+media-generation hints an `@mention` may have carried.
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from .feature_flags import AgentFeatureFlags, FEATURE_VOICE_MODE
 
@@ -31,6 +36,65 @@ _MEDIA_PARAM_HINT_LABELS = (
 )
 
 VOICE_MODE_PROMPT_MARKER = "[VOICE CONVERSATION MODE]"
+
+CONTENT_FIELD = "content"
+ENABLED_FIELD = "enabled"
+MODE_FIELD = "mode"
+OVERRIDE_MODE = "override"
+
+SECTION_SEPARATOR = "\n\n"
+
+
+def build_effective_system_prompt(
+    *,
+    system_prompt: Optional[str],
+    global_instructions: Mapping[str, Any],
+    chat_instructions: Mapping[str, Any],
+    mention_priority_prompt: Optional[str],
+) -> Optional[str]:
+    """The custom prompt a turn is created with, from what the user configured.
+
+    The user's instructions lead, wrapped against prompt injection; the
+    chat's own custom prompt follows; the priority an `@mention` implies
+    closes. A chat whose instructions are in override mode replaces the
+    global ones rather than adding to them.
+    """
+
+    instructions = _user_instructions(global_instructions, chat_instructions)
+    effective = system_prompt
+    if instructions:
+        from conversations.prompt_protection import wrap_instructions_safely
+
+        wrapped = wrap_instructions_safely(SECTION_SEPARATOR.join(instructions))
+        effective = f"{wrapped}{SECTION_SEPARATOR}{effective}" if effective else wrapped
+
+    if mention_priority_prompt:
+        effective = (
+            f"{effective}{SECTION_SEPARATOR}{mention_priority_prompt}"
+            if effective
+            else mention_priority_prompt
+        )
+        logger.info("[LangChain] Added mention priority prompt to system prompt")
+    return effective
+
+
+def _user_instructions(
+    global_instructions: Mapping[str, Any], chat_instructions: Mapping[str, Any]
+) -> List[str]:
+    chat_content = chat_instructions.get(CONTENT_FIELD)
+    if chat_content and chat_instructions.get(MODE_FIELD) == OVERRIDE_MODE:
+        logger.info(f"[LangChain] Using chat instructions (override mode, {len(chat_content)} chars)")
+        return [chat_content]
+
+    parts: List[str] = []
+    global_content = global_instructions.get(CONTENT_FIELD)
+    if global_instructions.get(ENABLED_FIELD) and global_content:
+        parts.append(global_content)
+        logger.info(f"[LangChain] Added global instructions ({len(global_content)} chars)")
+    if chat_content:
+        parts.append(chat_content)
+        logger.info(f"[LangChain] Added chat instructions (append mode, {len(chat_content)} chars)")
+    return parts
 
 
 def _build_prompt(

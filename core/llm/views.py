@@ -50,7 +50,6 @@ from .serializers import (
     ImageModelFilterSerializer,
 )
 from .constants import MODEL_TIERS
-from .icon_utils import get_provider_icon_slug, get_model_icon_slug
 from .comparison_service import ModelComparisonService
 from .comparison_config import ComparisonConstraints, ComparisonPriorities, CapabilityWeights
 from .file_tools_integration import (
@@ -2659,32 +2658,10 @@ Files remain available throughout the conversation."""
 
     logger.info(f"[LangChain] Creating agent: model={model}, max_tokens={max_tokens}, file_tools={enable_file_tools}, mcp_tools={enable_mcp_tools}, reasoning={enable_reasoning}, reasoning_effort={reasoning_effort}, reasoning_max_tokens={reasoning_max_tokens}")
 
-    # Get model metadata for file tracking
-    model_metadata = None
-    if enable_file_tools and model_obj:
-        try:
-            # model_obj is a dict, not an object
-            model_name = model_obj.get("name")
-            model_id = model_obj.get("id")
-            provider = model_obj.get("provider")
-
-            # Generate icon slugs using the same functions used elsewhere in the app
-            model_icon_slug = get_model_icon_slug(model_id, model_name)
-            provider_icon_slug = get_provider_icon_slug(provider)
-
-            model_metadata = {
-                "model_name": model_name,
-                "model_id": model_id,
-                "provider": provider,
-                "model_icon_slug": model_icon_slug,
-                "model_icon_url": None,  # Not needed with slugs
-                "provider_icon_slug": provider_icon_slug,
-                "provider_icon_url": None,  # Not needed with slugs
-                "message_id": message_id  # Frontend can pass this if available
-            }
-            logger.info(f"[LangChain] Model metadata: {model_metadata}")
-        except Exception as e:
-            logger.warning(f"[LangChain] Failed to get model metadata: {e}")
+    from llm.agent.model_metadata import build_model_metadata
+    model_metadata = build_model_metadata(
+        model_obj, file_tools_enabled=enable_file_tools, message_id=message_id
+    )
 
     # Create agent (passes V2 params for tool discovery when enabled)
     model_display_name = model_obj.get("name") if model_obj else None
@@ -2701,49 +2678,16 @@ Files remain available throughout the conversation."""
         user_id=str(request.user.id)
     )
 
-    # Build effective system prompt, combining:
-    # 1. Global user instructions (if enabled)
-    # 2. Chat-specific instructions (based on mode: append or override)
-    # 3. Custom system prompt from chat
-    # 4. @mention priority instructions
-    effective_system_prompt = system_prompt
-
-    # Build user instructions section
-    instructions_parts = []
-
-    # Check if chat instructions override global
-    if chat_instructions['content'] and chat_instructions['mode'] == 'override':
-        # Chat instructions override global - only use chat instructions
-        instructions_parts.append(chat_instructions['content'])
-        logger.info(f"[LangChain] Using chat instructions (override mode, {len(chat_instructions['content'])} chars)")
-    else:
-        # Append mode or no chat instructions - use global + chat
-        if global_instructions['enabled'] and global_instructions['content']:
-            instructions_parts.append(global_instructions['content'])
-            logger.info(f"[LangChain] Added global instructions ({len(global_instructions['content'])} chars)")
-
-        if chat_instructions['content']:
-            instructions_parts.append(chat_instructions['content'])
-            logger.info(f"[LangChain] Added chat instructions (append mode, {len(chat_instructions['content'])} chars)")
-
-    # Combine all instructions into one section with prompt injection protection
-    if instructions_parts:
-        from conversations.prompt_protection import wrap_instructions_safely
-        combined_instructions = "\n\n".join(instructions_parts)
-        # Apply sanitization and safe wrapping to prevent prompt injection
-        user_instructions_section = wrap_instructions_safely(combined_instructions)
-        if effective_system_prompt:
-            effective_system_prompt = f"{user_instructions_section}\n\n{effective_system_prompt}"
-        else:
-            effective_system_prompt = user_instructions_section
-
-    # Add @mention priority instructions
-    if mention_priority_prompt:
-        if effective_system_prompt:
-            effective_system_prompt = f"{effective_system_prompt}\n\n{mention_priority_prompt}"
-        else:
-            effective_system_prompt = mention_priority_prompt
-        logger.info("[LangChain] Added mention priority prompt to system prompt")
+    # Build the custom prompt this turn is created with, combining the
+    # global user instructions, the chat's own, the chat's custom prompt,
+    # and any @mention priority instructions.
+    from llm.agent.prompt_assembly import build_effective_system_prompt
+    effective_system_prompt = build_effective_system_prompt(
+        system_prompt=system_prompt,
+        global_instructions=global_instructions,
+        chat_instructions=chat_instructions,
+        mention_priority_prompt=mention_priority_prompt,
+    )
 
     # Resolve API key + endpoint for the chat model (provider-scoped BYOK).
     # Image-capable chat models always stay on OpenRouter (V1 scope), so
@@ -2758,6 +2702,53 @@ Files remain available throughout the conversation."""
         # No key anywhere — preserve the previous failure mode (agent
         # construction fails downstream exactly as before).
         api_key, chat_base_url, chat_provider_slug = None, None, None
+
+    # Which stack serves this turn: the agent core, or the LangChain
+    # streaming agent below. See llm.agent_service.flag for the header
+    # and the setting that decide, and for the capabilities that stay
+    # on the LangChain path whatever they say.
+    from llm.agent.feature_flags import AgentFeatureFlags
+    from llm.agent_service import serves_agent_core
+    from llm.agent_service.endpoint import agent_core_streaming_response
+    if serves_agent_core(
+        request,
+        enable_reasoning=enable_reasoning,
+        supports_image_output="image" in output_modalities,
+    ):
+        return agent_core_streaming_response(
+            request=request,
+            model=model,
+            messages=messages,
+            conversation_id=conversation_id,
+            chat_id=chat_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            system_prompt=effective_system_prompt,
+            api_key=api_key,
+            base_url=chat_base_url,
+            provider_slug=chat_provider_slug,
+            flags=AgentFeatureFlags(
+                file_tools=enable_file_tools,
+                brave_search=enable_brave_search,
+                google_maps=enable_google_maps,
+                image_generation=enable_image_generation,
+                video_generation=enable_video_generation,
+                reasoning=enable_reasoning,
+                mcp_tools=enable_mcp_tools,
+                voice_mode=enable_voice_mode,
+                sparks=enable_sparks,
+                knowledge_base=enable_knowledge_base,
+            ),
+            auth_token=auth_token or "",
+            model_display_name=model_display_name,
+            model_metadata=model_metadata,
+            uploaded_files=uploaded_files_encoded or None,
+            sterna_resolution=sterna_resolution,
+            media_tool_params=media_tool_params,
+            spark_fix_request=spark_fix_request,
+            spark_ignite_request=spark_ignite_request,
+            forced_tool_name=forced_tool_name,
+        )
 
     agent = LangChainStreamingAgent(
         model=model,
