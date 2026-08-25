@@ -214,11 +214,13 @@ echo "  backend_vulture=${backend_dead_code} backend_files_scanned=${backend_fil
 # eslint.config.js below, so an edit to its entry/project globs must be
 # a conscious, reviewed baseline change.
 #
-# The scanned-file denominator is the count of JS/TS source files under
-# core/frontend that the config's project globs describe (excluding
-# node_modules/dist/build/coverage). It is independent of the eslint
-# file count above so neither counter's scope can hide behind the
-# other's.
+# The scanned-file denominator is the count of regular JS/TS source files
+# under core/frontend that the config's project globs describe (excluding
+# node_modules/dist/build/coverage). Symlinks are excluded to match knip's
+# own glob semantics (it does not follow symbolic links), so replacing a
+# source file with a symlink shrinks this denominator and trips the
+# scope-fall guard. It is independent of the eslint file count above so
+# neither counter's scope can hide behind the other's.
 echo "==> knip config integrity"
 knip_config_path="$repo_root/core/frontend/knip.json"
 if [ ! -f "$knip_config_path" ]; then
@@ -246,7 +248,7 @@ echo "  knip_config_sha256=${knip_config_sha256} (matches baseline)"
 
 echo "==> Frontend unused-export count (knip)"
 frontend_files_scanned="$(
-  find "$repo_root/core/frontend" \( -type f -o -type l \) \( -iname '*.ts' -o -iname '*.tsx' -o -iname '*.js' -o -iname '*.jsx' \) \
+  find "$repo_root/core/frontend" -type f \( -iname '*.ts' -o -iname '*.tsx' -o -iname '*.js' -o -iname '*.jsx' \) \
     -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/coverage/*' \
     | wc -l | tr -d ' '
 )"
