@@ -1,4 +1,4 @@
-"""Characterization tests for llm/langchain_file_tools.py.
+"""Characterization tests for llm/agent_tool_handlers.py.
 
 Covers (see priority #5 in the delegating task):
   - `_resolve_workspace_chat_id`: the ClonedRepository lookup that
@@ -22,7 +22,7 @@ import httpx
 from asgiref.sync import async_to_sync
 from django.test import SimpleTestCase, TestCase
 
-from llm.langchain_file_tools import (
+from llm.agent_tool_handlers import (
     FileToolsContext,
     _get_context,
     _resolve_workspace_chat_id,
@@ -192,7 +192,7 @@ class ContextRegistryTests(TestCase):
         self._register(context)
 
         import contextvars
-        from llm import langchain_file_tools as module
+        from llm import agent_tool_handlers as module
 
         # Simulate a task that never called set_file_tools_context.
         def _in_fresh_context():
@@ -216,11 +216,11 @@ class CodingAgentToolCostUsdTests(TestCase):
         self.addCleanup(clear_file_tools_context, self.key)
 
         self._patches = [
-            patch("llm.langchain_file_tools._check_code_session_tier_gate", new=AsyncMock(return_value=None)),
-            patch("llm.langchain_file_tools._resolve_workspace_chat_id", new=AsyncMock(return_value="chat-1")),
-            patch("llm.langchain_file_tools._ensure_repo_in_sandbox", new=AsyncMock(return_value=None)),
-            patch("llm.langchain_file_tools._fetch_user_sub_agents", new=AsyncMock(return_value=([], []))),
-            patch("llm.langchain_file_tools._fetch_user_model_preferences", new=AsyncMock(return_value={
+            patch("llm.agent_tool_handlers._check_code_session_tier_gate", new=AsyncMock(return_value=None)),
+            patch("llm.agent_tool_handlers._resolve_workspace_chat_id", new=AsyncMock(return_value="chat-1")),
+            patch("llm.agent_tool_handlers._ensure_repo_in_sandbox", new=AsyncMock(return_value=None)),
+            patch("llm.agent_tool_handlers._fetch_user_sub_agents", new=AsyncMock(return_value=([], []))),
+            patch("llm.agent_tool_handlers._fetch_user_model_preferences", new=AsyncMock(return_value={
                 "fast_model_id": "m", "balanced_model_id": "m", "powerful_model_id": "m",
             })),
         ]
@@ -243,7 +243,7 @@ class CodingAgentToolCostUsdTests(TestCase):
             "duration_ms": 1200,
         }
         with patch("llm.services.execute_coding_agent", new=AsyncMock(return_value=execute_result)), \
-             patch("llm.langchain_file_tools._bill_code_session", new=AsyncMock()) as mock_bill:
+             patch("llm.agent_tool_handlers._bill_code_session", new=AsyncMock()) as mock_bill:
             raw = _run(coding_agent.ainvoke({"task": "do the thing"}))
 
         payload = json.loads(raw)
@@ -264,7 +264,7 @@ class CodingAgentToolCostUsdTests(TestCase):
             "result": {"total_cost_usd": 0.11},
         }
         with patch("llm.services.execute_coding_agent", new=AsyncMock(return_value=execute_result)), \
-             patch("llm.langchain_file_tools._bill_code_session", new=AsyncMock()) as mock_bill:
+             patch("llm.agent_tool_handlers._bill_code_session", new=AsyncMock()) as mock_bill:
             raw = _run(coding_agent.ainvoke({"task": "do the thing"}))
 
         payload = json.loads(raw)
@@ -280,7 +280,7 @@ class CodingAgentToolCostUsdTests(TestCase):
             "result": {"total_cost_usd": 0.0, "summary": "no-op"},
         }
         with patch("llm.services.execute_coding_agent", new=AsyncMock(return_value=execute_result)), \
-             patch("llm.langchain_file_tools._bill_code_session", new=AsyncMock()) as mock_bill:
+             patch("llm.agent_tool_handlers._bill_code_session", new=AsyncMock()) as mock_bill:
             raw = _run(coding_agent.ainvoke({"task": "do nothing"}))
 
         payload = json.loads(raw)
@@ -297,7 +297,7 @@ class CodingAgentToolGuardTests(TestCase):
         # on the module-global `_contexts` dict being empty, which is
         # not guaranteed when the full suite runs (other tests/views can
         # leave exactly one context registered).
-        with patch("llm.langchain_file_tools._get_context", return_value=None):
+        with patch("llm.agent_tool_handlers._get_context", return_value=None):
             raw = _run(coding_agent.ainvoke({"task": "do the thing"}))
         payload = json.loads(raw)
         self.assertFalse(payload["success"])
@@ -320,7 +320,7 @@ class CodingAgentToolGuardTests(TestCase):
         self.addCleanup(clear_file_tools_context, key)
 
         denial = json.dumps({"success": False, "error_type": "QUOTA_EXCEEDED", "message": "no more code sessions"})
-        with patch("llm.langchain_file_tools._check_code_session_tier_gate", new=AsyncMock(return_value=denial)), \
+        with patch("llm.agent_tool_handlers._check_code_session_tier_gate", new=AsyncMock(return_value=denial)), \
              patch("llm.services.execute_coding_agent", new=AsyncMock()) as mock_execute:
             raw = _run(coding_agent.ainvoke({"task": "do the thing"}))
 

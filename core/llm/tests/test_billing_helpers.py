@@ -78,7 +78,7 @@ class ExtractBillableToolCostsTests(SimpleTestCase):
 
     def test_coding_agent_tool_names_are_always_excluded(self):
         """Coding-agent tools bill their own dedicated CODE_SESSION UsageLog
-        row (see _bill_code_session in langchain_file_tools.py) -- their
+        row (see _bill_code_session in agent_tool_handlers.py) -- their
         cost_usd must never land in the chat-aggregate tool_cost, even
         though they carry a top-level cost_usd field."""
         for name in CODING_AGENT_TOOL_NAMES:

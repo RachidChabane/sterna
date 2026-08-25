@@ -53,7 +53,7 @@ from .agent.tool_registry import AgentToolRegistry
 from .catalog_service import CatalogService
 from .client import OpenRouterClient
 from .constants import ENABLE_TOOL_DISCOVERY
-from .langchain_file_tools import CODING_AGENT_TOOL_NAMES, FileToolsContext
+from .agent_tool_handlers import CODING_AGENT_TOOL_NAMES, FileToolsContext
 
 # Names re-exported for callers that import them from this module
 # (llm/views.py, usage_quota tests) or patch them here.

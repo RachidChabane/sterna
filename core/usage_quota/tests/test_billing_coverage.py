@@ -313,7 +313,7 @@ class TestCodeSessionBilling(BillingCoverageBase):
         return ctx
 
     def test_bill_code_session_writes_code_session_row(self):
-        from llm.langchain_file_tools import _bill_code_session
+        from llm.agent_tool_handlers import _bill_code_session
         ctx = self._make_context()
         async_to_sync(_bill_code_session)(
             ctx, 0.05, "anthropic/claude-sonnet-4", "chat-abc",
@@ -325,7 +325,7 @@ class TestCodeSessionBilling(BillingCoverageBase):
         )
 
     def test_bill_code_session_zero_cost_skipped(self):
-        from llm.langchain_file_tools import _bill_code_session
+        from llm.agent_tool_handlers import _bill_code_session
         ctx = self._make_context()
         async_to_sync(_bill_code_session)(
             ctx, 0.0, "anthropic/claude-sonnet-4", "chat-abc",
@@ -333,7 +333,7 @@ class TestCodeSessionBilling(BillingCoverageBase):
         self.assertNotBilled(service=ServiceType.CODE_SESSION)
 
     def test_bill_code_session_missing_user_skipped(self):
-        from llm.langchain_file_tools import _bill_code_session
+        from llm.agent_tool_handlers import _bill_code_session
         class _Ctx:
             user_id = None
             chat_id = None
@@ -351,7 +351,7 @@ class TestCodingAgentDedupGuard(BillingCoverageBase):
     """
 
     def test_constant_contains_all_four_tools(self):
-        from llm.langchain_file_tools import CODING_AGENT_TOOL_NAMES
+        from llm.agent_tool_handlers import CODING_AGENT_TOOL_NAMES
         self.assertEqual(
             CODING_AGENT_TOOL_NAMES,
             frozenset({

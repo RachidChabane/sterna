@@ -2,7 +2,7 @@
 
 Every tool in this package that wraps pre-Phase-4 logic (the catalog
 tools in `llm.tool_catalog.core_tools`, the handlers dispatched by
-`llm.http_tool_executor`) reaches that logic the same way: by calling
+`llm.sandbox_tool_executor`) reaches that logic the same way: by calling
 back through the `LegacyToolInvoker` port on the execution context,
 naming itself by tool id. `delegate_to_invoker` builds that handler
 once so each tool module states only its id, not the call.

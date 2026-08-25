@@ -25,7 +25,7 @@ from ..constants import ENABLE_PTC, ENABLE_TOOL_DISCOVERY
 from ..google_maps_tools import GOOGLE_MAPS_TOOLS
 from ..image_tools import IMAGE_TOOLS
 from ..knowledge_base_tools import KNOWLEDGE_BASE_TOOLS
-from ..langchain_file_tools import CODING_AGENT_TOOL, FILE_TOOLS, PLAN_TOOLS
+from ..agent_tool_handlers import CODING_AGENT_TOOL, FILE_TOOLS, PLAN_TOOLS
 from ..list_tools import LIST_TOOLS
 from ..spark_tools import SPARK_TOOLS
 from ..video_tools import VIDEO_TOOLS

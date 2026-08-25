@@ -1508,7 +1508,7 @@ class CompletionViewSet(viewsets.ViewSet):
         def calc_file_tools_tokens() -> int:
             """Estimate tokens added by FILE_TOOLS descriptions in LangChain"""
             try:
-                from .langchain_file_tools import FILE_TOOLS
+                from .agent_tool_handlers import FILE_TOOLS
                 # Each tool has name + description + args schema
                 # Rough estimate: ~60-100 tokens per tool
                 return len(FILE_TOOLS) * 80  # Conservative estimate

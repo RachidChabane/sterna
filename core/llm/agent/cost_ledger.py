@@ -18,7 +18,7 @@ from typing import Callable, Optional
 from asgiref.sync import sync_to_async
 
 from ..catalog_service import CatalogService
-from ..langchain_file_tools import CODING_AGENT_TOOL_NAMES
+from ..agent_tool_handlers import CODING_AGENT_TOOL_NAMES
 from ..pricing_config import PRICE_STORAGE_UNIT
 
 # Child of the configured "llm" logger (see sterna/logging.py APP_LOGGERS):

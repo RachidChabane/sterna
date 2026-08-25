@@ -17,9 +17,9 @@ requires approval, regardless of whether it is also a handler
 all four legacy sources so each test imports rather than re-derives
 them.
 
-`http_tool_executor_handler_ids` and `file_tools_definitions` parse
+`sandbox_tool_executor_handler_ids` and `file_tools_definitions` parse
 their source file with `ast` instead of importing it:
-`llm.http_tool_executor` imports Django directly, and
+`llm.sandbox_tool_executor` imports Django directly, and
 `sandbox.orchestrator` has no `__init__.py` — it is not a package the
 rest of `core` imports from, and reading it here must not become the
 first thing that does. Neither constraint applies to
@@ -36,7 +36,7 @@ from llm.tool_catalog import core_tools as core_tools_module
 from llm.tool_catalog.models import ToolDefinition as LegacyToolDefinition
 
 CORE_ROOT = Path(__file__).resolve().parent.parent.parent
-HTTP_TOOL_EXECUTOR = CORE_ROOT / "llm" / "http_tool_executor.py"
+HTTP_TOOL_EXECUTOR = CORE_ROOT / "llm" / "sandbox_tool_executor.py"
 SANDBOX_FILE_TOOLS = CORE_ROOT / "sandbox" / "orchestrator" / "file_tools.py"
 
 V1_AUTO_TOOL_NAMES: Set[str] = {
@@ -80,7 +80,7 @@ def catalog_tool_definitions() -> Dict[str, LegacyToolDefinition]:
     }
 
 
-def http_tool_executor_handler_ids() -> Set[str]:
+def sandbox_tool_executor_handler_ids() -> Set[str]:
     """The tool ids `HTTPToolExecutor.execute_tool_call` dispatches, read from source.
 
     This answers "which tools exist" (has legacy execution logic

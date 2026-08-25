@@ -3,7 +3,7 @@
 A `ToolDefinition` under `llm.agent_core.tools` states a tool's schema,
 label and approval requirement and delegates the work itself to the
 `LegacyToolInvoker` on its execution context. The implementations live
-in `llm.langchain_file_tools`, `llm.brave_search_tools`,
+in `llm.agent_tool_handlers`, `llm.brave_search_tools`,
 `llm.image_tools` and their siblings, as callables bound by name and
 reading the request from the ContextVars
 `llm.agent.streaming.request_context` publishes.

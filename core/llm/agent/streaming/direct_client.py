@@ -29,7 +29,7 @@ from ...constants import (
     TOOL_HEARTBEAT_INTERVAL_SECONDS,
 )
 from ...error_messages import error_payload
-from ...langchain_file_tools import CODING_AGENT_TOOL_NAMES
+from ...agent_tool_handlers import CODING_AGENT_TOOL_NAMES
 from ..cost_ledger import extract_billable_tool_costs
 from ..sse_events import (
     EVENT_CONTEXT_TRIMMED,

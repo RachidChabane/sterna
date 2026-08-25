@@ -27,7 +27,7 @@ from ...constants import (
     TOOL_EXECUTION_TIMEOUT_SECONDS,
     TOOL_HEARTBEAT_INTERVAL_SECONDS,
 )
-from ...langchain_file_tools import CODING_AGENT_TOOL_NAMES
+from ...agent_tool_handlers import CODING_AGENT_TOOL_NAMES
 from ..cost_ledger import extract_billable_tool_costs
 from ..sse_events import (
     EVENT_CONTENT,

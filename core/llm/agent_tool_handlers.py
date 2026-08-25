@@ -1,7 +1,8 @@
 """
-LangChain File Tools
+Agent Tool Handlers
 
-Wraps file system operations as LangChain tools for agent use.
+Workspace, coding-agent, and plan tools bound to a V2 chat agent,
+each a LangChain tool over the sandboxed workspace this request owns.
 """
 
 import json

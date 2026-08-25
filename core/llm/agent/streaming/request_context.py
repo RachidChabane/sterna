@@ -19,7 +19,7 @@ from ...brave_search_tools import BRAVE_SEARCH_USER_CONTEXT
 from ...google_maps_tools import GOOGLE_MAPS_USER_CONTEXT
 from ...image_tools import set_image_tool_context
 from ...knowledge_base_tools import KNOWLEDGE_BASE_USER_CONTEXT
-from ...langchain_file_tools import (
+from ...agent_tool_handlers import (
     FileToolsContext,
     clear_file_tools_context,
     set_file_tools_context,

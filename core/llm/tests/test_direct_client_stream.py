@@ -243,7 +243,7 @@ class DirectClientStreamTests(TestCase):
         that returns a top-level cost_usd must NOT contribute to
         accumulated_tool_cost / done.tool_cost -- it is billed
         separately as a CODE_SESSION UsageLog row by
-        langchain_file_tools._bill_code_session."""
+        agent_tool_handlers._bill_code_session."""
         agent = make_agent()
         agent._user_id = None
         agent.tools = [FakeTool("coding_agent", {"success": True, "cost_usd": 4.20, "summary": "done"})]
