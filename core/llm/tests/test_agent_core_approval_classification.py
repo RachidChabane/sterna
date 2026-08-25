@@ -1,27 +1,29 @@
-"""Every discovered tool's default `approval` matches V1's classification.
+"""Every discovered tool's default `approval` matches V1's real gate.
 
-Legacy V1 (`llm.views.stream_complete`) runs a sandbox/file-handler
-tool immediately and puts every catalog tool and MCP tool call up for
-approval first. `agent_core` encodes that as a per-`ToolDefinition`
+Legacy V1 (`llm.views.stream_complete`) holds a `file_tool_names` set
+literal and branches on membership in it: a call naming one of those
+six tool ids runs immediately; every other tool call that endpoint
+sees — catalog tool, MCP tool, or any other sandbox handler — is
+queued for the user's approval first. That set, not
+`HTTPToolExecutor`'s handler dict, is V1's actual approval
+classification: a handler id answers "does legacy execution logic
+exist for this tool", which is an orthogonal question from "does this
+endpoint run it without asking first" (`run_bash`, `search_code`, and
+several others are dispatchable handlers that V1 still gates).
+
+`agent_core` encodes the six-name partition as a per-`ToolDefinition`
 `approval` constant, so this test derives the expected AUTO/REQUIRED
-partition programmatically from the same two legacy sources
-`test_agent_core_tool_coverage.py` diffs the registry against —
-`HTTPToolExecutor.execute_tool_call`'s handler dict names the
-sandbox/file-handler tools V1 runs immediately, and
-`llm.tool_catalog.core_tools`'s constants name the catalog tools V1
-gates — and asserts each discovered tool's `approval` matches it,
-rather than pinning a second, hand-maintained id list that could drift
-from the registry the same way the schemas this migration transcribed
-did.
+split programmatically from `views_file_tool_names` — reading the same
+literal `llm.views.stream_complete` branches on — rather than pinning
+a second, hand-maintained id list that could drift from either the
+registry or the view the same way the schemas this migration
+transcribed did.
 
-A handler id also present in the catalog (`list_files`, `coding_agent`,
-...) is a sandbox/file-handler tool for this purpose: V1 runs it
-immediately regardless of whether `core_tools` also happens to
-describe it, so handler membership takes precedence over catalog
-membership. Every discovered tool is expected to fall in exactly one
-of the two sources; the MCP bridge tool is dynamic (minted per server
-at runtime, not one of the statically discovered tools) and is not
-covered by this partition — its own module pins its approval directly.
+The MCP bridge tool is dynamic (minted per server at runtime, not one
+of the statically discovered tools under `agent_core.tools`) and is
+not covered by this partition; its own module (`mcp_bridge.py`) pins
+its approval to `REQUIRED` directly, matching V1, which never
+auto-executes a third-party MCP call.
 """
 
 from __future__ import annotations
@@ -29,46 +31,21 @@ from __future__ import annotations
 import unittest
 
 from llm.agent_core.registry import ToolApproval, discover_tools
-from llm.tests.legacy_tool_sources import (
-    catalog_tool_definitions,
-    http_tool_executor_handler_ids,
-)
+from llm.tests.legacy_tool_sources import views_file_tool_names
 
 
 class DefaultApprovalMatchesV1ClassificationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.discovered = discover_tools()
-        cls.handler_ids = http_tool_executor_handler_ids()
-        cls.catalog_ids = set(catalog_tool_definitions())
-
-    def test_every_discovered_tool_is_covered_by_exactly_one_legacy_source(self):
-        """A tool this migration forgot to classify fails loudly here, not silently.
-
-        A tool in both sources is still covered (handler membership
-        takes precedence, per the module docstring); one in neither
-        would have no derivable expectation and must not pass by
-        omission.
-        """
-
-        uncovered = [
-            tool_id
-            for tool_id in self.discovered
-            if tool_id not in self.handler_ids and tool_id not in self.catalog_ids
-        ]
-        self.assertEqual(
-            uncovered,
-            [],
-            "discovered tool(s) named in neither legacy source, so this test "
-            f"cannot derive their expected approval: {sorted(uncovered)}",
-        )
+        cls.auto_tool_names = views_file_tool_names()
 
     def test_every_discovered_tool_s_approval_matches_the_derived_partition(self):
         mismatches = []
         for tool_id, tool in self.discovered.items():
             expected = (
                 ToolApproval.AUTO
-                if tool_id in self.handler_ids
+                if tool_id in self.auto_tool_names
                 else ToolApproval.REQUIRED
             )
             if tool.approval is not expected:
@@ -76,26 +53,57 @@ class DefaultApprovalMatchesV1ClassificationTests(unittest.TestCase):
         self.assertEqual(
             mismatches,
             [],
-            "approval() drifted from the V1 classification (tool_id, actual, "
+            "approval() drifted from V1's stream_complete gate (tool_id, actual, "
             f"expected): {mismatches}",
         )
 
-    def test_a_sandbox_file_handler_tool_that_is_also_cataloged_is_still_auto(self):
-        """Pins the precedence rule against a couple of tools a reviewer would
-        expect to see explicitly, rather than trusting only the derived loop.
+    def test_a_gated_tool_name_is_auto_regardless_of_source(self):
+        for tool_id in ("list_files", "read_file", "write_file"):
+            with self.subTest(tool_id=tool_id):
+                self.assertIn(tool_id, self.auto_tool_names)
+                self.assertIs(self.discovered[tool_id].approval, ToolApproval.AUTO)
+
+    def test_a_dispatchable_handler_outside_the_gate_is_still_required(self):
+        """A tool with legacy execution logic behind it is not automatically ungated.
+
+        `run_bash`, `search_code`, `update_todos`, `prepare_pull_request`,
+        `execute_programming_task`, and `explore_codebase` all dispatch
+        through legacy code the same way the six gated tools do, but
+        none of them is named in `file_tool_names`, so V1 still queues
+        them for approval.
         """
 
-        for tool_id in ("list_files", "coding_agent", "clone_repo"):
+        for tool_id in (
+            "run_bash",
+            "search_code",
+            "update_todos",
+            "prepare_pull_request",
+            "execute_programming_task",
+            "explore_codebase",
+        ):
             with self.subTest(tool_id=tool_id):
-                self.assertIn(tool_id, self.catalog_ids)
-                self.assertIn(tool_id, self.handler_ids)
-                self.assertIs(self.discovered[tool_id].approval, ToolApproval.AUTO)
+                self.assertNotIn(tool_id, self.auto_tool_names)
+                self.assertIs(self.discovered[tool_id].approval, ToolApproval.REQUIRED)
 
     def test_a_catalog_only_tool_is_required(self):
         for tool_id in ("execute_code", "brave_web_search", "query_knowledge_base"):
             with self.subTest(tool_id=tool_id):
-                self.assertIn(tool_id, self.catalog_ids)
-                self.assertNotIn(tool_id, self.handler_ids)
+                self.assertNotIn(tool_id, self.auto_tool_names)
+                self.assertIs(self.discovered[tool_id].approval, ToolApproval.REQUIRED)
+
+    def test_agent_orchestration_tools_are_required(self):
+        """Multi-step / delegating tools are not part of the six-name gate either."""
+
+        for tool_id in (
+            "clone_repo",
+            "coding_agent",
+            "edit_file",
+            "edit_plan",
+            "plan_implementation",
+            "implement_plan",
+        ):
+            with self.subTest(tool_id=tool_id):
+                self.assertNotIn(tool_id, self.auto_tool_names)
                 self.assertIs(self.discovered[tool_id].approval, ToolApproval.REQUIRED)
 
 

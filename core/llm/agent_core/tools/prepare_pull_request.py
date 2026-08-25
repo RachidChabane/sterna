@@ -66,5 +66,5 @@ TOOL = ToolDefinition(
         "required": ["title", "summary", "changes"],
     },
     handler=delegate_to_invoker(TOOL_ID),
-    approval=ToolApproval.AUTO,
+    approval=ToolApproval.REQUIRED,
 )

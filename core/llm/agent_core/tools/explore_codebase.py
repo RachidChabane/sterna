@@ -56,5 +56,5 @@ TOOL = ToolDefinition(
         "required": ["task"],
     },
     handler=delegate_to_invoker(TOOL_ID),
-    approval=ToolApproval.AUTO,
+    approval=ToolApproval.REQUIRED,
 )

@@ -57,5 +57,5 @@ TOOL = ToolDefinition(
         "required": ["command"],
     },
     handler=delegate_to_invoker(TOOL_ID),
-    approval=ToolApproval.AUTO,
+    approval=ToolApproval.REQUIRED,
 )
