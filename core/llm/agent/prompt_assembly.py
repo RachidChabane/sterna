@@ -1,16 +1,22 @@
 """System-prompt assembly for one chat turn.
 
-Two steps, and the endpoint uses both. `build_effective_system_prompt`
+Two steps, and the V2 endpoint uses both. `build_effective_system_prompt`
 folds what the user configured -- the global instructions, the chat's
 own, the chat's custom prompt, and the priority an `@mention` implies
 -- into the one custom prompt a turn is created with.
 `build_agent_system_prompt` then builds the full prompt from the
 layered prompts_v2 builder around it and appends the
 media-generation hints an `@mention` may have carried.
+
+The direct-completion endpoint assembles a prompt of its own: the
+conversation carries the custom prompt as a system message, which
+`split_custom_system_prompt` takes back out, and
+`build_direct_completion_system_prompt` wraps in the capability
+notices and the section naming the user's MCP tools.
 """
 
 import logging
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .feature_flags import AgentFeatureFlags, FEATURE_VOICE_MODE
 
@@ -38,6 +44,11 @@ _MEDIA_PARAM_HINT_LABELS = (
 VOICE_MODE_PROMPT_MARKER = "[VOICE CONVERSATION MODE]"
 
 CONTENT_FIELD = "content"
+ROLE_FIELD = "role"
+SYSTEM_ROLE = "system"
+TEXT_FIELD = "text"
+TYPE_FIELD = "type"
+TEXT_TYPE = "text"
 ENABLED_FIELD = "enabled"
 MODE_FIELD = "mode"
 OVERRIDE_MODE = "override"
@@ -76,6 +87,72 @@ def build_effective_system_prompt(
         )
         logger.info("[LangChain] Added mention priority prompt to system prompt")
     return effective
+
+
+def split_custom_system_prompt(
+    messages: Sequence[Mapping[str, Any]],
+) -> Tuple[Optional[str], List[Dict[str, Any]]]:
+    """The custom prompt a conversation carries, and the rest of it.
+
+    A system message may hold plain text or the multipart content a
+    multimodal client sends; either way what comes back is the text of
+    the last such message, which is what the built prompt wraps.
+    """
+
+    custom_prompt: Optional[str] = None
+    conversation: List[Dict[str, Any]] = []
+    for message in messages:
+        if message.get(ROLE_FIELD) == SYSTEM_ROLE:
+            custom_prompt = _system_text(message.get(CONTENT_FIELD, ""))
+        else:
+            conversation.append(dict(message))
+    return custom_prompt, conversation
+
+
+def _system_text(content: Any) -> str:
+    if isinstance(content, list):
+        return " ".join(
+            part.get(TEXT_FIELD, "")
+            for part in content
+            if isinstance(part, Mapping) and part.get(TYPE_FIELD) == TEXT_TYPE
+        )
+    return content
+
+
+def build_direct_completion_system_prompt(
+    *,
+    custom_prompt: Optional[str],
+    enable_reasoning: bool = False,
+    enable_file_tools: bool = False,
+    enable_image_generation: bool = False,
+    mcp_tools: Optional[Sequence[Any]] = None,
+) -> Optional[str]:
+    """The system prompt a direct-completion turn is sent with.
+
+    The capability notices come first, built around the conversation's
+    own custom prompt; a request with MCP tools available closes with
+    the dynamic section naming them.
+    """
+
+    # Lazy imports to avoid Django app-loading order issues (see
+    # llm/__init__.py docstring).
+    from mcp.prompts import build_mcp_system_prompt
+
+    from ..prompts_v2 import get_prompt_builder
+
+    combined = get_prompt_builder().build_direct_completion_prompt(
+        custom_prompt=custom_prompt,
+        enable_reasoning=enable_reasoning,
+        enable_file_tools=enable_file_tools,
+        enable_image_generation=enable_image_generation,
+    )
+    if mcp_tools:
+        mcp_prompt = build_mcp_system_prompt(list(mcp_tools))
+        if mcp_prompt:
+            combined = (
+                f"{combined}{SECTION_SEPARATOR}{mcp_prompt}" if combined else mcp_prompt
+            )
+    return combined or None
 
 
 def _user_instructions(

@@ -460,42 +460,21 @@ class OpenRouterClient:
         Returns:
             Messages list with combined system prompt
         """
-        # Extract existing system message if present
-        custom_prompt = None
-        other_messages = []
-
-        for msg in messages:
-            if msg.get("role") == "system":
-                content = msg.get("content", "")
-                # Handle both string and multipart content formats
-                if isinstance(content, list):
-                    # Multipart format - extract text
-                    custom_prompt = " ".join(
-                        part.get("text", "") for part in content if part.get("type") == "text"
-                    )
-                else:
-                    custom_prompt = content
-            else:
-                other_messages.append(msg)
-
-        # Lazy imports to avoid Django app-loading order issues (see
+        # Lazy import to avoid Django app-loading order issues (see
         # llm/__init__.py docstring).
-        from .prompts_v2 import get_prompt_builder
-        from mcp.prompts import build_mcp_system_prompt
+        from .agent.prompt_assembly import (
+            build_direct_completion_system_prompt,
+            split_custom_system_prompt,
+        )
 
-        combined_prompt = get_prompt_builder().build_direct_completion_prompt(
+        custom_prompt, other_messages = split_custom_system_prompt(messages)
+        combined_prompt = build_direct_completion_system_prompt(
             custom_prompt=custom_prompt,
             enable_reasoning=enable_reasoning,
             enable_file_tools=enable_file_tools,
             enable_image_generation=enable_image_generation,
+            mcp_tools=mcp_tools if (enable_mcp_tools and has_mcp_tools) else None,
         )
-
-        # MCP tools get a dynamic section naming the actual tools
-        # available, appended after the static feature notices above.
-        if enable_mcp_tools and has_mcp_tools and mcp_tools:
-            mcp_prompt = build_mcp_system_prompt(mcp_tools)
-            if mcp_prompt:
-                combined_prompt = f"{combined_prompt}\n\n{mcp_prompt}" if combined_prompt else mcp_prompt
 
         # If we have a system prompt, inject it at the start
         if combined_prompt:
@@ -578,35 +557,13 @@ class OpenRouterClient:
         # Build reasoning object if enabled (OpenRouter native reasoning support)
         reasoning_obj = None
         if enable_reasoning:
-            # Extract reasoning parameters from kwargs if provided
-            reasoning_effort = kwargs.pop("reasoning_effort", None)
-            reasoning_max_tokens = kwargs.pop("reasoning_max_tokens", None)
+            from .reasoning_options import build_reasoning_option
 
-            # Different models use different parameters:
-            # - Effort-based models (OpenAI o-series, Grok): use "effort"
-            # - Token-limited models (Anthropic, Gemini, Qwen): use "max_tokens"
-            reasoning_obj = {}
-
-            # Prioritize explicit parameters from UI
-            if reasoning_max_tokens:
-                # Token-limited models: use max_tokens parameter
-                reasoning_obj["max_tokens"] = reasoning_max_tokens
-            elif reasoning_effort:
-                # Effort-based models: use effort parameter
-                reasoning_obj["effort"] = reasoning_effort
-            else:
-                # Auto-detect based on model type
-                is_token_limited = any(x in model.lower() for x in ['anthropic', 'claude', 'gemini', 'qwen'])
-                if is_token_limited:
-                    # For Anthropic: use max_tokens (minimum 1024, maximum 32000)
-                    # Default to 4000 tokens for reasoning if not specified
-                    reasoning_obj["max_tokens"] = 4000
-                else:
-                    # Fallback for other models
-                    reasoning_obj["enabled"] = True
-
-            # CRITICAL: Set exclude=false to ensure reasoning is returned in response
-            reasoning_obj["exclude"] = False
+            reasoning_obj = build_reasoning_option(
+                model=model,
+                reasoning_effort=kwargs.pop("reasoning_effort", None),
+                reasoning_max_tokens=kwargs.pop("reasoning_max_tokens", None),
+            )
 
         payload = {
             "model": self._request_model(model),
@@ -818,35 +775,13 @@ class OpenRouterClient:
         # Build reasoning object if enabled (OpenRouter native reasoning support)
         reasoning_obj = None
         if enable_reasoning:
-            # Extract reasoning parameters from kwargs if provided
-            reasoning_effort = kwargs.pop("reasoning_effort", None)
-            reasoning_max_tokens = kwargs.pop("reasoning_max_tokens", None)
+            from .reasoning_options import build_reasoning_option
 
-            # Different models use different parameters:
-            # - Effort-based models (OpenAI o-series, Grok): use "effort"
-            # - Token-limited models (Anthropic, Gemini, Qwen): use "max_tokens"
-            reasoning_obj = {}
-
-            # Prioritize explicit parameters from UI
-            if reasoning_max_tokens:
-                # Token-limited models: use max_tokens parameter
-                reasoning_obj["max_tokens"] = reasoning_max_tokens
-            elif reasoning_effort:
-                # Effort-based models: use effort parameter
-                reasoning_obj["effort"] = reasoning_effort
-            else:
-                # Auto-detect based on model type
-                is_token_limited = any(x in model.lower() for x in ['anthropic', 'claude', 'gemini', 'qwen'])
-                if is_token_limited:
-                    # For Anthropic: use max_tokens (minimum 1024, maximum 32000)
-                    # Default to 4000 tokens for reasoning if not specified
-                    reasoning_obj["max_tokens"] = 4000
-                else:
-                    # Fallback for other models
-                    reasoning_obj["enabled"] = True
-
-            # CRITICAL: Set exclude=false to ensure reasoning is returned in response
-            reasoning_obj["exclude"] = False
+            reasoning_obj = build_reasoning_option(
+                model=model,
+                reasoning_effort=kwargs.pop("reasoning_effort", None),
+                reasoning_max_tokens=kwargs.pop("reasoning_max_tokens", None),
+            )
 
         payload = {
             "model": self._request_model(model),

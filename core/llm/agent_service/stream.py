@@ -20,7 +20,6 @@ import dataclasses
 import logging
 from typing import Any, AsyncIterator, Dict, List, Optional, Protocol, Sequence
 
-from ..agent.cost_ledger import CostLedger
 from ..agent.sse_events import cancelled_event
 from ..agent.streaming import request_context
 from ..agent.streaming.quota_precheck import precheck_chat_quota
@@ -31,6 +30,7 @@ from .accounting import TurnAccounting
 from .dependencies import TurnRequest, TurnStack, build_turn_stack
 from .messages import to_provider_messages
 from .session import V2TurnSession
+from .settlement import rendered as _rendered, settle_turn
 from .v2_wire import V2Wire, error_frame
 
 # Child of the configured "llm" logger (see sterna/logging.py APP_LOGGERS).
@@ -38,8 +38,6 @@ logger = logging.getLogger(__name__)
 
 RATE_LIMIT_STATUS_CODE = 429
 STATUS_CODE_FIELD = "status_code"
-EVENT_FIELD = "event"
-DATA_FIELD = "data"
 FROM_MODEL_FIELD = "from_model"
 TO_MODEL_FIELD = "to_model"
 
@@ -249,22 +247,9 @@ class V2TurnRunner:
     async def _settle(self, turn: TurnRequest) -> None:
         """Write the aggregate usage row before the turn's `done` reaches the wire."""
 
-        ledger = CostLedger(lambda: turn.user_id, turn.model)
-        await ledger.record_chat_aggregate_usage(
-            self._accounting.prompt_tokens,
-            self._accounting.completion_tokens,
-            self._accounting.tool_cost,
-            self._accounting.image_generation_cost,
-        )
-        self._accounting.settled = ledger.final_usage_recorded
+        await settle_turn(self._accounting, user_id=turn.user_id, model=turn.model)
 
 
 def _is_rate_limited(error: ErrorEvent) -> bool:
     extra = error.extra or {}
     return extra.get(STATUS_CODE_FIELD) == RATE_LIMIT_STATUS_CODE
-
-
-def _rendered(event: Dict[str, Any]) -> str:
-    """One event mapping from the shared SSE helpers, as the frame it writes."""
-
-    return sse.render_frame(event[EVENT_FIELD], event[DATA_FIELD])
