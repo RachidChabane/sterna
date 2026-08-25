@@ -1,13 +1,13 @@
 """Per-request context every tool implementation reads from.
 
-Installer. The tool functions are plain callables invoked by LangChain;
-they cannot be handed the request, so the agent publishes it into a set of
-ContextVars (and one FileToolsContext) before the loop starts and tears it
-down in `finally`.
+Installer. The tool functions are plain callables invoked by the agent
+loop's bound-callable invoker; they cannot be handed the request, so the
+turn publishes it into a set of ContextVars (and one FileToolsContext)
+before the loop starts and tears it down in `finally`.
 
-`install` deliberately mutates the agent: it stores the file-tools context
-for cancellation and, when PTC is on, binds an extra tool. Everything it
-does is request-scoped setup, none of it yields.
+`install` deliberately mutates the session: it stores the file-tools
+context for cancellation. Everything it does is request-scoped setup,
+none of it yields.
 """
 
 import logging
@@ -15,17 +15,17 @@ from typing import Any, Dict, List, Optional
 
 from asgiref.sync import sync_to_async
 
-from ...brave_search_tools import BRAVE_SEARCH_USER_CONTEXT
-from ...google_maps_tools import GOOGLE_MAPS_USER_CONTEXT
-from ...image_tools import set_image_tool_context
-from ...knowledge_base_tools import KNOWLEDGE_BASE_USER_CONTEXT
-from ...agent_tool_handlers import (
+from ..agent_tool_handlers import (
     FileToolsContext,
     clear_file_tools_context,
     set_file_tools_context,
 )
-from ...spark_tools import set_spark_tool_context
-from ...video_tools import set_video_tool_context
+from ..brave_search_tools import BRAVE_SEARCH_USER_CONTEXT
+from ..google_maps_tools import GOOGLE_MAPS_USER_CONTEXT
+from ..image_tools import set_image_tool_context
+from ..knowledge_base_tools import KNOWLEDGE_BASE_USER_CONTEXT
+from ..spark_tools import set_spark_tool_context
+from ..video_tools import set_video_tool_context
 
 # Child of the configured "llm" logger (see sterna/logging.py APP_LOGGERS).
 logger = logging.getLogger(__name__)
@@ -97,28 +97,6 @@ async def _install_file_tools_context(
     # Store context reference for request cancellation
     agent.file_tools_context = context
     return execution_id
-
-
-def _install_ptc_tool(agent, *, user_id, conversation_id, chat_id, auth_token) -> None:
-    try:
-        from ...ptc import create_ptc_tool, PTCToolContext
-
-        ptc_context = PTCToolContext(
-            user_id=user_id,
-            conversation_id=conversation_id,
-            chat_id=chat_id,
-            auth_token=auth_token,
-            is_cancelled_callback=lambda: agent.is_cancelled,
-        )
-        agent.ptc_context = ptc_context
-
-        # Add the PTC tool to agent.tools so it is available in both the
-        # LangChain and direct-client paths.
-        agent.tools = agent.tools + [create_ptc_tool(ptc_context)]
-        agent.llm_with_tools = agent.llm.bind_tools(agent.tools)
-        logger.info("[LangChain] Added execute_programming_task tool for complex tasks")
-    except Exception as e:
-        logger.warning(f"[LangChain] Failed to setup PTC tool: {e}")
 
 
 async def install(
@@ -194,7 +172,7 @@ async def install(
         })
         logger.debug("[LangChain] Set spark tool context for storage")
 
-    # Knowledge base AND list tools both need the user object.
+    # Knowledge base tools need the user object.
     try:
         from authentication.models import User
         user_obj = await sync_to_async(User.objects.get)(id=user_id)
@@ -203,19 +181,9 @@ async def install(
             "conversation_id": conversation_id,
             "chat_id": chat_id,
         })
-        logger.debug("[LangChain] Set user context for KB and list tools")
+        logger.debug("[LangChain] Set user context for KB tools")
     except Exception as e:
         logger.warning(f"[LangChain] Failed to set user context: {e}")
-
-    # PTC needs the request context for sandbox access.
-    if agent.ptc_enabled and agent.enable_file_tools:
-        _install_ptc_tool(
-            agent,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            chat_id=chat_id,
-            auth_token=auth_token,
-        )
 
     return execution_id
 

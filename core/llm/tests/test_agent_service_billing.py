@@ -27,7 +27,6 @@ from llm.tests.golden.harness import (
     seed_model_catalog,
 )
 from llm.tests.golden.test_v2_stream_complete_agent_core import (
-    AGENT_CORE_HEADER,
     STOP,
     STREAM_URL,
     NoWaitRateLimiter,
@@ -206,7 +205,6 @@ class AggregateSettlementTests(APITestCase):
                     "conversation_id": CONVERSATION_ID,
                 },
                 format="json",
-                **{AGENT_CORE_HEADER: "on"},
             )
             capture_sse(response)
         finally:

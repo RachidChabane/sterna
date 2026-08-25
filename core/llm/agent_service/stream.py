@@ -21,14 +21,14 @@ import logging
 from typing import Any, AsyncIterator, Dict, List, Optional, Protocol, Sequence
 
 from ..agent.sse_events import cancelled_event
-from ..agent.streaming import request_context
-from ..agent.streaming.quota_precheck import precheck_chat_quota
 from ..agent_core import sse
 from ..agent_core.events import DoneEvent, ErrorEvent, StreamEvent
 from ..agent_core.graph import AgentLoop
+from . import request_context
 from .accounting import TurnAccounting
 from .dependencies import TurnRequest, TurnStack, build_turn_stack
 from .messages import to_provider_messages
+from .quota_precheck import precheck_chat_quota
 from .session import V2TurnSession
 from .settlement import rendered as _rendered, settle_turn
 from .v2_wire import V2Wire, error_frame

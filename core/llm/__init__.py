@@ -4,13 +4,13 @@ LLM Module
 This module provides the AI agent infrastructure for the application.
 
 Quick Start:
-    from llm.langchain_agent import LangChainStreamingAgent
+    from llm.agent_service.endpoint import agent_core_streaming_response
+    from llm.agent_service.v1_endpoint import v1_streaming_response
 
-    agent = LangChainStreamingAgent(...)
-
-This is the live, production streaming agent, used directly by
-llm/views.py. It is complemented by supporting subsystems also under
-this package:
+Both chat endpoints run their turn on `llm.agent_core`'s agent loop;
+`llm.agent_service` is the Django-side glue each endpoint assembles it
+through. It is complemented by supporting subsystems also under this
+package:
 
 Tool Discovery:
     from llm.tool_catalog import get_tool_catalog
@@ -28,8 +28,6 @@ package-level imports (from llm import Class) where possible.
 # to avoid circular import issues with Django
 
 __all__ = [
-    # Available at package level (backward compatibility)
-    "LangChainStreamingAgent",
     # Utilities
     "CatalogService",
 ]
@@ -42,10 +40,6 @@ def __getattr__(name):
     This allows `from llm import X` to work without loading
     all modules at once, which would trigger Django model loading.
     """
-    if name == "LangChainStreamingAgent":
-        from .langchain_agent import LangChainStreamingAgent
-        return LangChainStreamingAgent
-
     if name == "CatalogService":
         from .catalog_service import CatalogService
         return CatalogService

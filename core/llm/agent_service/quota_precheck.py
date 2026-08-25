@@ -3,8 +3,7 @@
 Guard. Estimates what this turn will cost from the message payload, asks
 the billing service whether the user may spend it, and hands back an SSE
 error event when the answer is no. Returning the event (instead of
-yielding it) keeps control flow in the streaming generator that called
-us -- see the module docstring in `llm/agent/streaming/__init__.py`.
+yielding it) keeps control flow in the streaming generator that called us.
 """
 
 import logging
@@ -13,8 +12,8 @@ from typing import Any, Dict, List, Optional
 
 from asgiref.sync import sync_to_async
 
-from ...catalog_service import CatalogService
-from ..sse_events import quota_error_event
+from ..agent.sse_events import quota_error_event
+from ..catalog_service import CatalogService
 
 # Child of the configured "llm" logger (see sterna/logging.py APP_LOGGERS).
 logger = logging.getLogger(__name__)

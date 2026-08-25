@@ -54,10 +54,8 @@ class V2TurnSession:
         self.enable_image_generation = flags.image_generation
         self.enable_video_generation = flags.video_generation
         self.enable_sparks = flags.sparks
-        self.ptc_enabled = False
 
         self.file_tools_context = None
-        self.ptc_context = None
         self.is_cancelled = False
 
         self._accounting = accounting

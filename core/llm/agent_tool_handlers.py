@@ -74,8 +74,9 @@ async def _bill_code_session(context, cost_usd, model_id: str, session_id: str =
     """Record a UsageLog row for a Claude-CLI coding-agent invocation.
 
     The chat row's tool-cost accumulator excludes coding-agent costs (see
-    `langchain_agent.py` dedup guards) — this is the single bill site for
-    `service=code_session`. No-op for zero/negative cost or missing user.
+    `agent.cost_ledger.extract_billable_tool_costs`'s dedup guard) — this
+    is the single bill site for `service=code_session`. No-op for
+    zero/negative cost or missing user.
     """
     try:
         cost_value = float(cost_usd or 0)
@@ -1124,7 +1125,7 @@ async def coding_agent(
         context.last_coding_agent_result = result
 
         # BILLING: Extract Layer 2 cost regardless of success/failure
-        # so langchain_agent.py accumulated_tool_cost picks it up
+        # so the chat-aggregate rollup (extract_billable_tool_costs) picks it up
         cost_usd = result.get("result", {}).get("total_cost_usd", 0.0) or result.get("total_cost_usd", 0.0)
         await _bill_code_session(context, cost_usd, model, context.chat_id or "")
 

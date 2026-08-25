@@ -65,8 +65,8 @@ class OpenRouterClient:
                 DIRECTLY to that provider's OpenAI-compatible endpoint.
                 When absent, behavior is unchanged (OpenRouter).
             base_url: Explicit base URL override (used together with an
-                explicit api_key, e.g. by LangChainStreamingAgent's
-                direct client). Defaults to OpenRouter.
+                explicit api_key, for a caller routing straight to a
+                provider). Defaults to OpenRouter.
         """
         from .services.api_key_resolver import resolve_endpoint
         from .provider_registry import (

@@ -1,12 +1,11 @@
-"""Characterization tests for the pure billing-classification helpers in
-langchain_agent.py: `extract_billable_tool_costs` and
-`_parse_json_string_values`.
+"""Characterization tests for the pure billing-classification helper in
+`llm.agent.cost_ledger`: `extract_billable_tool_costs`.
 
-These are plain functions with no I/O -- no DB, no async, no mocking
-required. `extract_billable_tool_costs` is the single dedup gate shared
-by both streaming paths (`_astream_with_direct_client` and
-`astream_chat`) that decides which tool-reported `cost_usd` values may
-be re-billed at the chat-aggregate level. Getting this wrong either
+A plain function with no I/O -- no DB, no async, no mocking required.
+It is the single dedup gate the agent-core turn's accounting
+(`llm.agent_service.accounting.TurnAccounting`) runs every tool result
+batch through, deciding which tool-reported `cost_usd` values may be
+re-billed at the chat-aggregate level. Getting this wrong either
 double-bills the user (coding-agent / non-OpenRouter costs re-added) or
 silently drops billable dollars (image-gen or plain OpenRouter tool
 costs excluded).
@@ -14,12 +13,8 @@ costs excluded).
 
 from django.test import SimpleTestCase
 
-from llm.langchain_agent import (
-    CODING_AGENT_TOOL_NAMES,
-    IMAGE_GEN_TOOL_NAMES,
-    _parse_json_string_values,
-    extract_billable_tool_costs,
-)
+from llm.agent.cost_ledger import IMAGE_GEN_TOOL_NAMES, extract_billable_tool_costs
+from llm.agent_tool_handlers import CODING_AGENT_TOOL_NAMES
 
 
 def _tr(tool_name, result, call_id="call_1"):
@@ -131,41 +126,3 @@ class ExtractBillableToolCostsTests(SimpleTestCase):
         should skip it."""
         tool_results = [_tr("web_fetch", {"success": True, "cost_usd": "0.05"})]
         self.assertEqual(extract_billable_tool_costs(tool_results), (0.0, 0.0))
-
-
-class ParseJsonStringValuesTests(SimpleTestCase):
-
-    def test_non_dict_input_returned_unchanged(self):
-        self.assertEqual(_parse_json_string_values("not-a-dict"), "not-a-dict")
-        self.assertEqual(_parse_json_string_values(None), None)
-
-    def test_plain_scalar_values_pass_through(self):
-        args = {"a": 1, "b": "hello", "c": True, "d": None}
-        self.assertEqual(_parse_json_string_values(args), args)
-
-    def test_json_object_string_is_parsed(self):
-        args = {"parent": '{"page_id": "123"}'}
-        self.assertEqual(_parse_json_string_values(args), {"parent": {"page_id": "123"}})
-
-    def test_json_array_string_is_parsed(self):
-        args = {"items": '["a", "b", "c"]'}
-        self.assertEqual(_parse_json_string_values(args), {"items": ["a", "b", "c"]})
-
-    def test_invalid_json_looking_string_left_as_string(self):
-        args = {"broken": '{not valid json}'}
-        self.assertEqual(_parse_json_string_values(args), {"broken": '{not valid json}'})
-
-    def test_plain_string_not_touched(self):
-        args = {"note": "just some text, not json"}
-        self.assertEqual(_parse_json_string_values(args), args)
-
-    def test_nested_dict_is_recursed_into(self):
-        args = {"outer": {"inner": '{"x": 1}'}}
-        self.assertEqual(_parse_json_string_values(args), {"outer": {"inner": {"x": 1}}})
-
-    def test_list_of_dicts_is_recursed_into(self):
-        args = {"items": [{"inner": '{"x": 1}'}, "plain-string", 5]}
-        result = _parse_json_string_values(args)
-        self.assertEqual(result["items"][0], {"inner": {"x": 1}})
-        self.assertEqual(result["items"][1], "plain-string")
-        self.assertEqual(result["items"][2], 5)

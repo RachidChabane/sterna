@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Any, AsyncIterator, Dict, Optional, Sequence
 
-from ..agent.streaming.quota_precheck import precheck_chat_quota
+from .quota_precheck import precheck_chat_quota
 from ..agent_core.events import DoneEvent, StreamEvent
 from ..agent_core.graph import AgentLoop
 from ..agent_core.mcp_bridge import MCPToolSource

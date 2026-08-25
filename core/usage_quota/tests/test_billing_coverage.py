@@ -456,22 +456,16 @@ class TestVoiceRoomLLMBilling(BillingCoverageBase):
 # ---------------------------------------------------------------------------
 
 
-def _make_agent(user, model="clamp/test-model"):
-    """LangChain agent wired to a real user for billing-path tests."""
-    from llm.langchain_agent import LangChainStreamingAgent
+def _make_ledger(user, model="clamp/test-model"):
+    """The agent-core turn's cost ledger, wired to a real user."""
+    from llm.agent.cost_ledger import CostLedger
 
-    return LangChainStreamingAgent(
-        model=model,
-        api_key="sk-test",
-        user_id=str(user.id),
-        conversation_id="conv-1",
-        chat_id="chat-1",
-    )
+    return CostLedger(lambda: str(user.id), model)
 
 
 class TestImageGenSingleNetBill(BillingCoverageBase):
     """Matrix rows #20/#21 — an OpenRouter image generated inside the
-    LangChain chat path produces exactly ONE net bill: the per-image
+    chat turn produces exactly ONE net bill: the per-image
     IMAGE_GENERATION row. The aggregate OPENROUTER/CHAT row must
     subtract the image-gen dollars (`image_gen_cost_in_bundle`).
     """
@@ -485,7 +479,7 @@ class TestImageGenSingleNetBill(BillingCoverageBase):
         }
 
     def test_classifier_marks_openrouter_image_gen(self):
-        from llm.langchain_agent import extract_billable_tool_costs
+        from llm.agent.cost_ledger import extract_billable_tool_costs
 
         tool_cost, image_cost = extract_billable_tool_costs(
             [self._image_tool_result(0.05)]
@@ -494,7 +488,7 @@ class TestImageGenSingleNetBill(BillingCoverageBase):
         self.assertAlmostEqual(image_cost, 0.05)
 
     def test_classifier_skips_non_openrouter_and_coding_tools(self):
-        from llm.langchain_agent import extract_billable_tool_costs
+        from llm.agent.cost_ledger import extract_billable_tool_costs
 
         tool_cost, image_cost = extract_billable_tool_costs([
             self._image_tool_result(0.05, provider="google_ai_studio"),
@@ -503,15 +497,15 @@ class TestImageGenSingleNetBill(BillingCoverageBase):
         self.assertEqual(tool_cost, 0.0)
         self.assertEqual(image_cost, 0.0)
 
-    def test_openrouter_image_in_langchain_chat_bills_exactly_once_net(self):
+    def test_openrouter_image_in_chat_bills_exactly_once_net(self):
         """Mocked-provider flow: the tool layer writes the per-image row
         (real `_record_billing`), then the chat settles through the real
-        `astream_chat` aggregate helper. The image dollars must appear in
+        aggregate cost-ledger helper. The image dollars must appear in
         exactly one UsageLog row and quota must be decremented once.
         """
+        from llm.agent.cost_ledger import extract_billable_tool_costs
         from llm.image_providers.base import ImageGenerationResult
         from llm.image_tools import _record_billing
-        from llm.langchain_agent import extract_billable_tool_costs
 
         # 1) Tool layer (as generate_image does after a mocked provider call)
         result = ImageGenerationResult(
@@ -528,12 +522,12 @@ class TestImageGenSingleNetBill(BillingCoverageBase):
             billing_origin="platform",
         )
 
-        # 2) Chat aggregate settlement (real astream_chat billing helper)
-        agent = _make_agent(self.user)
+        # 2) Chat aggregate settlement (real cost-ledger billing helper)
+        ledger = _make_ledger(self.user)
         tool_cost, image_cost = extract_billable_tool_costs(
             [self._image_tool_result(0.05)]
         )
-        billed = async_to_sync(agent._record_chat_aggregate_usage)(
+        billed = async_to_sync(ledger.record_chat_aggregate_usage)(
             0, 0, tool_cost, image_cost
         )
 
@@ -550,8 +544,8 @@ class TestImageGenSingleNetBill(BillingCoverageBase):
     def test_chat_aggregate_row_bills_residual_tool_cost(self):
         """Matrix row #2 — the aggregate OPENROUTER/CHAT row still bills
         non-image tool cost (nothing else double-records it)."""
-        agent = _make_agent(self.user)
-        billed = async_to_sync(agent._record_chat_aggregate_usage)(
+        ledger = _make_ledger(self.user)
+        billed = async_to_sync(ledger.record_chat_aggregate_usage)(
             0, 0, 0.03, 0.0
         )
         self.assertAlmostEqual(billed, 0.03)

@@ -1697,7 +1697,7 @@ class CompletionViewSet(viewsets.ViewSet):
 
 
 # ===========================
-# LangChain-based Streaming (V2)
+# Agent-core Streaming (V2)
 # ===========================
 
 
@@ -1705,11 +1705,10 @@ class CompletionViewSet(viewsets.ViewSet):
 @permission_classes([IsAuthenticated])
 def stream_complete_langchain(request):
     """
-    Stream completion using LangChain with automatic tool calling loop.
+    Stream completion with automatic tool calling, on the agent core.
 
-    This is a V2 endpoint that properly handles multiple tool call cycles.
+    This is the V2 endpoint that properly handles multiple tool call cycles.
     """
-    from .langchain_agent import LangChainStreamingAgent
     from .uploaded_files_helper import encode_uploaded_files, prepare_uploaded_files_context
 
     # Handle both JSON and FormData (multipart/form-data with files)
@@ -2291,291 +2290,47 @@ Files remain available throughout the conversation."""
         # construction fails downstream exactly as before).
         api_key, chat_base_url, chat_provider_slug = None, None, None
 
-    # Which stack serves this turn: the agent core, or the LangChain
-    # streaming agent below. See llm.agent_service.flag for the header
-    # and the setting that decide.
+    # The turn itself runs on the agent core: see
+    # llm.agent_service.endpoint for the request it builds and the
+    # frames it speaks.
     from llm.agent.feature_flags import AgentFeatureFlags
-    from llm.agent_service import serves_agent_core
     from llm.agent_service.endpoint import agent_core_streaming_response
-    if serves_agent_core(request):
-        return agent_core_streaming_response(
-            request=request,
-            model=model,
-            messages=messages,
-            conversation_id=conversation_id,
-            chat_id=chat_id,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            system_prompt=effective_system_prompt,
-            api_key=api_key,
-            base_url=chat_base_url,
-            provider_slug=chat_provider_slug,
-            flags=AgentFeatureFlags(
-                file_tools=enable_file_tools,
-                brave_search=enable_brave_search,
-                google_maps=enable_google_maps,
-                image_generation=enable_image_generation,
-                video_generation=enable_video_generation,
-                reasoning=enable_reasoning,
-                mcp_tools=enable_mcp_tools,
-                voice_mode=enable_voice_mode,
-                sparks=enable_sparks,
-                knowledge_base=enable_knowledge_base,
-            ),
-            auth_token=auth_token or "",
-            model_display_name=model_display_name,
-            model_metadata=model_metadata,
-            uploaded_files=uploaded_files_encoded or None,
-            sterna_resolution=sterna_resolution,
-            media_tool_params=media_tool_params,
-            spark_fix_request=spark_fix_request,
-            spark_ignite_request=spark_ignite_request,
-            forced_tool_name=forced_tool_name,
-            reasoning_effort=reasoning_effort,
-            reasoning_max_tokens=reasoning_max_tokens,
-            output_modalities=output_modalities,
-        )
-
-    agent = LangChainStreamingAgent(
+    return agent_core_streaming_response(
+        request=request,
         model=model,
+        messages=messages,
+        conversation_id=conversation_id,
+        chat_id=chat_id,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        system_prompt=effective_system_prompt,
         api_key=api_key,
         base_url=chat_base_url,
         provider_slug=chat_provider_slug,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        enable_file_tools=enable_file_tools,
-        enable_brave_search=enable_brave_search,
-        enable_google_maps=enable_google_maps,
-        enable_image_generation=enable_image_generation,
-        enable_video_generation=enable_video_generation,
-        enable_reasoning=enable_reasoning,
-        enable_mcp_tools=enable_mcp_tools,
-        enable_voice_mode=enable_voice_mode,
-        enable_sparks=enable_sparks,
-        enable_knowledge_base=enable_knowledge_base,
-        mcp_tools=mcp_tools_list,
-        custom_prompt=effective_system_prompt,
-        reasoning_effort=reasoning_effort,  # For effort-based models
-        reasoning_max_tokens=reasoning_max_tokens,  # For token-limited models
-        output_modalities=output_modalities,  # For image generation models
-        model_name=model_display_name,  # For system prompt identification
-        # V2 tool discovery params
-        user_id=str(request.user.id),
-        conversation_id=conversation_id,
-        chat_id=chat_id,
-        # User info for system prompt
-        user_first_name=getattr(request.user, 'first_name', None),
-        user_last_name=getattr(request.user, 'last_name', None),
-        user_email=getattr(request.user, 'email', None),
-        # Spark auto-fix
-        spark_fix_request=spark_fix_request,
-        # Spark ignite
-        spark_ignite_request=spark_ignite_request,
-        # Forced tool choice (from @mention)
-        forced_tool_name=forced_tool_name,
-        # Media tool parameters (from @generate_image [params] or @generate_video [params])
+        flags=AgentFeatureFlags(
+            file_tools=enable_file_tools,
+            brave_search=enable_brave_search,
+            google_maps=enable_google_maps,
+            image_generation=enable_image_generation,
+            video_generation=enable_video_generation,
+            reasoning=enable_reasoning,
+            mcp_tools=enable_mcp_tools,
+            voice_mode=enable_voice_mode,
+            sparks=enable_sparks,
+            knowledge_base=enable_knowledge_base,
+        ),
+        auth_token=auth_token or "",
+        model_display_name=model_display_name,
+        model_metadata=model_metadata,
+        uploaded_files=uploaded_files_encoded or None,
+        sterna_resolution=sterna_resolution,
         media_tool_params=media_tool_params,
-    )
-
-    # Define async generator
-    async def generate_sse():
-        nonlocal agent, model
-
-        MAX_REROUTE_ATTEMPTS = 2
-        excluded_models = []
-        current_agent = agent
-        current_model = model
-
-        for attempt in range(1 + MAX_REROUTE_ATTEMPTS):
-            rerouted = False
-            try:
-                # Emit Sterna routing info before streaming content
-                if attempt == 0 and sterna_resolution:
-                    sterna_event = {
-                        "resolved_model": sterna_resolution.resolved_model_id,
-                        "resolved_model_name": sterna_resolution.resolved_model_name,
-                        "score": sterna_resolution.final_score,
-                        "tier": sterna_resolution.tier,
-                        "reason": sterna_resolution.reason,
-                        "cost_tier": sterna_resolution.cost_tier,
-                    }
-                    yield f"event: sterna_route\ndata: {json.dumps(sterna_event)}\n\n"
-
-                async for event in current_agent.astream_chat(
-                    messages=messages,
-                    user_id=str(request.user.id),
-                    conversation_id=conversation_id,
-                    chat_id=chat_id,
-                    auth_token=auth_token or "",
-                    model_metadata=model_metadata,
-                    uploaded_files=uploaded_files_encoded if uploaded_files_encoded else None
-                ):
-                    event_type = event.get("event", "message")
-                    event_data = event.get("data", {})
-
-                    # Detect 429 rate limit errors — reroute if possible
-                    if event_type == "error":
-                        error_msg = str(event_data.get("error", ""))
-                        if "429" in error_msg and attempt < MAX_REROUTE_ATTEMPTS:
-                            excluded_models.append(current_model)
-                            from llm.smart_router.router import SmartRouter
-                            router = SmartRouter()
-                            alt_model = router.reroute_on_rate_limit(
-                                failed_model=current_model,
-                                messages=messages,
-                                conversation_id=conversation_id,
-                                user=request.user,
-                                excluded_models=excluded_models,
-                            )
-                            if alt_model:
-                                logger.info(
-                                    f"[Sterna] Rerouting 429: {current_model} -> {alt_model} "
-                                    f"(attempt {attempt + 1}/{MAX_REROUTE_ATTEMPTS})"
-                                )
-                                # Emit reroute event so frontend knows
-                                yield f"event: sterna_reroute\ndata: {json.dumps({'from_model': current_model, 'to_model': alt_model})}\n\n"
-                                # Create new agent with the alternative model
-                                current_model = alt_model
-                                # Re-resolve endpoint for the alternative
-                                # model — its BYOK provider may differ.
-                                reroute_model_id = (
-                                    current_model
-                                    if "image" not in output_modalities
-                                    else None
-                                )
-                                try:
-                                    (
-                                        alt_api_key,
-                                        alt_base_url,
-                                        _alt_origin,
-                                        alt_provider_slug,
-                                    ) = resolve_endpoint(
-                                        user=request.user,
-                                        model_id=reroute_model_id,
-                                    )
-                                except ValueError:
-                                    alt_api_key = api_key
-                                    alt_base_url = chat_base_url
-                                    alt_provider_slug = chat_provider_slug
-                                current_agent = LangChainStreamingAgent(
-                                    model=current_model,
-                                    api_key=alt_api_key,
-                                    base_url=alt_base_url,
-                                    provider_slug=alt_provider_slug,
-                                    temperature=temperature,
-                                    max_tokens=max_tokens,
-                                    enable_file_tools=enable_file_tools,
-                                    enable_brave_search=enable_brave_search,
-                                    enable_google_maps=enable_google_maps,
-                                    enable_image_generation=enable_image_generation,
-                                    enable_video_generation=enable_video_generation,
-                                    enable_reasoning=enable_reasoning,
-                                    enable_mcp_tools=enable_mcp_tools,
-                                    enable_voice_mode=enable_voice_mode,
-                                    enable_sparks=enable_sparks,
-                                    enable_knowledge_base=enable_knowledge_base,
-                                    mcp_tools=mcp_tools_list,
-                                    custom_prompt=effective_system_prompt,
-                                    reasoning_effort=reasoning_effort,
-                                    reasoning_max_tokens=reasoning_max_tokens,
-                                    output_modalities=output_modalities,
-                                    model_name=current_model.split('/')[-1].replace('-', ' ').title(),
-                                    user_id=str(request.user.id),
-                                    conversation_id=conversation_id,
-                                    chat_id=chat_id,
-                                    user_first_name=getattr(request.user, 'first_name', None),
-                                    user_last_name=getattr(request.user, 'last_name', None),
-                                    user_email=getattr(request.user, 'email', None),
-                                    spark_fix_request=spark_fix_request,
-                                    spark_ignite_request=spark_ignite_request,
-                                    forced_tool_name=forced_tool_name,
-                                    media_tool_params=media_tool_params,
-                                )
-                                # Update outer agent reference for cleanup
-                                agent = current_agent
-                                rerouted = True
-                                break  # Break inner for-loop, outer loop retries
-
-                    yield f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"
-
-                if not rerouted:
-                    break  # Streaming completed normally, exit retry loop
-
-            except Exception as e:
-                logger.error(f"[LangChain] Stream error: {e}", exc_info=True)
-                yield f"event: error\ndata: {json.dumps(error_payload(e))}\n\n"
-                break  # Don't retry on non-429 exceptions
-
-    # For ASGI (Uvicorn), we need to use async streaming
-    # StreamingHttpResponse accepts async iterators when running under ASGI
-    async def async_streaming_wrapper():
-        """Async wrapper that handles cancellation and cleanup"""
-        client_disconnected = False
-        max_chunks_after_cancel = 5
-        chunks_after_cancel = 0
-
-        try:
-            async for chunk in generate_sse():
-                # If client disconnected, we're in cleanup mode - limit chunks
-                if client_disconnected:
-                    chunks_after_cancel += 1
-                    logger.debug(f"[LangChain] Sending cleanup chunk {chunks_after_cancel}/{max_chunks_after_cancel}")
-                    if chunks_after_cancel >= max_chunks_after_cancel:
-                        logger.warning("[LangChain] Max cleanup chunks reached - stopping")
-                        break
-                yield chunk
-        except GeneratorExit:
-            # Client disconnected (abort/stop button clicked)
-            logger.warning("[LangChain] Client disconnected - cancelling agent")
-            client_disconnected = True
-            agent.cancel()
-            # Server-side settlement: bill the true cost of this aborted
-            # stream even if the client never PATCHes the stopped message.
-            # Skipped when the final aggregate row was already recorded
-            # (disconnect raced the stream end). Iterations already billed
-            # inline (Direct Client path) are skipped by the task's
-            # request_id idempotency guard.
-            # Provider-scoped BYOK streams bypass OpenRouter entirely:
-            # their generation ids are provider-native and cannot be
-            # settled against OpenRouter's /generation endpoint (and the
-            # user's own provider account already paid) — skip.
-            try:
-                if (
-                    not getattr(agent, "final_usage_recorded", False)
-                    and getattr(agent, "is_openrouter", True)
-                ):
-                    from llm.tasks import enqueue_abort_settlement
-                    enqueue_abort_settlement(
-                        user_id=str(request.user.id),
-                        generation_ids=list(
-                            getattr(agent, "all_generation_ids", []) or []
-                        ),
-                        model_id=agent.model,
-                        chat_id=chat_id or "",
-                    )
-            except Exception:
-                logger.error(
-                    "billing.abort_settlement_hook_failed", exc_info=True
-                )
-        except Exception as e:
-            logger.error(f"[LangChain] async_streaming_wrapper error: {e}")
-            agent.cancel()
-        finally:
-            # Close HTTP client if file tools were used
-            if agent.file_tools_context:
-                try:
-                    await agent.file_tools_context.close()
-                except Exception as e:
-                    logger.warning(f"[LangChain] Error closing file tools context: {e}")
-            logger.info("[LangChain] Stream completed")
-
-    return StreamingHttpResponse(
-        async_streaming_wrapper(),
-        content_type='text/event-stream',
-        headers={
-            'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no',
-        }
+        spark_fix_request=spark_fix_request,
+        spark_ignite_request=spark_ignite_request,
+        forced_tool_name=forced_tool_name,
+        reasoning_effort=reasoning_effort,
+        reasoning_max_tokens=reasoning_max_tokens,
+        output_modalities=output_modalities,
     )
 
 

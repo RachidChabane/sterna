@@ -806,7 +806,7 @@ async def _execute_video_generation(
         )
 
         # Return info for LLM and frontend
-        # NOTE: cost_usd is used by langchain_agent to accumulate message costs
+        # NOTE: cost_usd is used by the chat turn's cost ledger to accumulate message costs
         # The LLM is instructed via system prompt NOT to mention costs/URLs to users
         # video.asset_id is required by frontend to display the video
         return json.dumps({
@@ -818,7 +818,7 @@ async def _execute_video_generation(
                 "width": result.width,
                 "height": result.height,
             },
-            "cost_usd": float(cost_usd),  # For langchain_agent cost accumulation
+            "cost_usd": float(cost_usd),  # For the chat turn's cost-ledger accumulation
         })
 
     except ContentPolicyError as e:

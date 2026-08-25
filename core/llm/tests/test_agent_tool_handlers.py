@@ -207,8 +207,8 @@ class ContextRegistryTests(TestCase):
 class CodingAgentToolCostUsdTests(TestCase):
     """Priority #1: cost_usd must always surface at the top level of the
     coding_agent tool's JSON return, on both success and failure, so
-    langchain_agent.py's accumulated_tool_cost/`extract_billable_tool_costs`
-    exclusion logic has something consistent to exclude."""
+    `agent.cost_ledger.extract_billable_tool_costs`'s exclusion logic
+    has something consistent to exclude."""
 
     def setUp(self):
         self.context = _make_context(api_key="sk-or-test", model_id="anthropic/claude-sonnet-4")

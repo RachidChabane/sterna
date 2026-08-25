@@ -70,9 +70,9 @@ def _count_image_generations(user, plan):
     if window_start is None:
         return 0
     # Single attribution path: every image-gen tool call writes one
-    # UsageLog row with service=IMAGE_GENERATION. The aggregate row in
-    # langchain_agent's accumulated_tool_cost path subtracts image
-    # dollars to avoid double-billing — see Section 2.11.
+    # UsageLog row with service=IMAGE_GENERATION. The chat turn's
+    # aggregate cost-ledger row subtracts image dollars to avoid
+    # double-billing — see Section 2.11.
     return UsageLog.objects.filter(
         user=user,
         service=ServiceType.IMAGE_GENERATION,

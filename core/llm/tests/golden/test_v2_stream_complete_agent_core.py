@@ -1,10 +1,10 @@
 """Golden SSE transcripts for the V2 streaming loop, served by the agent core.
 
-`stream_complete_langchain` routes a turn to `llm.agent_service` when
-the request asks for it. The agent loop streams the model through the
-provider port, runs whatever tools the generation asked for through the
-bound-callable invoker, feeds the results back, and repeats until the
-model answers without calling anything.
+`stream_complete_langchain` routes every turn through `llm.agent_service`.
+The agent loop streams the model through the provider port, runs
+whatever tools the generation asked for through the bound-callable
+invoker, feeds the results back, and repeats until the model answers
+without calling anything.
 
 The provider port is replaced by a scripted stand-in replaying a fixed
 list of chunks per generation, and the tool invoker by one with fixed
@@ -28,7 +28,6 @@ from llm.agent_core.provider import (
     ProviderUsageChunk,
 )
 from llm.agent_core.provider_errors import ProviderTransportError
-from llm.agent_service.flag import HEADER_META_KEY
 from llm.tests.agent_core_doubles import ScriptedProvider
 from llm.tests.conftest import make_billing_user, seed_billing_plan
 from llm.tests.golden.harness import (
@@ -51,7 +50,6 @@ from llm.tests.golden.harness import (
 pytestmark = pytest.mark.golden
 
 STREAM_URL = "/api/llm/completions/stream-complete-v2/"
-AGENT_CORE_HEADER = HEADER_META_KEY
 
 STOP = "stop"
 TOOL_CALLS = "tool_calls"
@@ -171,9 +169,7 @@ class V2StreamCompleteAgentCoreGoldenTests(APITestCase):
             for active in patches:
                 active.start()
                 started.append(active)
-            response = self.client.post(
-                STREAM_URL, payload, format="json", **{AGENT_CORE_HEADER: "on"}
-            )
+            response = self.client.post(STREAM_URL, payload, format="json")
             return capture_sse(response)
         finally:
             for active in reversed(started):

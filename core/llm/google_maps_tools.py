@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 GOOGLE_MAPS_SERVICE_URL = "http://google-maps:8005"
 
-# Per-task user context, set by `langchain_agent.py` before tool invocation.
+# Per-task user context, set by `agent_service.request_context` before tool invocation.
 # Mirrors the Brave Search pattern at `brave_search_tools.py`.
 GOOGLE_MAPS_USER_CONTEXT: ContextVar[Optional[Dict[str, str]]] = ContextVar(
     "google_maps_user_context", default=None
@@ -53,7 +53,7 @@ async def call_google_maps_service(endpoint: str, payload: dict) -> str:
 # QUOTA HELPERS
 # ============================================================================
 # Distinct from MCP's `_resolve_user_by_id(user_id)` — Google Maps reads from
-# a per-task ContextVar (set by `langchain_agent.py` before tool dispatch).
+# a per-task ContextVar (set by `agent_service.request_context` before tool dispatch).
 # Each module owns its own helper because the resolution signatures differ.
 
 
