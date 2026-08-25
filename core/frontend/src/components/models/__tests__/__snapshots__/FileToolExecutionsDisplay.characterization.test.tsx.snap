@@ -1,0 +1,3120 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`FileToolExecutionsDisplay — GitHub and MCP tools > renders an MCP server tool using the server-provided icon and display name 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <img
+              alt=""
+              class="w-3.5 h-3.5 shrink-0 object-contain"
+              src="https://example.com/mcp-icon.png"
+            />
+            <span
+              class="text-foreground font-medium"
+            >
+              Custom MCP Tool
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — GitHub and MCP tools > renders an unrecognized github_-prefixed tool using a formatted fallback name 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-github w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"
+              />
+              <path
+                d="M9 18c-4.51 2-5-2-7-2"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Star Repo
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — GitHub and MCP tools > renders github_list_issues with an issue count summary 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-github w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"
+              />
+              <path
+                d="M9 18c-4.51 2-5-2-7-2"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              List issues
+            </span>
+            <span
+              class="text-muted-foreground/60 text-xs"
+            >
+              → 
+              3 issues
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — code execution > flags run_bash as failed when output matches an error pattern even though success=true 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex-1 min-w-0"
+            data-state="closed"
+          >
+            <div
+              class="flex items-center gap-1.5 min-w-0"
+            >
+              <span
+                class="text-sm"
+              >
+                <span
+                  class="font-medium text-foreground/70"
+                >
+                  Bash
+                </span>
+                 
+                <code
+                  class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded"
+                >
+                  cat missing.txt
+                </code>
+              </span>
+              <button
+                aria-controls="radix-_r_5_"
+                aria-expanded="false"
+                class="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                data-state="closed"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevron-right h-3 w-3 transition-transform duration-200"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="m9 18 6-6-6-6"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+              data-state="closed"
+              hidden=""
+              id="radix-_r_5_"
+              style=""
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — code execution > renders execute_code failure 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-terminal w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 19h8"
+              />
+              <path
+                d="m4 17 6-6-6-6"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Execute code
+            </span>
+          </div>
+          <div
+            class="text-red-400 text-xs flex items-center"
+          >
+            <span
+              class="text-muted-foreground/60 mr-1"
+            >
+              ⎿
+            </span>
+            failed
+          </div>
+        </div>
+      </div>
+      <div
+        class="flex-1 min-w-0 mt-1"
+        data-state="closed"
+      >
+        <div
+          class="flex items-center gap-1.5 min-w-0"
+        >
+          <span
+            class="text-sm flex items-center gap-1.5"
+          >
+            <span
+              class="text-xs font-mono text-red-400"
+            >
+              0.03
+              s
+            </span>
+          </span>
+          <button
+            aria-controls="radix-_r_3_"
+            aria-expanded="false"
+            class="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            data-state="closed"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-chevron-right h-3 w-3 transition-transform duration-200"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m9 18 6-6-6-6"
+              />
+            </svg>
+          </button>
+        </div>
+        <div
+          class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+          data-state="closed"
+          hidden=""
+          id="radix-_r_3_"
+          style=""
+        />
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — code execution > renders execute_code success collapsed by default 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-terminal w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 19h8"
+              />
+              <path
+                d="m4 17 6-6-6-6"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Execute code
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        class="flex-1 min-w-0 mt-1"
+        data-state="closed"
+      >
+        <div
+          class="flex items-center gap-1.5 min-w-0"
+        >
+          <span
+            class="text-sm flex items-center gap-1.5"
+          >
+            <span
+              class="text-xs font-mono text-muted-foreground"
+            >
+              0.12
+              s
+            </span>
+          </span>
+          <button
+            aria-controls="radix-_r_2_"
+            aria-expanded="false"
+            class="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            data-state="closed"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-chevron-right h-3 w-3 transition-transform duration-200"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m9 18 6-6-6-6"
+              />
+            </svg>
+          </button>
+        </div>
+        <div
+          class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+          data-state="closed"
+          hidden=""
+          id="radix-_r_2_"
+          style=""
+        />
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — code execution > renders execute_programming_task collapsed by default 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-code-xml w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m18 16 4-4-4-4"
+              />
+              <path
+                d="m6 8-4 4 4 4"
+              />
+              <path
+                d="m14.5 4-5 16"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Programming task
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        class="ml-5 mt-1"
+        data-state="closed"
+      >
+        <div
+          class="flex items-center gap-2"
+        >
+          <button
+            aria-controls="radix-_r_6_"
+            aria-expanded="false"
+            class="flex items-center gap-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            data-state="closed"
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-chevron-right h-3 w-3 transition-transform duration-200"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m9 18 6-6-6-6"
+              />
+            </svg>
+            <span
+              class="truncate max-w-[350px]"
+            >
+              message, items
+            </span>
+          </button>
+          <button
+            class="flex items-center gap-1 text-xs text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-code-xml h-3 w-3"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m18 16 4-4-4-4"
+              />
+              <path
+                d="m6 8-4 4 4 4"
+              />
+              <path
+                d="m14.5 4-5 16"
+              />
+            </svg>
+            <span>
+              View
+               code
+            </span>
+          </button>
+        </div>
+        <div
+          class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+          data-state="closed"
+          hidden=""
+          id="radix-_r_6_"
+          style=""
+        />
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — code execution > renders run_bash success with an expandable command 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex-1 min-w-0"
+            data-state="closed"
+          >
+            <div
+              class="flex items-center gap-1.5 min-w-0"
+            >
+              <span
+                class="text-sm"
+              >
+                <span
+                  class="font-medium text-foreground/70"
+                >
+                  Bash
+                </span>
+                 
+                <code
+                  class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded"
+                >
+                  ls -la /workspace
+                </code>
+              </span>
+              <button
+                aria-controls="radix-_r_4_"
+                aria-expanded="false"
+                class="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                data-state="closed"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevron-right h-3 w-3 transition-transform duration-200"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="m9 18 6-6-6-6"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+              data-state="closed"
+              hidden=""
+              id="radix-_r_4_"
+              style=""
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — display variants > renders a mixed sequence of tool executions in order 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div>
+            <div
+              class="flex items-center gap-1.5"
+            >
+              <span
+                class="text-foreground font-medium"
+              >
+                Read
+              </span>
+              <code
+                class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded truncate"
+              >
+                /a.py
+              </code>
+            </div>
+            <div
+              class="text-xs text-muted-foreground/60 flex items-center"
+            >
+              <span
+                class="mr-1"
+              >
+                ⎿
+              </span>
+              Read 
+              1
+               line
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex-1 min-w-0"
+            data-state="closed"
+          >
+            <div
+              class="flex items-center gap-1.5 min-w-0"
+            >
+              <span
+                class="text-sm"
+              >
+                <span
+                  class="font-medium text-foreground/70"
+                >
+                  Bash
+                </span>
+                 
+                <code
+                  class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded"
+                >
+                  pytest
+                </code>
+              </span>
+              <button
+                aria-controls="radix-_r_b_"
+                aria-expanded="false"
+                class="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                data-state="closed"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevron-right h-3 w-3 transition-transform duration-200"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="m9 18 6-6-6-6"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div
+              class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+              data-state="closed"
+              hidden=""
+              id="radix-_r_b_"
+              style=""
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-list-todo w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M13 5h8"
+              />
+              <path
+                d="M13 12h8"
+              />
+              <path
+                d="M13 19h8"
+              />
+              <path
+                d="m3 17 2 2 4-4"
+              />
+              <rect
+                height="6"
+                rx="1"
+                width="6"
+                x="3"
+                y="4"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Update tasks
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        class="space-y-0.5"
+      >
+        <div
+          class="text-xs text-muted-foreground/60 flex items-center mb-1"
+        >
+          <span
+            class="mr-1"
+          >
+            ⎿
+          </span>
+          <span>
+            1
+             task
+          </span>
+        </div>
+        <div
+          class="flex items-start gap-2 text-xs py-0.5 ml-3"
+        >
+          <div
+            class="mt-0.5 h-3.5 w-3.5 rounded-sm border flex items-center justify-center shrink-0 border-border text-muted-foreground"
+          />
+          <span
+            class="text-muted-foreground"
+          >
+            Ship
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — display variants > renders the "code" variant with dot-style status instead of check/x 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs text-muted-foreground"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div>
+            <div
+              class="flex items-center gap-1.5"
+            >
+              <span
+                class="text-foreground/70 font-medium"
+              >
+                Read
+              </span>
+              <code
+                class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded truncate"
+              >
+                /workspace/src/app.py
+              </code>
+            </div>
+            <div
+              class="text-xs text-muted-foreground/60 flex items-center"
+            >
+              <span
+                class="mr-1"
+              >
+                ⎿
+              </span>
+              Read 
+              1
+               line
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — display variants > suppresses the Brave Search media carousel when showBraveSearchMedia=false 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-image w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect
+                height="18"
+                rx="2"
+                ry="2"
+                width="18"
+                x="3"
+                y="3"
+              />
+              <circle
+                cx="9"
+                cy="9"
+                r="2"
+              />
+              <path
+                d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Image search
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — execution lifecycle states > renders a failed-state indicator for a non-run_bash tool 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Search
+            </span>
+          </div>
+          <div
+            class="text-red-400 text-xs flex items-center"
+          >
+            <span
+              class="text-muted-foreground/60 mr-1"
+            >
+              ⎿
+            </span>
+            failed
+          </div>
+        </div>
+      </div>
+      <div
+        class="ml-5 mt-1 text-xs text-red-400"
+      >
+        <span
+          class="text-muted-foreground/60 mr-1"
+        >
+          ⎿
+        </span>
+        search index unavailable
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — execution lifecycle states > renders a spinner while a tool is still executing, with no result section yet 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-shrink-0 flex items-center justify-center mt-0.5"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-loader-circle animate-spin w-3.5 h-3.5 text-accent-brand"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 12a9 9 0 1 1-6.219-8.56"
+            />
+          </svg>
+        </div>
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex-1 min-w-0"
+            data-state="closed"
+          >
+            <div
+              class="flex items-center gap-1.5 min-w-0"
+            >
+              <span
+                class="text-sm"
+              >
+                <span
+                  class="font-medium text-foreground/70"
+                >
+                  Bash
+                </span>
+                 
+                <code
+                  class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded"
+                >
+                  npm install
+                </code>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — execution lifecycle states > renders nothing for an empty executions array 1`] = `<div />`;
+
+exports[`FileToolExecutionsDisplay — file operations > renders create_directory as a plain file-path row 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div>
+            <div
+              class="flex items-center gap-1.5"
+            >
+              <span
+                class="text-foreground font-medium"
+              >
+                Create
+              </span>
+              <code
+                class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded truncate"
+              >
+                /workspace/src/newdir
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — file operations > renders delete_file as a plain file-path row (no special result section) 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div>
+            <div
+              class="flex items-center gap-1.5"
+            >
+              <span
+                class="text-foreground font-medium"
+              >
+                Delete
+              </span>
+              <code
+                class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded truncate"
+              >
+                /workspace/src/old_file.py
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — file operations > renders edit_file collapsed by default 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div>
+            <div
+              class="flex items-center gap-1.5"
+            >
+              <span
+                class="text-foreground font-medium"
+              >
+                Edit
+              </span>
+              <code
+                class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded truncate"
+              >
+                /workspace/src/app.py
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        class="ml-5"
+        data-state="closed"
+      >
+        <button
+          aria-controls="radix-_r_1_"
+          aria-expanded="false"
+          class="flex items-center gap-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          data-state="closed"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-chevron-right h-3 w-3 transition-transform duration-200"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m9 18 6-6-6-6"
+            />
+          </svg>
+          <span
+            class="text-amber-500"
+          >
+            +1
+             / 
+            <span
+              class="text-red-400"
+            >
+              -
+              1
+            </span>
+          </span>
+          <span
+            class="text-muted-foreground/40"
+          >
+            ·
+          </span>
+          <span>
+            View diff
+          </span>
+        </button>
+        <div
+          class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+          data-state="closed"
+          hidden=""
+          id="radix-_r_1_"
+          style=""
+        />
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — file operations > renders list_files with a tree view (via FileListDisplay) 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div>
+            <div
+              class="flex items-center gap-1.5"
+            >
+              <span
+                class="text-foreground font-medium"
+              >
+                List
+              </span>
+              <code
+                class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded truncate"
+              >
+                /workspace
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        data-mock="file-list-display"
+      >
+        {"data":{"entries":[{"name":"app.py","type":"file"}]}}
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — file operations > renders read_file with a line count 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div>
+            <div
+              class="flex items-center gap-1.5"
+            >
+              <span
+                class="text-foreground font-medium"
+              >
+                Read
+              </span>
+              <code
+                class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded truncate"
+              >
+                /workspace/src/app.py
+              </code>
+            </div>
+            <div
+              class="text-xs text-muted-foreground/60 flex items-center"
+            >
+              <span
+                class="mr-1"
+              >
+                ⎿
+              </span>
+              Read 
+              3
+               line
+              s
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — file operations > renders rename_file showing old → new path 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div>
+            <div
+              class="flex items-center gap-1.5"
+            >
+              <span
+                class="text-foreground font-medium"
+              >
+                Rename
+              </span>
+              <code
+                class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded truncate"
+              >
+                /workspace/b.py
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — file operations > renders write_file collapsed by default 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div>
+            <div
+              class="flex items-center gap-1.5"
+            >
+              <span
+                class="text-foreground font-medium"
+              >
+                Write
+              </span>
+              <code
+                class="font-mono text-muted-foreground bg-muted/50 px-1 py-0.5 rounded truncate"
+              >
+                /workspace/src/new_file.py
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        class="ml-5"
+        data-state="closed"
+      >
+        <button
+          aria-controls="radix-_r_0_"
+          aria-expanded="false"
+          class="flex items-center gap-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          data-state="closed"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-chevron-right h-3 w-3 transition-transform duration-200"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m9 18 6-6-6-6"
+            />
+          </svg>
+          <span
+            class="text-emerald-500"
+          >
+            + 
+            2
+             lines written
+          </span>
+          <span
+            class="text-muted-foreground/40"
+          >
+            ·
+          </span>
+          <span>
+            View content
+          </span>
+        </button>
+        <div
+          class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+          data-state="closed"
+          hidden=""
+          id="radix-_r_0_"
+          style=""
+        />
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — generation and agent tools > renders a coding_agent tool call as the premium agent card, skipping the standard header row 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="min-w-0 overflow-hidden"
+    >
+      <div
+        data-job-id="job-1"
+        data-mock="coding-agent-display"
+        data-status="completed"
+        data-step-count="1"
+        data-task="Add a health check endpoint"
+        data-variant="chat"
+      />
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — generation and agent tools > renders create_spark as a clickable summary row 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5 cursor-pointer hover:text-foreground transition-colors"
+            role="button"
+            tabindex="0"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-zap w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium hover:underline"
+            >
+              Create Spark
+            </span>
+            <span
+              class="text-muted-foreground/60 text-xs"
+            >
+              → 
+              Expense Tracker
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — generation and agent tools > renders generate_image as a generic icon+summary row (no inline preview) 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-palette w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"
+              />
+              <circle
+                cx="13.5"
+                cy="6.5"
+                fill="currentColor"
+                r=".5"
+              />
+              <circle
+                cx="17.5"
+                cy="10.5"
+                fill="currentColor"
+                r=".5"
+              />
+              <circle
+                cx="6.5"
+                cy="12.5"
+                fill="currentColor"
+                r=".5"
+              />
+              <circle
+                cx="8.5"
+                cy="7.5"
+                fill="currentColor"
+                r=".5"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Generate Image
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — generation and agent tools > renders generate_video as a generic icon+summary row (no inline preview) 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-video w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"
+              />
+              <rect
+                height="12"
+                rx="2"
+                width="14"
+                x="2"
+                y="6"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Generate Video
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — generation and agent tools > renders list_processes with a process table 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-server w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect
+                height="8"
+                rx="2"
+                ry="2"
+                width="20"
+                x="2"
+                y="2"
+              />
+              <rect
+                height="8"
+                rx="2"
+                ry="2"
+                width="20"
+                x="2"
+                y="14"
+              />
+              <line
+                x1="6"
+                x2="6.01"
+                y1="6"
+                y2="6"
+              />
+              <line
+                x1="6"
+                x2="6.01"
+                y1="18"
+                y2="18"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              List Processes
+            </span>
+            <span
+              class="text-muted-foreground/60 text-xs"
+            >
+              → 
+              1 process running
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        class="space-y-0.5"
+      >
+        <div
+          class="text-xs text-muted-foreground/60 flex items-center mb-1"
+        >
+          <span
+            class="mr-1"
+          >
+            ⎿
+          </span>
+          <span>
+            1
+             running process
+          </span>
+        </div>
+        <div
+          class="flex items-center gap-3 text-xs py-0.5 ml-3 text-muted-foreground"
+        >
+          <span
+            class="font-mono text-muted-foreground/50 w-12 text-right shrink-0"
+          >
+            1234
+          </span>
+          <span
+            class="font-mono truncate flex-1"
+          >
+            node server.js
+          </span>
+          <span
+            class="text-muted-foreground/60 shrink-0"
+          >
+            :
+            3000
+          </span>
+          <span
+            class="text-xs shrink-0 text-emerald-500"
+          >
+            running
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — generation and agent tools > renders list_sparks via the shared list-tool results display 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-zap w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              List Sparks
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        data-mock="list-tool-results-display"
+        data-tool-name="list_sparks"
+      />
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — generation and agent tools > renders query_knowledge_base with result chunks 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-book-open w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12 7v14"
+              />
+              <path
+                d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Knowledge Base
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        class="mt-2 ml-5 border rounded-lg overflow-hidden border-border bg-white"
+      >
+        <div
+          class="px-3 py-2 border-b flex items-center justify-between bg-emerald-50 border-emerald-200"
+        >
+          <span
+            class="text-sm font-medium text-emerald-700"
+          >
+            1
+             result
+             found
+          </span>
+          <span
+            class="text-xs text-slate-500"
+          >
+            "
+            refund policy
+            "
+          </span>
+        </div>
+        <div
+          class="divide-y divide-border/50"
+        >
+          <div
+            class="transition-colors hover:bg-slate-50"
+            data-state="closed"
+          >
+            <button
+              aria-controls="radix-_r_9_"
+              aria-expanded="false"
+              class="w-full px-3 py-2 cursor-pointer text-left"
+              data-state="closed"
+              type="button"
+            >
+              <div
+                class="flex items-start gap-2"
+              >
+                <div
+                  class="flex-shrink-0 mt-0.5"
+                >
+                  <svg
+                    aria-hidden="true"
+                    class="lucide lucide-chevron-right w-3.5 h-3.5 transition-transform duration-200 text-slate-400"
+                    fill="none"
+                    height="24"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                    width="24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="m9 18 6-6-6-6"
+                    />
+                  </svg>
+                </div>
+                <div
+                  class="flex-1 min-w-0"
+                >
+                  <div
+                    class="flex items-center gap-2 flex-wrap"
+                  >
+                    <span
+                      class="inline-flex items-center rounded-full text-[10px] px-1.5 py-0.5 font-medium uppercase leading-none bg-red-500/15 text-red-600 dark:text-red-400"
+                    >
+                      pdf
+                    </span>
+                    <span
+                      class="text-sm font-medium truncate text-slate-800"
+                    >
+                      policies.pdf
+                    </span>
+                    <span
+                      class="text-xs text-slate-500"
+                    >
+                      Page 
+                      1
+                    </span>
+                    <span
+                      class="ml-auto text-xs font-mono text-emerald-600"
+                    >
+                      92
+                      % match
+                    </span>
+                  </div>
+                  <p
+                    class="mt-1 text-xs line-clamp-2 text-slate-600"
+                  >
+                    Refunds are processed within 5 business days.
+                  </p>
+                </div>
+              </div>
+            </button>
+            <div
+              class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+              data-state="closed"
+              hidden=""
+              id="radix-_r_9_"
+              style=""
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — generation and agent tools > renders update_spark with an inline diff 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-zap w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Update Spark
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        class="mt-1.5 ml-5 border rounded-md overflow-hidden border-border bg-white"
+      >
+        <div
+          class="px-2 py-1 text-xs flex items-center gap-2 border-b bg-amber-50 border-amber-200"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-zap w-3 h-3 text-amber-600"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+            />
+          </svg>
+          <span
+            class="text-amber-700"
+          >
+            Code changes in 
+            Expense Tracker
+          </span>
+        </div>
+        <div
+          class="text-[11px] font-mono leading-[1.6] max-h-[300px] overflow-y-auto"
+        >
+          <div
+            class="flex bg-slate-100"
+          >
+            <div
+              class="flex-shrink-0 w-16 border-r border-slate-200"
+            />
+            <pre
+              class="flex-1 px-2 whitespace-pre-wrap break-all text-slate-500"
+            >
+              --- a/Expense Tracker v1
+            </pre>
+          </div>
+          <div
+            class="flex bg-slate-100"
+          >
+            <div
+              class="flex-shrink-0 w-16 border-r border-slate-200"
+            />
+            <pre
+              class="flex-1 px-2 whitespace-pre-wrap break-all text-slate-500"
+            >
+              +++ b/Expense Tracker v2
+            </pre>
+          </div>
+          <div
+            class="flex bg-blue-50"
+          >
+            <div
+              class="flex-shrink-0 w-16 border-r border-slate-200"
+            />
+            <pre
+              class="flex-1 px-2 whitespace-pre-wrap break-all text-blue-700 font-medium"
+            >
+              @@ -1,1 +1,1 @@
+            </pre>
+          </div>
+          <div
+            class="flex bg-red-50"
+          >
+            <div
+              class="flex-shrink-0 w-16 flex select-none border-r text-slate-400 border-slate-200"
+            >
+              <span
+                class="w-8 text-right pr-1"
+              >
+                1
+              </span>
+              <span
+                class="w-8 text-right pr-1"
+              />
+            </div>
+            <pre
+              class="flex-1 px-2 whitespace-pre-wrap break-all text-red-700"
+            >
+              const total = 0
+            </pre>
+          </div>
+          <div
+            class="flex bg-emerald-50"
+          >
+            <div
+              class="flex-shrink-0 w-16 flex select-none border-r text-slate-400 border-slate-200"
+            >
+              <span
+                class="w-8 text-right pr-1"
+              />
+              <span
+                class="w-8 text-right pr-1"
+              >
+                1
+              </span>
+            </div>
+            <pre
+              class="flex-1 px-2 whitespace-pre-wrap break-all text-emerald-700"
+            >
+              const total = items.reduce((a, b) =&gt; a + b, 0)
+            </pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — generation and agent tools > renders update_todos with a task checklist 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-list-todo w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M13 5h8"
+              />
+              <path
+                d="M13 12h8"
+              />
+              <path
+                d="M13 19h8"
+              />
+              <path
+                d="m3 17 2 2 4-4"
+              />
+              <rect
+                height="6"
+                rx="1"
+                width="6"
+                x="3"
+                y="4"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Update tasks
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        class="space-y-0.5"
+      >
+        <div
+          class="text-xs text-muted-foreground/60 flex items-center mb-1"
+        >
+          <span
+            class="mr-1"
+          >
+            ⎿
+          </span>
+          <span>
+            3
+             task
+            s
+          </span>
+        </div>
+        <div
+          class="flex items-start gap-2 text-xs py-0.5 ml-3"
+        >
+          <div
+            class="mt-0.5 h-3.5 w-3.5 rounded-sm border flex items-center justify-center shrink-0 bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-check h-2.5 w-2.5"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M20 6 9 17l-5-5"
+              />
+            </svg>
+          </div>
+          <span
+            class="line-through text-muted-foreground/60"
+          >
+            Write tests
+          </span>
+        </div>
+        <div
+          class="flex items-start gap-2 text-xs py-0.5 ml-3"
+        >
+          <div
+            class="mt-0.5 h-3.5 w-3.5 rounded-sm border flex items-center justify-center shrink-0 bg-amber-500/20 border-amber-500/50"
+          />
+          <span
+            class="text-muted-foreground"
+          >
+            Fix bug
+          </span>
+        </div>
+        <div
+          class="flex items-start gap-2 text-xs py-0.5 ml-3"
+        >
+          <div
+            class="mt-0.5 h-3.5 w-3.5 rounded-sm border flex items-center justify-center shrink-0 border-border text-muted-foreground"
+          />
+          <span
+            class="text-muted-foreground"
+          >
+            Ship it
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — maps and weather > renders geocode_address with coordinates summary 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-map-pin w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"
+              />
+              <circle
+                cx="12"
+                cy="10"
+                r="3"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Geocode
+            </span>
+            <span
+              class="text-muted-foreground/60 text-xs"
+            >
+              → 
+              37.3318, -122.0312
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — maps and weather > renders get_air_quality with no summary line (fields outside the count/total heuristic) 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-wind w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M12.8 19.6A2 2 0 1 0 14 16H2"
+              />
+              <path
+                d="M17.5 8a2.5 2.5 0 1 1 2 4H2"
+              />
+              <path
+                d="M9.8 4.4A2 2 0 1 1 11 8H2"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Air Quality
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — maps and weather > renders get_directions with a duration/distance summary 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-navigation w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <polygon
+                points="3 11 22 2 13 21 11 13 3 11"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Directions
+            </span>
+            <span
+              class="text-muted-foreground/60 text-xs"
+            >
+              → 
+              18 mins (9.4 km)
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — maps and weather > renders search_nearby_places with a place count 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-store w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5"
+              />
+              <path
+                d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244"
+              />
+              <path
+                d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Places Search
+            </span>
+            <span
+              class="text-muted-foreground/60 text-xs"
+            >
+              → 
+              2 places
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — search and discovery > renders brave_image_search with a media carousel 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-image w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect
+                height="18"
+                rx="2"
+                ry="2"
+                width="18"
+                x="3"
+                y="3"
+              />
+              <circle
+                cx="9"
+                cy="9"
+                r="2"
+              />
+              <path
+                d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Image search
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        data-count="2"
+        data-mock="brave-search-media-carousel"
+        data-title="Images"
+      />
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — search and discovery > renders brave_local_search as a generic icon+summary row 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-map-pin w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"
+              />
+              <circle
+                cx="12"
+                cy="10"
+                r="3"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Local search
+            </span>
+            <span
+              class="text-muted-foreground/60 text-xs"
+            >
+              → 
+              1 result
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — search and discovery > renders brave_news_search as a generic icon+summary row 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-newspaper w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M15 18h-5"
+              />
+              <path
+                d="M18 14h-8"
+              />
+              <path
+                d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2"
+              />
+              <rect
+                height="4"
+                rx="1"
+                width="8"
+                x="10"
+                y="6"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              News search
+            </span>
+            <span
+              class="text-muted-foreground/60 text-xs"
+            >
+              → 
+              3 results
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — search and discovery > renders brave_video_search with a media carousel 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-video w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"
+              />
+              <rect
+                height="12"
+                rx="2"
+                width="14"
+                x="2"
+                y="6"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Video search
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        data-count="1"
+        data-mock="brave-search-media-carousel"
+        data-title="Videos"
+      />
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — search and discovery > renders brave_web_search as a generic icon+summary row 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <div
+              class="relative inline-flex"
+            >
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-globe w-3.5 h-3.5 shrink-0 text-muted-foreground"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                />
+                <path
+                  d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"
+                />
+                <path
+                  d="M2 12h20"
+                />
+              </svg>
+              <svg
+                aria-hidden="true"
+                class="lucide lucide-plus absolute -top-0.5 -right-0.5 bg-background rounded-full w-2 h-2"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="3"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M5 12h14"
+                />
+                <path
+                  d="M12 5v14"
+                />
+              </svg>
+            </div>
+            <span
+              class="text-foreground font-medium"
+            >
+              Web search
+            </span>
+            <span
+              class="text-muted-foreground/60 text-xs"
+            >
+              → 
+              2 results
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — search and discovery > renders fetch_web_page with a page title summary 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-globe w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+              />
+              <path
+                d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"
+              />
+              <path
+                d="M2 12h20"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Fetch page
+            </span>
+            <span
+              class="text-muted-foreground/60 text-xs"
+            >
+              → 
+              An Interesting Article
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — search and discovery > renders search_available_tools with a found count 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Tool Discovery
+            </span>
+            <span
+              class="text-muted-foreground/60"
+            >
+              3
+               tool
+              s
+               found
+              <span
+                class="text-amber-400 ml-1"
+              >
+                (
+                1
+                 disabled)
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        class="ml-5"
+        data-state="closed"
+      >
+        <button
+          aria-controls="radix-_r_7_"
+          aria-expanded="false"
+          class="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          data-state="closed"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-chevron-right h-3 w-3 transition-transform duration-200"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m9 18 6-6-6-6"
+            />
+          </svg>
+          <span>
+            Show
+             tools
+          </span>
+        </button>
+        <div
+          class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+          data-state="closed"
+          hidden=""
+          id="radix-_r_7_"
+          style=""
+        />
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`FileToolExecutionsDisplay — search and discovery > renders search_code collapsed with a match count 1`] = `
+<div>
+  <div
+    class="space-y-1.5 mt-2"
+  >
+    <div
+      class="space-y-0"
+    >
+      <div
+        class="flex items-start gap-2 py-0.5 text-xs"
+      >
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-search w-3.5 h-3.5 shrink-0 text-muted-foreground"
+              fill="none"
+              height="24"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m21 21-4.34-4.34"
+              />
+              <circle
+                cx="11"
+                cy="11"
+                r="8"
+              />
+            </svg>
+            <span
+              class="text-foreground font-medium"
+            >
+              Search
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        class="ml-5 mt-1"
+        data-state="closed"
+      >
+        <button
+          aria-controls="radix-_r_8_"
+          aria-expanded="false"
+          class="flex items-center gap-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          data-state="closed"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-chevron-right h-3 w-3 transition-transform duration-200"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m9 18 6-6-6-6"
+            />
+          </svg>
+          <span>
+            2
+             match
+            es
+          </span>
+          <code
+            class="text-muted-foreground bg-muted/50 px-1 rounded"
+          >
+            TODO
+          </code>
+        </button>
+        <div
+          class="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up"
+          data-state="closed"
+          hidden=""
+          id="radix-_r_8_"
+          style=""
+        />
+      </div>
+    </div>
+  </div>
+</div>
+`;
