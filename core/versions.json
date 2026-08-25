@@ -1,6 +1,6 @@
 {
   "api-gateway": "6.2.2",
-  "web": "6.2.3",
+  "web": "6.2.4",
   "frontend": "6.2.5",
   "orchestrator": "6.2.1",
   "egress-proxy": "6.2.2",
