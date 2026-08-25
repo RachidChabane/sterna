@@ -10,8 +10,7 @@ Reference: https://docs.anthropic.com/en/docs/coding-agent/mcp
 import logging
 from typing import Any
 
-if True:  # TYPE_CHECKING equivalent that works at runtime
-    from .models import MCPServer
+from .models import MCPServer
 
 logger = logging.getLogger(__name__)
 

@@ -39,7 +39,7 @@ def truncate(text: str, max_length: int = MAX_TEXT_LENGTH) -> str:
     return text[:max_length].rsplit(' ', 1)[0] + "..."
 
 
-def condense_for_model(result: Dict[str, Any], result_type: str = "web") -> Dict[str, Any]:
+def condense_for_model(result: Dict[str, Any]) -> Dict[str, Any]:
     """
     Condense search results to reduce token usage.
     Keeps essential info for model reasoning, strips display-only metadata.

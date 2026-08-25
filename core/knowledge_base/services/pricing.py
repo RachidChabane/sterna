@@ -91,11 +91,3 @@ class KnowledgePricingService:
         # If no pricing found, log warning and return 0 (don't block the operation)
         logger.warning(f"No pricing found for embedding model: {model_id}")
         return Decimal('0')
-
-    def get_storage_cost(self, storage_bytes: int) -> Decimal:
-        """
-        Calculate storage cost.
-        Storage is typically included in plan, returns 0 for now.
-        """
-        # Storage included in Neon plan
-        return Decimal('0')
