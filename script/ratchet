@@ -70,7 +70,7 @@ if [ "$ts_any_grep_exit" -ge 2 ]; then
 fi
 ts_any_count=0
 if [ "$ts_any_grep_exit" -eq 0 ]; then
-  ts_any_count="$(printf '%s\n' "$ts_any_raw" | grep -v '/__tests__/' | grep -v '/src/test/' | wc -l | tr -d ' ')"
+  ts_any_count="$(printf '%s\n' "$ts_any_raw" | grep -v '/__tests__/' | grep -v '/src/test/' | wc -l | tr -d ' ' || true)"
 fi
 echo "  ts_any=${ts_any_count}"
 
@@ -133,7 +133,13 @@ echo "==> God-file line counts"
 declare -a loc_paths
 declare -a loc_counts
 while IFS=$'\t' read -r path; do
-  count="$(wc -l < "$repo_root/$path" | tr -d ' ')"
+  if [ -f "$repo_root/$path" ]; then
+    count="$(wc -l < "$repo_root/$path" | tr -d ' ')"
+  else
+    # A tracked file that no longer exists has fallen to zero lines —
+    # that satisfies the ratchet, it does not break it.
+    count=0
+  fi
   loc_paths+=("$path")
   loc_counts+=("$count")
   echo "  ${path}=${count}"
