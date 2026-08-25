@@ -17,6 +17,6 @@ echo "==> Installing backend dependencies (core/requirements.txt)"
 uv pip install --python "$venv_python" -r "$repo_root/core/requirements.txt"
 
 echo "==> Installing frontend dependencies (pnpm)"
-(cd "$repo_root/core/frontend" && pnpm install)
+(cd "$repo_root/core/frontend" && pnpm install --frozen-lockfile)
 
 echo "==> Bootstrap complete"

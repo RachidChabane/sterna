@@ -5,20 +5,41 @@
 # user-preferences-service, sandbox — carry their own dependency stacks
 # and are excluded to avoid cross-service module clashes): its error
 # count is printed in a stable `RATCHET` line for the mypy ratchet to
-# consume, but a nonzero mypy result does not fail this script.
+# consume. mypy exit 1 (type errors found) does not fail this script;
+# mypy exit >= 2 (crash, bad config, module clash) is a harness fault
+# and does fail it — a tool that didn't run must never be reported as a
+# clean pass.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
 echo "==> mypy (report-only)"
+set +e
 mypy_output="$(
-  cd "$repo_root/core" \
-    && "$repo_root/.venv/bin/mypy" \
-      --exclude '^(api-gateway|brave-search|google-maps|user-preferences-service|sandbox)/' \
-      . 2>&1 || true
+  cd "$repo_root/core" && "$repo_root/.venv/bin/mypy" \
+    --exclude '^(api-gateway|brave-search|google-maps|user-preferences-service|sandbox)/' \
+    . 2>&1
 )"
-mypy_errors="$(printf '%s\n' "$mypy_output" | grep -c ': error:' || true)"
+mypy_exit=$?
+set -e
+
+if [ "$mypy_exit" -ge 2 ]; then
+  echo "mypy failed to complete a full pass (exit ${mypy_exit}); treating as a harness fault, not a type-error count." >&2
+  printf '%s\n' "$mypy_output" >&2
+  exit 1
+fi
+
+if printf '%s\n' "$mypy_output" | grep -q '^Success: no issues found'; then
+  mypy_errors=0
+elif [[ "$mypy_output" =~ Found\ ([0-9]+)\ error[s]?\ in\ [0-9]+\ file ]]; then
+  mypy_errors="${BASH_REMATCH[1]}"
+else
+  echo "mypy exited ${mypy_exit} without its usual summary line; treating as a harness fault." >&2
+  printf '%s\n' "$mypy_output" >&2
+  exit 1
+fi
+
 echo "RATCHET mypy_errors=${mypy_errors}"
 
 echo "==> tsc --noEmit (frontend, gates)"

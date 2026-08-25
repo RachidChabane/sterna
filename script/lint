@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # ruff is the enforced lint gate, matching CI's `ruff check .` run from the
-# repo root. eslint runs alongside it in report-only mode: its error and
-# warning counts are printed in a stable `RATCHET` line for the dead-code
-# and TS-`any` ratchets to consume, but a nonzero eslint result does not
-# fail this script.
+# repo root. eslint runs alongside it in report-only mode: its error,
+# warning, and TS-`any` counts are printed in a stable `RATCHET` line for
+# the eslint/TS-any ratchet to consume, but a nonzero eslint *lint*
+# result (exit 1: problems found) does not fail this script. eslint
+# failing to complete a run at all (exit >= 2: crash, bad config) is a
+# harness fault and does fail this script — a broken tool must never be
+# reported as a clean codebase.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,26 +16,46 @@ echo "==> ruff check (gates)"
 "$repo_root/.venv/bin/ruff" check .
 
 echo "==> eslint (report-only)"
+eslint_stderr_file="$(mktemp)"
+trap 'rm -f "$eslint_stderr_file"' EXIT
+
 set +e
-eslint_json="$(cd "$repo_root/core/frontend" && pnpm exec eslint . --format json 2>/dev/null)"
+eslint_json="$(cd "$repo_root/core/frontend" && pnpm exec eslint . --format json 2>"$eslint_stderr_file")"
+eslint_exit=$?
 set -e
 
+if [ "$eslint_exit" -ge 2 ]; then
+  echo "eslint failed to complete a run (exit ${eslint_exit}); treating as a harness fault, not a lint-error count." >&2
+  cat "$eslint_stderr_file" >&2
+  exit 1
+fi
+
+set +e
 eslint_counts="$(printf '%s' "$eslint_json" | "$repo_root/.venv/bin/python3" -c '
 import json, sys
 try:
-    data = json.loads(sys.stdin.read() or "[]")
-    errors = sum(f.get("errorCount", 0) for f in data)
-    warnings = sum(f.get("warningCount", 0) for f in data)
-    ts_any = sum(
-        1
-        for f in data
-        for m in f.get("messages", [])
-        if m.get("ruleId") == "@typescript-eslint/no-explicit-any"
-    )
-except Exception:
-    errors, warnings, ts_any = 0, 0, 0
+    data = json.loads(sys.stdin.read())
+except Exception as exc:
+    print(f"failed to parse eslint JSON output: {exc}", file=sys.stderr)
+    sys.exit(1)
+errors = sum(f.get("errorCount", 0) for f in data)
+warnings = sum(f.get("warningCount", 0) for f in data)
+ts_any = sum(
+    1
+    for f in data
+    for m in f.get("messages", [])
+    if m.get("ruleId") == "@typescript-eslint/no-explicit-any"
+)
 print(errors, warnings, ts_any)
 ')"
+parse_exit=$?
+set -e
+
+if [ "$parse_exit" -ne 0 ]; then
+  echo "$eslint_counts" >&2
+  exit 1
+fi
+
 read -r eslint_errors eslint_warnings ts_any_count <<< "$eslint_counts"
 echo "RATCHET eslint_errors=${eslint_errors} eslint_warnings=${eslint_warnings} ts_any_count=${ts_any_count}"
 

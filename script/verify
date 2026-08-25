@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Full deterministic verification: bootstrap, lint, typecheck, test, and
-# (once they exist) the schema-diff and ratchet gates. e2e is not part
-# of this chain — it runs on its own via script/e2e.
+# the schema-diff and ratchet gates when present. e2e is not part of
+# this chain — it runs on its own via script/e2e.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
