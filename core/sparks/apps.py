@@ -7,7 +7,19 @@ class SparksConfig(AppConfig):
     verbose_name = 'Sparks - Interactive Components'
 
     def ready(self):
+        self._register_spark_serializer()
         self._cleanup_stale_deployments()
+
+    def _register_spark_serializer(self):
+        """Nest spark data under conversation messages/chats.
+
+        Sparks owns this dependency: conversations exposes the
+        registration point and never imports from sparks itself.
+        """
+        from conversations.serializers import register_spark_serializer
+        from .serializers import MessageSparkSerializer
+
+        register_spark_serializer(MessageSparkSerializer)
 
     def _cleanup_stale_deployments(self):
         """Mark stale in-progress deployments as failed on startup."""
