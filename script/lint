@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # ruff is the enforced lint gate, matching CI's `ruff check .` run from the
 # repo root. eslint runs alongside it in report-only mode: its error,
-# warning, and TS-`any` counts are printed in a stable `RATCHET` line for
-# the eslint/TS-any ratchet to consume, but a nonzero eslint *lint*
-# result (exit 1: problems found) does not fail this script. eslint
-# failing to complete a run at all (exit >= 2: crash, bad config) is a
-# harness fault and does fail this script — a broken tool must never be
-# reported as a clean codebase.
+# warning, and TS-`any` counts are printed in a `RATCHET` line for
+# visibility only — script/ratchet independently re-runs eslint and
+# enforces those counts against baselines/ratchet.json, so a nonzero
+# eslint *lint* result (exit 1: problems found) does not fail this
+# script. eslint failing to complete a run at all (exit >= 2: crash, bad
+# config) is a harness fault and does fail this script — a broken tool
+# must never be reported as a clean codebase.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Enforce the code-quality ratchets recorded in baselines/ratchet.json:
-# each counter (mypy error count, TS `any` usage, dead-code findings,
-# and the tracked god-file line counts) may only stay equal or fall
-# from its baseline value — a rise fails the script. The line-count cap
-# also blocks any file outside baselines/loc_grandfathered.txt from
-# growing past the global line ceiling recorded in the baseline.
+# each counter (mypy error count, eslint error/warning counts, the
+# @typescript-eslint/no-explicit-any occurrence count, dead-code
+# findings, and the tracked god-file line counts) may only stay equal
+# or fall from its baseline value — a rise fails the script. Every
+# counter that scans a bounded set of files also has a recorded
+# denominator (files checked/linted/scanned); a denominator that falls
+# more than 2% versus baseline fails the script too, since a narrowed
+# scope (a widened --exclude, a renamed extension) can otherwise make a
+# counter look better while covering less code. The line-count cap also
+# blocks any file not listed in loc_caps.files from growing past the
+# global line ceiling recorded in the baseline.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,13 +20,13 @@ venv_python="$repo_root/.venv/bin/python"
 venv_mypy="$repo_root/.venv/bin/mypy"
 venv_vulture="$repo_root/.venv/bin/vulture"
 ratchet_baseline="$repo_root/baselines/ratchet.json"
-loc_grandfather="$repo_root/baselines/loc_grandfathered.txt"
 knip_version="6.32.2"
 
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 
-# ---- mypy error count (same invocation as script/typecheck) ----------
+# ---- mypy error count + checked-file denominator ----------------------
+# Same invocation as script/typecheck.
 echo "==> mypy error count"
 set +e
 mypy_output="$(
@@ -37,50 +43,105 @@ if [ "$mypy_exit" -ge 2 ]; then
   exit 1
 fi
 
-if printf '%s\n' "$mypy_output" | grep -q '^Success: no issues found'; then
+mypy_errors=""
+mypy_checked_files=""
+if [[ "$mypy_output" =~ Success:\ no\ issues\ found\ in\ ([0-9]+)\ source\ file ]]; then
   mypy_errors=0
-elif [[ "$mypy_output" =~ Found\ ([0-9]+)\ error[s]?\ in\ [0-9]+\ file ]]; then
+  mypy_checked_files="${BASH_REMATCH[1]}"
+elif [[ "$mypy_output" =~ Found\ ([0-9]+)\ error[s]?\ in\ [0-9]+\ file[s]?\ \(checked\ ([0-9]+)\ source\ file[s]?\) ]]; then
   mypy_errors="${BASH_REMATCH[1]}"
+  mypy_checked_files="${BASH_REMATCH[2]}"
 else
   echo "mypy exited ${mypy_exit} without its usual summary line; treating as a harness fault." >&2
   printf '%s\n' "$mypy_output" >&2
   exit 1
 fi
-echo "  mypy_errors=${mypy_errors}"
+echo "  mypy_errors=${mypy_errors} mypy_checked_files=${mypy_checked_files}"
 
-# ---- TS `any` usage count (source only, tests excluded) --------------
-echo "==> TS 'any' usage count"
+# ---- eslint error/warning/any counts + linted-file denominator --------
+# Independent invocation of the same command script/lint runs
+# (`eslint . --format json`): the JSON report is the one authoritative
+# source for errors, warnings, the @typescript-eslint/no-explicit-any
+# occurrence count, and the number of files eslint actually linted.
+echo "==> eslint error/warning/any counts"
+eslint_json="$work_dir/eslint.json"
+eslint_stderr="$work_dir/eslint.stderr"
 set +e
-ts_any_raw="$(
-  cd "$repo_root/core/frontend" && grep -rE ': any|<any>|as any|any\[\]' src \
-    --include='*.ts' --include='*.tsx' \
-    --exclude='*.test.ts' --exclude='*.test.tsx' \
-    --exclude='*.spec.ts' --exclude='*.spec.tsx'
-)"
-ts_any_grep_exit=$?
+(cd "$repo_root/core/frontend" && pnpm exec eslint . --format json) >"$eslint_json" 2>"$eslint_stderr"
+eslint_exit=$?
 set -e
 
-# grep exit 1 means "no matches" (a legitimate zero); exit >= 2 means the
-# search itself broke (bad path, bad pattern) and must not be read as a
-# clean count.
-if [ "$ts_any_grep_exit" -ge 2 ]; then
-  echo "grep for TS 'any' usage failed to complete (exit ${ts_any_grep_exit}); treating as a harness fault." >&2
-  printf '%s\n' "$ts_any_raw" >&2
+if [ "$eslint_exit" -ge 2 ]; then
+  echo "eslint failed to complete a run (exit ${eslint_exit}); treating as a harness fault." >&2
+  cat "$eslint_stderr" >&2
   exit 1
 fi
-ts_any_count=0
-if [ "$ts_any_grep_exit" -eq 0 ]; then
-  ts_any_count="$(printf '%s\n' "$ts_any_raw" | grep -v '/__tests__/' | grep -v '/src/test/' | wc -l | tr -d ' ' || true)"
+
+set +e
+eslint_counts="$("$venv_python" - "$eslint_json" <<'PYEOF'
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path) as fh:
+        data = json.load(fh)
+except Exception as exc:
+    print(f"failed to parse eslint JSON output: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+files_linted = len(data)
+if files_linted == 0:
+    print("eslint JSON report listed zero files; treating as a harness fault (empty scope).", file=sys.stderr)
+    sys.exit(1)
+
+errors = sum(f.get("errorCount", 0) for f in data)
+warnings = sum(f.get("warningCount", 0) for f in data)
+ts_any = sum(
+    1
+    for f in data
+    for m in f.get("messages", [])
+    if m.get("ruleId") == "@typescript-eslint/no-explicit-any"
+)
+print(errors, warnings, ts_any, files_linted)
+PYEOF
+)"
+parse_exit=$?
+set -e
+
+if [ "$parse_exit" -ne 0 ]; then
+  echo "$eslint_counts" >&2
+  exit 1
 fi
-echo "  ts_any=${ts_any_count}"
+
+read -r eslint_errors eslint_warnings ts_explicit_any eslint_files_linted <<< "$eslint_counts"
+echo "  eslint_errors=${eslint_errors} eslint_warnings=${eslint_warnings} ts_explicit_any=${ts_explicit_any} eslint_files_linted=${eslint_files_linted}"
 
 # ---- Dead code: backend (vulture) -------------------------------------
+# The scanned-file list is built once with `find` and handed to vulture
+# as explicit file arguments (rather than a directory plus vulture's
+# own --exclude glob), so the finding count and the scanned-file
+# denominator can never drift apart from a second, independently edited
+# exclude pattern.
 echo "==> Backend dead-code count (vulture)"
+declare -a vulture_files
+while IFS= read -r -d '' path; do
+  vulture_files+=("$path")
+done < <(find "$repo_root/core" -type f -name '*.py' \
+  -not -path '*/migrations/*' -not -path '*/tests/*' -not -name 'test_*.py' \
+  -not -path '*/node_modules/*' -not -path "$repo_root/core/api-gateway/*" \
+  -not -path "$repo_root/core/brave-search/*" -not -path "$repo_root/core/google-maps/*" \
+  -not -path "$repo_root/core/user-preferences-service/*" -not -path "$repo_root/core/sandbox/*" \
+  -print0)
+backend_files_scanned="${#vulture_files[@]}"
+if [ "$backend_files_scanned" -eq 0 ]; then
+  echo "vulture's file scan matched zero Python files; treating as a harness fault (empty scope)." >&2
+  exit 1
+fi
+
 set +e
 vulture_output="$(
-  cd "$repo_root/core" && "$venv_vulture" . \
-    --min-confidence 90 \
-    --exclude '*/migrations/*,*/tests/*,test_*.py,*/node_modules/*,*/api-gateway/*,*/brave-search/*,*/google-maps/*,*/user-preferences-service/*,*/sandbox/*'
+  cd "$repo_root/core" && "$venv_vulture" --min-confidence 90 "${vulture_files[@]}"
 )"
 vulture_exit=$?
 set -e
@@ -94,7 +155,7 @@ backend_dead_code="$(printf '%s\n' "$vulture_output" | grep -c . || true)"
 if [ "$vulture_exit" -eq 0 ]; then
   backend_dead_code=0
 fi
-echo "  backend_vulture=${backend_dead_code}"
+echo "  backend_vulture=${backend_dead_code} backend_files_scanned=${backend_files_scanned}"
 
 # ---- Dead code: frontend unused-export count (knip) --------------------
 # Counts only the export-surface categories (exports, types, enum
@@ -103,7 +164,22 @@ echo "  backend_vulture=${backend_dead_code}"
 # resolution gaps in knip's entry-point graph rather than dead code,
 # and can rise on legitimate work (a new dependency, a file only
 # reachable through a route knip can't trace).
+#
+# The scanned-file denominator is the count of JS/TS source files under
+# core/frontend (excluding node_modules/dist/build) — the population
+# knip's default project scope draws from. It is independent of the
+# eslint file count above so neither counter's scope can hide behind
+# the other's.
 echo "==> Frontend unused-export count (knip)"
+frontend_files_scanned="$(
+  find "$repo_root/core/frontend" -type f \( -iname '*.ts' -o -iname '*.tsx' -o -iname '*.js' -o -iname '*.jsx' \) \
+    -not -path '*/node_modules/*' -not -path '*/dist/*' -not -path '*/build/*' \
+    | wc -l | tr -d ' '
+)"
+if [ "$frontend_files_scanned" -eq 0 ]; then
+  echo "the frontend file scan matched zero files; treating as a harness fault (empty scope)." >&2
+  exit 1
+fi
 knip_json="$work_dir/knip.json"
 set +e
 (cd "$repo_root/core/frontend" && pnpm dlx "knip@${knip_version}" --reporter json) >"$knip_json" 2>"$work_dir/knip.stderr"
@@ -126,7 +202,7 @@ total = sum(len(issue.get(c, [])) for issue in data["issues"] for c in categorie
 print(total)
 PYEOF
 )"
-echo "  frontend_knip=${frontend_dead_code}"
+echo "  frontend_knip=${frontend_dead_code} frontend_files_scanned=${frontend_files_scanned}"
 
 # ---- Line-count caps ----------------------------------------------------
 echo "==> God-file line counts"
@@ -154,43 +230,109 @@ global_cap="$("$venv_python" -c "
 import json
 print(json.load(open('$ratchet_baseline'))['loc_caps']['global_new_file_max_lines'])
 ")"
-echo "==> Global ${global_cap}-line cap (new files only)"
+
+# Every file over the global cap must carry its own entry in
+# loc_caps.files; a file that exceeds the cap without one fails here.
+# This pass scans every candidate file once and counts the scan itself
+# as the loc_files_scanned denominator.
+echo "==> Global ${global_cap}-line cap (files without an explicit entry)"
 new_file_violations="$work_dir/new_file_violations.txt"
 : >"$new_file_violations"
+loc_files_scanned=0
 while IFS= read -r -d '' path; do
   rel_path="${path#"$repo_root"/}"
   lines="$(wc -l < "$path" | tr -d ' ')"
-  if [ "$lines" -gt "$global_cap" ] && ! grep -qxF "$rel_path" "$loc_grandfather"; then
-    echo "${rel_path}: ${lines} lines" >>"$new_file_violations"
+  loc_files_scanned=$((loc_files_scanned + 1))
+  if [ "$lines" -gt "$global_cap" ]; then
+    has_entry=0
+    for capped in "${loc_paths[@]}"; do
+      if [ "$capped" = "$rel_path" ]; then
+        has_entry=1
+        break
+      fi
+    done
+    if [ "$has_entry" -eq 0 ]; then
+      echo "${rel_path}: ${lines} lines" >>"$new_file_violations"
+    fi
   fi
 done < <(find "$repo_root/core" -type f \( -iname '*.py' -o -iname '*.ts' -o -iname '*.tsx' \) \
   -not -path '*/migrations/*' -not -path '*/node_modules/*' \
   -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' \
   -print0)
 
+if [ "$loc_files_scanned" -eq 0 ]; then
+  echo "the loc-caps file scan matched zero files; treating as a harness fault (empty scope)." >&2
+  exit 1
+fi
+echo "  loc_files_scanned=${loc_files_scanned}"
+
 if [ -s "$new_file_violations" ]; then
-  echo "New files exceeding the ${global_cap}-line cap:" >&2
+  echo "Files exceeding the ${global_cap}-line cap with no explicit loc_caps.files entry:" >&2
   cat "$new_file_violations" >&2
 fi
 
+# ---- Build current.json --------------------------------------------------
+loc_current_tsv="$work_dir/loc_current.tsv"
+: >"$loc_current_tsv"
+for i in "${!loc_paths[@]}"; do
+  printf '%s\t%s\n' "${loc_paths[$i]}" "${loc_counts[$i]}" >>"$loc_current_tsv"
+done
+
+current_json="$work_dir/current.json"
+"$venv_python" - \
+  "$mypy_errors" "$mypy_checked_files" \
+  "$eslint_errors" "$eslint_warnings" "$ts_explicit_any" "$eslint_files_linted" \
+  "$backend_dead_code" "$backend_files_scanned" \
+  "$frontend_dead_code" "$frontend_files_scanned" \
+  "$global_cap" "$loc_files_scanned" \
+  "$loc_current_tsv" "$current_json" <<'PYEOF'
+import json
+import sys
+
+(
+    mypy_errors, mypy_checked_files,
+    eslint_errors, eslint_warnings, ts_explicit_any, eslint_files_linted,
+    backend_vulture, backend_files_scanned,
+    frontend_knip, frontend_files_scanned,
+    global_cap, loc_files_scanned,
+    loc_current_tsv, current_json_path,
+) = sys.argv[1:15]
+
+loc_files = {}
+with open(loc_current_tsv) as fh:
+    for line in fh:
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        path, count = line.split("\t")
+        loc_files[path] = int(count)
+
+current = {
+    "mypy_errors": int(mypy_errors),
+    "mypy_checked_files": int(mypy_checked_files),
+    "eslint_errors": int(eslint_errors),
+    "eslint_warnings": int(eslint_warnings),
+    "ts_explicit_any": int(ts_explicit_any),
+    "eslint_files_linted": int(eslint_files_linted),
+    "dead_code": {
+        "backend_vulture": int(backend_vulture),
+        "backend_files_scanned": int(backend_files_scanned),
+        "frontend_knip": int(frontend_knip),
+        "frontend_files_scanned": int(frontend_files_scanned),
+    },
+    "loc_caps": {
+        "global_new_file_max_lines": int(global_cap),
+        "files_scanned": int(loc_files_scanned),
+        "files": loc_files,
+    },
+}
+
+with open(current_json_path, "w") as fh:
+    json.dump(current, fh, indent=2)
+PYEOF
+
 # ---- Compare against the baseline --------------------------------------
 echo "==> Comparing against baseline"
-current_json="$work_dir/current.json"
-{
-  echo "{"
-  echo "  \"mypy_errors\": ${mypy_errors},"
-  echo "  \"ts_any\": ${ts_any_count},"
-  echo "  \"dead_code\": {\"backend_vulture\": ${backend_dead_code}, \"frontend_knip\": ${frontend_dead_code}},"
-  echo "  \"loc_caps\": {\"files\": {"
-  for i in "${!loc_paths[@]}"; do
-    sep=","
-    if [ "$i" -eq $((${#loc_paths[@]} - 1)) ]; then sep=""; fi
-    printf '    "%s": %s%s\n' "${loc_paths[$i]}" "${loc_counts[$i]}" "$sep"
-  done
-  echo "  }}"
-  echo "}"
-} >"$current_json"
-
 violations_file="$work_dir/violations.txt"
 set +e
 "$venv_python" - "$ratchet_baseline" "$current_json" "$violations_file" <<'PYEOF'
@@ -202,21 +344,63 @@ baseline = json.load(open(baseline_path))
 current = json.load(open(current_path))
 violations = []
 
+DENOMINATOR_FALL_TOLERANCE = 0.02  # a denominator may not drop more than 2%
+
+
 def check_counter(name, base_value, cur_value):
     if cur_value > base_value:
         violations.append(f"{name}: {base_value} -> {cur_value} (rose)")
 
+
+def check_denominator(name, base_value, cur_value):
+    if base_value <= 0:
+        return
+    fall_ratio = (base_value - cur_value) / base_value
+    if fall_ratio > DENOMINATOR_FALL_TOLERANCE:
+        violations.append(
+            f"{name}: {base_value} -> {cur_value} (scope shrank more than "
+            f"{DENOMINATOR_FALL_TOLERANCE:.0%}; the baseline must be "
+            "consciously re-approved, not silently passed)"
+        )
+
+
 check_counter("mypy_errors", baseline["mypy_errors"], current["mypy_errors"])
-check_counter("ts_any", baseline["ts_any"], current["ts_any"])
+check_denominator(
+    "mypy_checked_files", baseline["mypy_checked_files"], current["mypy_checked_files"]
+)
+
+check_counter("eslint_errors", baseline["eslint_errors"], current["eslint_errors"])
+check_counter("eslint_warnings", baseline["eslint_warnings"], current["eslint_warnings"])
+check_counter("ts_explicit_any", baseline["ts_explicit_any"], current["ts_explicit_any"])
+check_denominator(
+    "eslint_files_linted", baseline["eslint_files_linted"], current["eslint_files_linted"]
+)
+
 check_counter(
     "dead_code.backend_vulture",
     baseline["dead_code"]["backend_vulture"],
     current["dead_code"]["backend_vulture"],
 )
+check_denominator(
+    "dead_code.backend_files_scanned",
+    baseline["dead_code"]["backend_files_scanned"],
+    current["dead_code"]["backend_files_scanned"],
+)
 check_counter(
     "dead_code.frontend_knip",
     baseline["dead_code"]["frontend_knip"],
     current["dead_code"]["frontend_knip"],
+)
+check_denominator(
+    "dead_code.frontend_files_scanned",
+    baseline["dead_code"]["frontend_files_scanned"],
+    current["dead_code"]["frontend_files_scanned"],
+)
+
+check_denominator(
+    "loc_caps.files_scanned",
+    baseline["loc_caps"]["files_scanned"],
+    current["loc_caps"]["files_scanned"],
 )
 for path, base_lines in baseline["loc_caps"]["files"].items():
     check_counter(f"loc_caps.files.{path}", base_lines, current["loc_caps"]["files"][path])
@@ -236,9 +420,9 @@ if [ "$compare_exit" -ne 0 ] || [ -s "$new_file_violations" ]; then
     cat "$violations_file" >&2
   fi
   if [ -s "$new_file_violations" ]; then
-    echo "(see new-file cap violations printed above)" >&2
+    echo "(see uncapped-file violations printed above)" >&2
   fi
   exit 1
 fi
 
-echo "==> Ratchet clean: no counter rose above its baseline"
+echo "==> Ratchet clean: no counter rose and no scanned-file denominator shrank beyond tolerance"
