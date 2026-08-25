@@ -1,8 +1,8 @@
 """
 Unified MCP Registry
 
-Manages sandboxed npm-package, WebSocket, and remote HTTP servers with
-per-process state; DB-persisted OAuth servers are registry.py's concern.
+Loads a user's active MCPServer rows and manages sandboxed npm-package, WebSocket, and remote HTTP servers built from them, keeping connection and instance state in process memory rather than the database; for remote HTTP servers configured with OAuth, it refreshes the stored token itself when it needs refresh, before use.
+registry.py loads and connects to a user's active MCPServer rows independently of this module (over WebSocket, HTTP, and STDIO-via-command), persisting connection status and discovered tools to the database.
 
 Design Principles:
 - Per-user isolation: Each user's servers are independent

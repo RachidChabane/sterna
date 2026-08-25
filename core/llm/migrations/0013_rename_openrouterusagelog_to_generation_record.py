@@ -1,5 +1,5 @@
-# Hand-written: scopes OpenRouterUsageLog as OpenRouterGenerationRecord,
-# a provider-analytics model distinct from the billing ledger of record
+# Scopes OpenRouterUsageLog as OpenRouterGenerationRecord, a
+# provider-analytics model distinct from the billing ledger of record
 # (usage_quota.UsageLog). RenameModel issues an ALTER TABLE RENAME (no
 # db_table was ever pinned, so the table follows the class name), which
 # is a metadata-only operation and preserves existing rows.

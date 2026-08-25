@@ -1,13 +1,17 @@
-"""MCP Registry for managing OAuth-connected MCP servers and their tools.
+"""MCP Registry for managing a user's active MCP servers and their tools.
 
-Owns the WebSocket, HTTP, and STDIO-via-command transports backing an
-MCPServer's stored OAuth/auth state: connecting, health checks, DB-persisted
-tool discovery and caching (MCPTool rows), and tool calls with per-request
-ownership verification.
+Connects to a user's active MCPServer rows over the WebSocket, HTTP, and
+STDIO-via-command transports, persisting connection status and discovered
+tools (MCPTool rows) to the database, and verifying per-request server
+ownership before a tool call. For HTTP servers configured with OAuth, it
+sends the token already stored on the MCPServer row as a bearer credential;
+it does not refresh that token.
 
-Sandboxed npm-package servers and orchestrator-managed remote HTTP servers
-are a separate concern owned by UnifiedMCPRegistry (unified_registry.py),
-which keeps its connection state in process memory rather than the database.
+unified_registry.py's UnifiedMCPRegistry also loads a user's active
+MCPServer rows (for sandboxed npm-package, WebSocket, and remote HTTP
+transports), keeping its own connection state in process memory rather
+than the database, and independently refreshes OAuth tokens for the
+remote HTTP servers it loads.
 """
 
 import logging
