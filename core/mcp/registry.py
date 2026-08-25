@@ -2,8 +2,10 @@
 
 Connects to a user's active MCPServer rows over the WebSocket, HTTP, and
 STDIO-via-command transports, persisting connection status and discovered
-tools (MCPTool rows) to the database, and verifying per-request server
-ownership before a tool call. For HTTP servers configured with OAuth, it
+tools (MCPTool rows) to the database. Server-ownership verification runs
+only in call_tool_by_name when a user is passed; call_tool performs no
+ownership check, so its callers must pre-scope the MCPTool to the
+requesting user. For HTTP servers configured with OAuth, it
 sends the token already stored on the MCPServer row as a bearer credential;
 it does not refresh that token.
 

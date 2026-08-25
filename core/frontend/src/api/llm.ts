@@ -109,7 +109,7 @@ export interface CompletionRequest {
   // Voice conversation mode - adjusts system prompt for voice output (no markdown, etc.)
   enable_voice_mode?: boolean
 
-  // Custom system prompt (backend merges it via build_system_prompt)
+  // Custom system prompt (merged into the backend's built system prompt)
   system_prompt?: string
 
   conversation_id?: string
