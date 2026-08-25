@@ -1,0 +1,15 @@
+event: generation_id
+data: {"generation_id": "genid-golden-first"}
+
+event: content
+data: {"content": "Reading the file and searching the web."}
+
+event: file_tool_executed
+data: {"tool_calls": [{"id": "toolcall-read-file", "type": "function", "function": {"name": "read_file", "arguments": "{\"path\": \"/workspace/notes.md\"}"}}], "results": [{"role": "tool", "tool_call_id": "toolcall-read-file", "name": "read_file", "content": "{\"success\": true, \"content\": \"# Notes\\nfirst line\\n\"}"}]}
+
+event: tool_call_request
+data: {"approvals": [{"id": "<approval-pk-1>", "tool_id": "<mcp-tool-pk-1>", "tool_name": "brave_web_search", "tool_description": "Search the web for current information.", "server_name": "Fixture Search Server", "arguments": {"query": "sterna streaming"}, "status": "pending"}], "tool_calls": [{"id": "toolcall-web-search", "type": "function", "function": {"name": "brave_web_search", "arguments": "{\"query\": \"sterna streaming\"}"}}]}
+
+event: done
+data: {"model": "fixture/golden-model", "finish_reason": "tool_calls", "usage": {"prompt_tokens": 120, "completion_tokens": 40, "total_tokens": 160}, "cost": 0.00032, "prompt_cost": 0.00012, "completion_cost": 0.0002, "tool_calls": [{"id": "toolcall-read-file", "type": "function", "function": {"name": "read_file", "arguments": "{\"path\": \"/workspace/notes.md\"}"}}, {"id": "toolcall-web-search", "type": "function", "function": {"name": "brave_web_search", "arguments": "{\"query\": \"sterna streaming\"}"}}], "awaiting_approval": true, "approval_count": 1}
+

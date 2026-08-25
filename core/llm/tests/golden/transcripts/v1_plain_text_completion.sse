@@ -1,0 +1,15 @@
+event: generation_id
+data: {"generation_id": "genid-golden-first"}
+
+event: content
+data: {"content": "The notes "}
+
+event: content
+data: {"content": "list two "}
+
+event: content
+data: {"content": "open items."}
+
+event: done
+data: {"model": "fixture/golden-model", "finish_reason": "stop", "usage": {"prompt_tokens": 120, "completion_tokens": 40, "total_tokens": 160}, "cost": 0.00032, "prompt_cost": 0.00012, "completion_cost": 0.0002}
+

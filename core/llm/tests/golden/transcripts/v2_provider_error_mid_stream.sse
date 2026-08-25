@@ -1,0 +1,12 @@
+event: generation_id
+data: {"generation_id": "genid-golden-first"}
+
+event: content
+data: {"content": "The notes "}
+
+event: content
+data: {"content": "list "}
+
+event: error
+data: {"error": "Stream error", "detail": "Upstream provider returned 502 Bad Gateway"}
+

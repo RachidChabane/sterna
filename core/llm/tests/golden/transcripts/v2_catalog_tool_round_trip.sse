@@ -1,0 +1,36 @@
+event: generation_id
+data: {"generation_id": "genid-golden-first"}
+
+event: content
+data: {"content": "Searching the web."}
+
+event: usage_update
+data: {"usage": {"prompt_tokens": 120, "completion_tokens": 40, "total_tokens": 160}, "cost": 0.00019999999999999998, "prompt_cost": 0.00011999999999999999, "completion_cost": 7.999999999999999e-05, "generation_id": "genid-golden-first", "generation_ids": ["genid-golden-first"]}
+
+event: file_tool_executing
+data: {"tool_calls": [{"id": "toolcall-web-search", "type": "function", "function": {"name": "brave_web_search", "arguments": "{\"query\": \"sterna streaming\"}"}, "display_name": "Web Search"}]}
+
+event: heartbeat
+data: {"tool": "brave_web_search", "elapsed_seconds": <elapsed-seconds>}
+
+event: file_tool_executed
+data: {"tool_calls": [{"id": "toolcall-web-search", "type": "function", "function": {"name": "brave_web_search", "arguments": "{\"query\": \"sterna streaming\"}"}, "display_name": "Web Search"}], "results": [{"tool_call": {"id": "toolcall-web-search", "type": "function", "function": {"name": "brave_web_search", "arguments": "{\"query\": \"sterna streaming\"}"}}, "result": {"success": true, "results": [{"url": "https://example.invalid/sterna", "title": "Sterna streaming"}]}, "success": true}]}
+
+event: web_sources
+data: {"sources": [{"url": "https://example.invalid/sterna", "title": "Sterna streaming"}]}
+
+event: generation_id
+data: {"generation_id": "genid-golden-follow-up"}
+
+event: content
+data: {"content": "One result "}
+
+event: content
+data: {"content": "describes the project."}
+
+event: usage_update
+data: {"usage": {"prompt_tokens": 300, "completion_tokens": 70, "total_tokens": 370}, "cost": 0.00043999999999999996, "prompt_cost": 0.0003, "completion_cost": 0.00014, "generation_id": "genid-golden-follow-up", "generation_ids": ["genid-golden-first", "genid-golden-follow-up"]}
+
+event: done
+data: {"model": "fixture/golden-model", "finish_reason": "stop", "usage": {"prompt_tokens": 300, "completion_tokens": 70, "total_tokens": 370}, "cost": 0.00043999999999999996, "prompt_cost": 0.0003, "completion_cost": 0.00014, "tool_cost": 0.0, "generation_id": "genid-golden-follow-up", "generation_ids": ["genid-golden-first", "genid-golden-follow-up"]}
+

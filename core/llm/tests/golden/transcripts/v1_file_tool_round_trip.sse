@@ -1,0 +1,21 @@
+event: generation_id
+data: {"generation_id": "genid-golden-first"}
+
+event: content
+data: {"content": "Reading the file."}
+
+event: file_tool_executed
+data: {"tool_calls": [{"id": "toolcall-read-file", "type": "function", "function": {"name": "read_file", "arguments": "{\"path\": \"/workspace/notes.md\"}"}}], "results": [{"role": "tool", "tool_call_id": "toolcall-read-file", "name": "read_file", "content": "{\"success\": true, \"content\": \"# Notes\\nfirst line\\n\"}"}]}
+
+event: generation_id
+data: {"generation_id": "genid-golden-follow-up"}
+
+event: content
+data: {"content": "The notes "}
+
+event: content
+data: {"content": "open with a heading."}
+
+event: done
+data: {"model": "fixture/golden-model", "finish_reason": "stop", "usage": {"prompt_tokens": 320, "completion_tokens": 65, "total_tokens": 385}, "cost": 0.00057, "prompt_cost": 0.00024, "completion_cost": 0.0004}
+

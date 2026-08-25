@@ -230,6 +230,11 @@ local-test: ## Run tests locally
 	./venv/bin/pytest
 	@echo '${GREEN}Local tests complete!${NC}'
 
+local-golden-update: ## Regenerate the golden SSE transcripts from current behavior
+	@echo '${BLUE}Regenerating golden SSE transcripts...${NC}'
+	GOLDEN_UPDATE=1 ./venv/bin/pytest llm/tests/golden
+	@echo '${GREEN}Golden transcripts updated!${NC}'
+
 ##@ Git Hooks
 
 pre-commit: ## Run pre-commit checks
