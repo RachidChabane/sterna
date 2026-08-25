@@ -531,7 +531,7 @@ GET_STREET_VIEW = ToolDefinition(
 EXECUTE_CODE = ToolDefinition(
     id="execute_code",
     name="Execute Code",
-    description="Execute Python, JavaScript, or Bash code in a secure sandbox. Available libraries: pandas, numpy, matplotlib, scikit-learn, opencv. For plots use plt.savefig() not plt.show().",
+    description="Execute Python, JavaScript, or Bash code in a secure sandbox. Available libraries: pandas, numpy, matplotlib. For plots use plt.savefig() not plt.show().",
     category=ToolCategory.CODE_EXECUTION,
     provider=ToolProvider.CORE,
     tags=["code", "python", "javascript", "bash", "execute", "run", "script", "programming"],
@@ -572,7 +572,7 @@ EXECUTE_CODE = ToolDefinition(
     timeout_seconds=60,
     search_keywords=["code", "python", "execute", "run", "script", "program", "compute", "calculate"],
     search_boost=1.5,
-    system_prompt_section="Python code execution with pandas, numpy, matplotlib, scikit-learn, opencv available. Use plt.savefig() not plt.show().",
+    system_prompt_section="Python code execution with pandas, numpy, matplotlib available. Use plt.savefig() not plt.show().",
 )
 
 LIST_FILES = ToolDefinition(
