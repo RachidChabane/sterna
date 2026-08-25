@@ -37,25 +37,35 @@ class GenerationAccounting:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class ApprovalRequest:
-    """The gated tool calls of one round, paired with their records."""
+    """The gated tool calls of one round, paired with their records.
+
+    `tool_calls` holds only what the user is being asked about;
+    `round_tool_calls` holds everything the generation asked for,
+    including the calls that already ran without needing sign-off, so
+    the event closing the paused turn can report the whole round.
+    """
 
     approvals: List[Approval]
     tool_calls: List[ToolCall]
+    round_tool_calls: List[ToolCall]
 
 
 class AgentTurnState(TypedDict):
     """The channels one agent turn reads and writes.
 
-    `pending_tool_calls` holds what the last generation asked for and
-    the tool node has not yet answered. `decisions` holds the answers
-    a resumed turn came back with, keyed by tool-call id inside each
-    entry. `error` is set only by a failure that ends the turn, and
-    its presence routes straight to the end without a `done` event.
+    `pending_tool_calls` holds what the tool node has not yet
+    answered, which shrinks as calls run; `round_tool_calls` holds
+    everything the last generation asked for and does not.
+    `decisions` holds the answers a resumed turn came back with,
+    keyed by tool-call id inside each entry. `error` is set only by a
+    failure that ends the turn, and its presence routes straight to
+    the end without a `done` event.
     """
 
     messages: List[ProviderMessage]
     iteration: int
     pending_tool_calls: List[ToolCall]
+    round_tool_calls: List[ToolCall]
     approval_request: Optional[ApprovalRequest]
     decisions: List[ToolApprovalDecision]
     generation_ids: List[str]
@@ -71,6 +81,7 @@ def initial_state(messages: List[ProviderMessage]) -> AgentTurnState:
         messages=list(messages),
         iteration=0,
         pending_tool_calls=[],
+        round_tool_calls=[],
         approval_request=None,
         decisions=[],
         generation_ids=[],

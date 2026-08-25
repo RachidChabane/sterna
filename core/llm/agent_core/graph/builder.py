@@ -27,7 +27,7 @@ from .dependencies import GraphDependencies
 from .emission import EventStream
 from .finalize_node import finalize_node
 from .model_node import model_node
-from .routing import Node, route_after_model
+from .routing import Node, route_after_model, route_after_tools
 from .state import AgentTurnState
 from .tool_node import tool_node
 
@@ -63,6 +63,9 @@ def build_agent_graph(
     def after_model(state: AgentTurnState) -> str:
         return route_after_model(state, deps)
 
+    def after_tools(state: AgentTurnState) -> str:
+        return route_after_tools(state)
+
     builder: StateGraph = StateGraph(AgentTurnState)
     builder.add_node(Node.MODEL, model)
     builder.add_node(Node.APPROVAL_REQUEST, approval_request)
@@ -78,7 +81,9 @@ def build_agent_graph(
     )
     builder.add_edge(Node.APPROVAL_REQUEST, Node.APPROVAL_GATE)
     builder.add_edge(Node.APPROVAL_GATE, Node.TOOLS)
-    builder.add_edge(Node.TOOLS, Node.MODEL)
+    builder.add_conditional_edges(
+        Node.TOOLS, after_tools, [Node.MODEL, Node.APPROVAL_REQUEST]
+    )
     builder.add_edge(Node.FINALIZE, END)
 
     return builder.compile(checkpointer=checkpointer or InMemorySaver())

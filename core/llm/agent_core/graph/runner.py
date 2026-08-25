@@ -53,9 +53,9 @@ _STREAM_MODES: List[StreamMode] = [_CUSTOM, _UPDATES]
 """The two channels a turn is read from: what nodes emit, and where the graph went.
 
 Requesting more than one mode requires a `list`: any other sequence is
-taken for a single mode, and the turn then streams nothing at all. A
-fresh copy is passed on every call, since the value is consumed
-destructively.
+taken for a single mode, and the turn then streams nothing at all.
+Each run is handed a copy, so this shared list cannot be reached by
+anything the run does with it.
 """
 
 
@@ -129,7 +129,7 @@ class AgentLoop:
                 cost=accounting.cost,
                 prompt_cost=accounting.prompt_cost,
                 completion_cost=accounting.completion_cost,
-                tool_calls=list(pause.tool_calls),
+                tool_calls=list(pause.round_tool_calls) or list(pause.tool_calls),
                 awaiting_approval=True,
                 approval_count=len(pause.approvals),
                 generation_id=generation_ids[-1] if generation_ids else None,

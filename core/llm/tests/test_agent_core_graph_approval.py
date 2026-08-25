@@ -114,6 +114,97 @@ class ApprovalPauseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reader.calls, [{"path": "/a"}])
 
 
+def _mixed_round_loop():
+    """A round asking for one ungated file tool and one gated catalog tool."""
+
+    reader = RecordingTool("read_file", result={"success": True, "content": "# Notes"})
+    search = RecordingTool(
+        "brave_web_search", result={"success": True}, approval=ToolApproval.REQUIRED
+    )
+    provider = ScriptedProvider(
+        [
+            tool_call_generation(
+                "gen-1",
+                tool_call("call-read", "read_file", path="/workspace/notes.md"),
+                tool_call("call-search", "brave_web_search", query="sterna streaming"),
+                preamble="Reading the file and searching the web.",
+            ),
+            text_generation("gen-2", "Here is what I found."),
+        ]
+    )
+    loop = AgentLoop(
+        dependencies(provider, [reader, search], approvals=LocalApprovals())
+    )
+    return loop, provider, reader, search
+
+
+class MixedGatedAndUngatedRoundTests(unittest.IsolatedAsyncioTestCase):
+    async def test_the_ungated_call_runs_before_the_turn_pauses(self):
+        loop, _, reader, search = _mixed_round_loop()
+
+        events = await run_turn(loop, thread_id="thread-mixed")
+
+        self.assertEqual(
+            event_names(events),
+            [
+                EventType.GENERATION_ID,
+                EventType.CONTENT,
+                EventType.FILE_TOOL_EXECUTING,
+                EventType.FILE_TOOL_EXECUTED,
+                EventType.TOOL_CALL_REQUEST,
+                EventType.DONE,
+            ],
+        )
+        self.assertEqual(reader.calls, [{"path": "/workspace/notes.md"}])
+        self.assertEqual(search.calls, [])
+
+    async def test_only_the_gated_call_is_put_up_for_approval(self):
+        loop, _, _, _ = _mixed_round_loop()
+
+        events = await run_turn(loop, thread_id="thread-mixed")
+
+        executed = first_of(events, EventType.FILE_TOOL_EXECUTED)
+        self.assertEqual([call.id for call in executed.tool_calls], ["call-read"])
+        request = first_of(events, EventType.TOOL_CALL_REQUEST)
+        self.assertEqual([call.id for call in request.tool_calls], ["call-search"])
+        self.assertEqual([approval.tool_id for approval in request.approvals],
+                         ["brave_web_search"])
+
+    async def test_the_paused_done_event_reports_the_whole_round(self):
+        loop, _, _, _ = _mixed_round_loop()
+
+        done = first_of(await run_turn(loop, thread_id="thread-mixed"), EventType.DONE)
+
+        self.assertEqual(done.finish_reason, FinishReason.TOOL_CALLS)
+        self.assertEqual(
+            [call.id for call in done.tool_calls or []], ["call-read", "call-search"]
+        )
+        self.assertTrue(done.awaiting_approval)
+        self.assertEqual(done.approval_count, 1)
+
+    async def test_resuming_runs_only_the_gated_call_and_keeps_both_results(self):
+        loop, provider, reader, search = _mixed_round_loop()
+        await run_turn(loop, thread_id="thread-mixed")
+
+        await collect(
+            loop.resume(
+                [
+                    ToolApprovalDecision(
+                        tool_call_id="call-search", decision=ApprovalDecision.APPROVED
+                    )
+                ],
+                thread_id="thread-mixed",
+            )
+        )
+
+        self.assertEqual(reader.calls, [{"path": "/workspace/notes.md"}])
+        self.assertEqual(search.calls, [{"query": "sterna streaming"}])
+        self.assertEqual(
+            tool_result_messages(provider.requests[1].messages),
+            [{"success": True, "content": "# Notes"}, {"success": True}],
+        )
+
+
 class ApprovalResumeTests(unittest.IsolatedAsyncioTestCase):
     async def test_resuming_with_an_approval_runs_the_tool_and_finishes_the_turn(self):
         loop, provider, search = _gated_loop()

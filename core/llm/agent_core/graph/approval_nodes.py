@@ -43,6 +43,27 @@ def gated_calls(
     return gated
 
 
+def partition_by_gate(
+    tool_calls: Sequence[ToolCall],
+    decisions: Sequence[ToolApprovalDecision],
+    deps: GraphDependencies,
+) -> Tuple[List[ToolCall], List[ToolCall]]:
+    """Split pending calls into those that may run now and those still gated.
+
+    A call runs now when its tool needs no sign-off, or when the user
+    has already answered for it — a denial included, since a declined
+    call still owes the model a result. A round mixing gated and
+    ungated calls therefore runs the ungated ones before it pauses,
+    rather than holding the whole round back.
+    """
+
+    answered = {decision.tool_call_id for decision in decisions}
+    still_gated = {call.id for call, _ in gated_calls(tool_calls, deps)} - answered
+    runnable = [call for call in tool_calls if call.id not in still_gated]
+    deferred = [call for call in tool_calls if call.id in still_gated]
+    return runnable, deferred
+
+
 async def approval_request_node(
     state: AgentTurnState, deps: GraphDependencies
 ) -> Dict[str, Any]:
@@ -54,6 +75,7 @@ async def approval_request_node(
         "approval_request": ApprovalRequest(
             approvals=list(approvals),
             tool_calls=[call for call, _ in requests],
+            round_tool_calls=list(state["round_tool_calls"]),
         )
     }
 

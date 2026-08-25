@@ -1,8 +1,10 @@
-"""The node that answers every pending tool call and feeds the results back.
+"""The node that answers the pending tool calls and feeds the results back.
 
-Calls run concurrently, each under its own keep-alive, and each
-produces one tool-role message appended to the conversation so the
-next generation can read it. Three outcomes are answered the same way
+Calls that may run now do so concurrently, each under its own
+keep-alive, and each produces one tool-role message appended to the
+conversation so the next generation can read it. A call still waiting
+on the user's sign-off stays pending and is left for the round after
+the pause. Three outcomes are answered the same way
 — as a result the model can reason about rather than as a failure that
 ends the turn: a call naming a tool the registry does not hold, a call
 the user denied, and a handler that raised.
@@ -23,6 +25,7 @@ from ..events import (
 )
 from ..provider import ProviderMessage
 from ..registry import ToolDefinition
+from .approval_nodes import partition_by_gate
 from .dependencies import GraphDependencies
 from .emission import EventStream, Heartbeat
 from .ports import ToolApprovalDecision
@@ -63,12 +66,13 @@ async def tool_node(
 ) -> Dict[str, Any]:
     """Run every pending call and append one tool-role message per call."""
 
-    calls = state["pending_tool_calls"]
+    decisions = state["decisions"]
+    calls, deferred = partition_by_gate(state["pending_tool_calls"], decisions, deps)
     if not calls:
-        return {"pending_tool_calls": [], "decisions": []}
+        return {"pending_tool_calls": deferred, "decisions": []}
 
     stream.emit(FileToolExecutingEvent(tool_calls=list(calls)))
-    denied = _denied_call_ids(state["decisions"])
+    denied = _denied_call_ids(decisions)
     outcomes = await asyncio.gather(
         *(_run_one(call, call.id in denied, deps, stream) for call in calls)
     )
@@ -84,7 +88,7 @@ async def tool_node(
 
     return {
         "messages": state["messages"] + [outcome.as_message() for outcome in outcomes],
-        "pending_tool_calls": [],
+        "pending_tool_calls": deferred,
         "decisions": [],
     }
 

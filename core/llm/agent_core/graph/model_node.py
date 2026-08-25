@@ -116,6 +116,7 @@ async def model_node(state: AgentTurnState, deps: GraphDependencies, stream: Eve
         "messages": messages,
         "iteration": state["iteration"] + 1,
         "pending_tool_calls": tool_calls,
+        "round_tool_calls": tool_calls,
         "generation_ids": generation.known_generation_ids(),
         "accounting": generation.accounting or state["accounting"],
         "finish_reason": generation.finish_reason,
