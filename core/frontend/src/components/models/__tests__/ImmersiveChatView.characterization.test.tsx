@@ -4,7 +4,17 @@
  * means the rendered output changed — investigate before updating the
  * snapshot.
  */
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
+
+// The rendered greeting depends on the wall-clock hour, so the clock is
+// pinned to make snapshots deterministic regardless of when the suite runs.
+beforeAll(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.setSystemTime(new Date(2026, 0, 1, 14, 0, 0))
+})
+afterAll(() => {
+  vi.useRealTimers()
+})
 import { render } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import { ImmersiveChatView } from '../ImmersiveChatView'

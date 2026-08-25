@@ -39,7 +39,7 @@ interface ArtifactsPanelState {
   closePanel: () => void
   backToList: () => void
 
-  // Legacy compatibility (for SparkDisplay component)
+  // Convenience openers used by tool-execution displays and message sending
   openSparkInPanel: (sparkId: string) => void
   openAppInPanel: (appId: string) => void
 }

@@ -2,13 +2,13 @@
  * SparkAutoFixContext
  *
  * Provides auto-fix functionality for Sparks at the chat level.
- * This context gives nested components (like SparkDisplay) access to
+ * This context gives nested spark-rendering components access to
  * trigger fix requests to the LLM when a Spark fails to render.
  *
  * Usage:
  * 1. Wrap chat content with SparkAutoFixProvider
  * 2. Pass sendSparkFixRequest function to the provider
- * 3. SparkDisplay consumes this context to trigger auto-fixes
+ * 3. Spark-rendering components consume this context to trigger auto-fixes
  *
  * Architecture:
  * - The fix request metadata (spark_id, spark_title, error) is sent to the backend
