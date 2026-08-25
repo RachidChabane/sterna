@@ -1,0 +1,25 @@
+{
+  "mypy_errors": 1486,
+  "ts_any": 592,
+  "dead_code": {
+    "backend_vulture": 20,
+    "frontend_knip": 271
+  },
+  "loc_caps": {
+    "global_new_file_max_lines": 800,
+    "files": {
+      "core/llm/views.py": 3154,
+      "core/llm/client.py": 1583,
+      "core/llm/langchain_file_tools.py": 1764,
+      "core/llm/list_tools.py": 1759,
+      "core/llm/http_tool_executor.py": 1601,
+      "core/llm/catalog_service.py": 784,
+      "core/frontend/src/components/models/FileToolExecutionsDisplay.tsx": 2960,
+      "core/frontend/src/components/models/ModelComparisonPage.tsx": 2722,
+      "core/frontend/src/components/sandbox/FullIDE.tsx": 2576,
+      "core/frontend/src/components/models/ImmersiveChatView.tsx": 2122,
+      "core/frontend/src/components/voice-rooms/CreateRoomModal.tsx": 1914,
+      "core/frontend/src/components/models/ChatPanel.tsx": 1275
+    }
+  }
+}

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Regenerate the OpenAPI schema to a temp file and diff it against the
+# committed baseline. Exits 1 and prints the diff on any drift.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+baseline_path="$repo_root/baselines/openapi.yaml"
+
+if [ ! -f "$baseline_path" ]; then
+  echo "No OpenAPI baseline found at ${baseline_path#"$repo_root"/}; run script/schema-snapshot first." >&2
+  exit 1
+fi
+
+current_path="$(mktemp)"
+generator_log="$(mktemp)"
+trap 'rm -f "$current_path" "$generator_log"' EXIT
+
+if ! (
+  cd "$repo_root/core"
+  "$repo_root/.venv/bin/python" manage.py spectacular \
+    --settings sterna.settings.test \
+    --file "$current_path"
+) >"$generator_log" 2>&1; then
+  cat "$generator_log" >&2
+  exit 1
+fi
+
+if ! diff -u "$baseline_path" "$current_path"; then
+  echo "OpenAPI schema drift detected: baselines/openapi.yaml is out of date." >&2
+  echo "Run script/schema-snapshot and commit the result." >&2
+  exit 1
+fi
+
+echo "==> OpenAPI schema matches baselines/openapi.yaml"

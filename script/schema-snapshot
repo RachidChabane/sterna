@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Export the OpenAPI schema deterministically to baselines/openapi.yaml.
+# drf-spectacular sorts paths and component schemas alphabetically by
+# default, so the output is stable across runs on an unchanged API.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+baseline_path="$repo_root/baselines/openapi.yaml"
+mkdir -p "$(dirname "$baseline_path")"
+
+generator_log="$(mktemp)"
+trap 'rm -f "$generator_log"' EXIT
+
+if ! (
+  cd "$repo_root/core"
+  "$repo_root/.venv/bin/python" manage.py spectacular \
+    --settings sterna.settings.test \
+    --file "$baseline_path"
+) >"$generator_log" 2>&1; then
+  cat "$generator_log" >&2
+  exit 1
+fi
+
+echo "==> Wrote OpenAPI schema snapshot to ${baseline_path#"$repo_root"/}"

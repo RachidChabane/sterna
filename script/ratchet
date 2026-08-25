@@ -1,0 +1,238 @@
+#!/usr/bin/env bash
+# Enforce the code-quality ratchets recorded in baselines/ratchet.json:
+# each counter (mypy error count, TS `any` usage, dead-code findings,
+# and the tracked god-file line counts) may only stay equal or fall
+# from its baseline value — a rise fails the script. The line-count cap
+# also blocks any file outside baselines/loc_grandfathered.txt from
+# growing past the global line ceiling recorded in the baseline.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+venv_python="$repo_root/.venv/bin/python"
+venv_mypy="$repo_root/.venv/bin/mypy"
+venv_vulture="$repo_root/.venv/bin/vulture"
+ratchet_baseline="$repo_root/baselines/ratchet.json"
+loc_grandfather="$repo_root/baselines/loc_grandfathered.txt"
+knip_version="6.32.2"
+
+work_dir="$(mktemp -d)"
+trap 'rm -rf "$work_dir"' EXIT
+
+# ---- mypy error count (same invocation as script/typecheck) ----------
+echo "==> mypy error count"
+set +e
+mypy_output="$(
+  cd "$repo_root/core" && "$venv_mypy" \
+    --exclude '^(api-gateway|brave-search|google-maps|user-preferences-service|sandbox)/' \
+    . 2>&1
+)"
+mypy_exit=$?
+set -e
+
+if [ "$mypy_exit" -ge 2 ]; then
+  echo "mypy failed to complete a full pass (exit ${mypy_exit}); treating as a harness fault." >&2
+  printf '%s\n' "$mypy_output" >&2
+  exit 1
+fi
+
+if printf '%s\n' "$mypy_output" | grep -q '^Success: no issues found'; then
+  mypy_errors=0
+elif [[ "$mypy_output" =~ Found\ ([0-9]+)\ error[s]?\ in\ [0-9]+\ file ]]; then
+  mypy_errors="${BASH_REMATCH[1]}"
+else
+  echo "mypy exited ${mypy_exit} without its usual summary line; treating as a harness fault." >&2
+  printf '%s\n' "$mypy_output" >&2
+  exit 1
+fi
+echo "  mypy_errors=${mypy_errors}"
+
+# ---- TS `any` usage count (source only, tests excluded) --------------
+echo "==> TS 'any' usage count"
+set +e
+ts_any_raw="$(
+  cd "$repo_root/core/frontend" && grep -rE ': any|<any>|as any|any\[\]' src \
+    --include='*.ts' --include='*.tsx' \
+    --exclude='*.test.ts' --exclude='*.test.tsx' \
+    --exclude='*.spec.ts' --exclude='*.spec.tsx'
+)"
+ts_any_grep_exit=$?
+set -e
+
+# grep exit 1 means "no matches" (a legitimate zero); exit >= 2 means the
+# search itself broke (bad path, bad pattern) and must not be read as a
+# clean count.
+if [ "$ts_any_grep_exit" -ge 2 ]; then
+  echo "grep for TS 'any' usage failed to complete (exit ${ts_any_grep_exit}); treating as a harness fault." >&2
+  printf '%s\n' "$ts_any_raw" >&2
+  exit 1
+fi
+ts_any_count=0
+if [ "$ts_any_grep_exit" -eq 0 ]; then
+  ts_any_count="$(printf '%s\n' "$ts_any_raw" | grep -v '/__tests__/' | grep -v '/src/test/' | wc -l | tr -d ' ')"
+fi
+echo "  ts_any=${ts_any_count}"
+
+# ---- Dead code: backend (vulture) -------------------------------------
+echo "==> Backend dead-code count (vulture)"
+set +e
+vulture_output="$(
+  cd "$repo_root/core" && "$venv_vulture" . \
+    --min-confidence 90 \
+    --exclude '*/migrations/*,*/tests/*,test_*.py,*/node_modules/*,*/api-gateway/*,*/brave-search/*,*/google-maps/*,*/user-preferences-service/*,*/sandbox/*'
+)"
+vulture_exit=$?
+set -e
+
+if [ "$vulture_exit" -ne 0 ] && [ "$vulture_exit" -ne 3 ]; then
+  echo "vulture failed to complete a full pass (exit ${vulture_exit}); treating as a harness fault." >&2
+  printf '%s\n' "$vulture_output" >&2
+  exit 1
+fi
+backend_dead_code="$(printf '%s\n' "$vulture_output" | grep -c . || true)"
+if [ "$vulture_exit" -eq 0 ]; then
+  backend_dead_code=0
+fi
+echo "  backend_vulture=${backend_dead_code}"
+
+# ---- Dead code: frontend unused-export count (knip) --------------------
+# Counts only the export-surface categories (exports, types, enum
+# members, namespace members). Unused files/dependencies and
+# unresolved-import categories are deliberately excluded: they flag
+# resolution gaps in knip's entry-point graph rather than dead code,
+# and can rise on legitimate work (a new dependency, a file only
+# reachable through a route knip can't trace).
+echo "==> Frontend unused-export count (knip)"
+knip_json="$work_dir/knip.json"
+set +e
+(cd "$repo_root/core/frontend" && pnpm dlx "knip@${knip_version}" --reporter json) >"$knip_json" 2>"$work_dir/knip.stderr"
+knip_exit=$?
+set -e
+
+if [ "$knip_exit" -ne 0 ] && [ "$knip_exit" -ne 1 ]; then
+  echo "knip failed to complete a full pass (exit ${knip_exit}); treating as a harness fault." >&2
+  cat "$work_dir/knip.stderr" >&2
+  exit 1
+fi
+frontend_dead_code="$("$venv_python" - "$knip_json" <<'PYEOF'
+import json
+import sys
+
+categories = ["exports", "types", "enumMembers", "namespaceMembers"]
+with open(sys.argv[1]) as fh:
+    data = json.load(fh)
+total = sum(len(issue.get(c, [])) for issue in data["issues"] for c in categories)
+print(total)
+PYEOF
+)"
+echo "  frontend_knip=${frontend_dead_code}"
+
+# ---- Line-count caps ----------------------------------------------------
+echo "==> God-file line counts"
+declare -a loc_paths
+declare -a loc_counts
+while IFS=$'\t' read -r path; do
+  count="$(wc -l < "$repo_root/$path" | tr -d ' ')"
+  loc_paths+=("$path")
+  loc_counts+=("$count")
+  echo "  ${path}=${count}"
+done < <("$venv_python" -c "
+import json
+data = json.load(open('$ratchet_baseline'))
+for path in data['loc_caps']['files']:
+    print(path)
+")
+
+global_cap="$("$venv_python" -c "
+import json
+print(json.load(open('$ratchet_baseline'))['loc_caps']['global_new_file_max_lines'])
+")"
+echo "==> Global ${global_cap}-line cap (new files only)"
+new_file_violations="$work_dir/new_file_violations.txt"
+: >"$new_file_violations"
+while IFS= read -r -d '' path; do
+  rel_path="${path#"$repo_root"/}"
+  lines="$(wc -l < "$path" | tr -d ' ')"
+  if [ "$lines" -gt "$global_cap" ] && ! grep -qxF "$rel_path" "$loc_grandfather"; then
+    echo "${rel_path}: ${lines} lines" >>"$new_file_violations"
+  fi
+done < <(find "$repo_root/core" -type f \( -iname '*.py' -o -iname '*.ts' -o -iname '*.tsx' \) \
+  -not -path '*/migrations/*' -not -path '*/node_modules/*' \
+  -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/build/*' \
+  -print0)
+
+if [ -s "$new_file_violations" ]; then
+  echo "New files exceeding the ${global_cap}-line cap:" >&2
+  cat "$new_file_violations" >&2
+fi
+
+# ---- Compare against the baseline --------------------------------------
+echo "==> Comparing against baseline"
+current_json="$work_dir/current.json"
+{
+  echo "{"
+  echo "  \"mypy_errors\": ${mypy_errors},"
+  echo "  \"ts_any\": ${ts_any_count},"
+  echo "  \"dead_code\": {\"backend_vulture\": ${backend_dead_code}, \"frontend_knip\": ${frontend_dead_code}},"
+  echo "  \"loc_caps\": {\"files\": {"
+  for i in "${!loc_paths[@]}"; do
+    sep=","
+    if [ "$i" -eq $((${#loc_paths[@]} - 1)) ]; then sep=""; fi
+    printf '    "%s": %s%s\n' "${loc_paths[$i]}" "${loc_counts[$i]}" "$sep"
+  done
+  echo "  }}"
+  echo "}"
+} >"$current_json"
+
+violations_file="$work_dir/violations.txt"
+set +e
+"$venv_python" - "$ratchet_baseline" "$current_json" "$violations_file" <<'PYEOF'
+import json
+import sys
+
+baseline_path, current_path, violations_path = sys.argv[1:4]
+baseline = json.load(open(baseline_path))
+current = json.load(open(current_path))
+violations = []
+
+def check_counter(name, base_value, cur_value):
+    if cur_value > base_value:
+        violations.append(f"{name}: {base_value} -> {cur_value} (rose)")
+
+check_counter("mypy_errors", baseline["mypy_errors"], current["mypy_errors"])
+check_counter("ts_any", baseline["ts_any"], current["ts_any"])
+check_counter(
+    "dead_code.backend_vulture",
+    baseline["dead_code"]["backend_vulture"],
+    current["dead_code"]["backend_vulture"],
+)
+check_counter(
+    "dead_code.frontend_knip",
+    baseline["dead_code"]["frontend_knip"],
+    current["dead_code"]["frontend_knip"],
+)
+for path, base_lines in baseline["loc_caps"]["files"].items():
+    check_counter(f"loc_caps.files.{path}", base_lines, current["loc_caps"]["files"][path])
+
+with open(violations_path, "w") as fh:
+    fh.write("\n".join(violations))
+
+if violations:
+    sys.exit(1)
+PYEOF
+compare_exit=$?
+set -e
+
+if [ "$compare_exit" -ne 0 ] || [ -s "$new_file_violations" ]; then
+  echo "Ratchet violations detected:" >&2
+  if [ -s "$violations_file" ]; then
+    cat "$violations_file" >&2
+  fi
+  if [ -s "$new_file_violations" ]; then
+    echo "(see new-file cap violations printed above)" >&2
+  fi
+  exit 1
+fi
+
+echo "==> Ratchet clean: no counter rose above its baseline"
