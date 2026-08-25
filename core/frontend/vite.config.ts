@@ -60,7 +60,6 @@ export default defineConfig(({ mode }) => ({
   },
   // Optimize deps to prevent unnecessary rebuilds
   optimizeDeps: {
-    exclude: ['@tanstack/react-router-devtools'],
     include: ['pdfjs-dist'],
   },
   build: {
