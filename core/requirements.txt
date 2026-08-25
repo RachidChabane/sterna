@@ -59,7 +59,6 @@ pydantic==2.10.5
 
 # ML and embeddings
 # sentence-transformers==3.3.1  # Temporarily disabled - depends on hdbscan which has ARM64 issues
-numpy==1.26.4
 # hdbscan==0.8.29  # Temporarily disabled - compilation issues on ARM64
 
 # LLM
