@@ -1,9 +1,12 @@
-"""Golden SSE transcripts for the V2 streaming loop.
+"""Golden SSE transcripts for the V2 streaming loop, on its LangChain stack.
 
-`stream_complete_langchain` delegates to `LangChainStreamingAgent`, whose
-LangChain path accumulates streamed tool-call fragments, runs the tools,
-feeds the results back as tool messages, and repeats until the model
-answers without calling anything.
+Each scenario asks the endpoint for its LangChain stack by header, so
+these transcripts exercise `LangChainStreamingAgent`: its path
+accumulates streamed tool-call fragments, runs the tools, feeds the
+results back as tool messages, and repeats until the model answers
+without calling anything. They can only be produced with the fakes
+below in place, so a green run is proof that the header still reaches
+that stack.
 
 The provider is replaced by a fake chat model that replays a fixed list
 of chunks per loop iteration, and the tool set by fakes with fixed
@@ -17,6 +20,7 @@ import pytest
 from rest_framework.test import APIClient, APITestCase
 
 from llm.agent.tool_registry import AgentToolRegistry
+from llm.agent_service.flag import HEADER_META_KEY
 from llm.tests.conftest import (
     FakeChunk,
     FakeStreamingLLM,
@@ -44,6 +48,9 @@ from llm.tests.golden.harness import (
 pytestmark = pytest.mark.golden
 
 STREAM_URL = "/api/llm/completions/stream-complete-v2/"
+
+LANGCHAIN_STACK = "off"
+"""The header value that asks this endpoint for its LangChain stack."""
 
 GENERATION_ID_METADATA_KEY = "openrouter_generation_id"
 
@@ -176,7 +183,9 @@ class V2StreamCompleteLangchainGoldenTests(APITestCase):
             for active in patches:
                 active.start()
                 started.append(active)
-            response = self.client.post(STREAM_URL, payload, format="json")
+            response = self.client.post(
+                STREAM_URL, payload, format="json", **{HEADER_META_KEY: LANGCHAIN_STACK}
+            )
             return capture_sse(response)
         finally:
             for active in reversed(started):

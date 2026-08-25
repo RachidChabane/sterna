@@ -23,7 +23,7 @@ from typing import Optional
 
 from django.conf import settings
 
-DEFAULT_ENABLED = False
+DEFAULT_ENABLED = True
 """Which stack answers a request that names none."""
 
 SETTING_NAME = "LLM_AGENT_CORE_V2_STREAMING"
