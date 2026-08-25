@@ -51,6 +51,15 @@ PROVIDER_TIMEOUT_SECONDS = 600.0
 MAX_TURN_ITERATIONS = 10
 """Model calls one turn may make before the loop stops and reports what is pending."""
 
+MAX_V1_TURN_ITERATIONS = 2
+"""Model calls one direct-completion turn may make: the answer, and one recall.
+
+A V1 turn is sent the conversation as it stands and never relieves
+context pressure mid-turn, so the round trip it may take is the single
+one the endpoint has always taken -- ask, run what the model called,
+ask once more with the results.
+"""
+
 AUTOMATIC_TOOL_CHOICE = "auto"
 """What a turn offering tools leaves the choice among them to."""
 
@@ -178,7 +187,7 @@ async def build_v1_turn_stack(
         registry=registry,
         config=AgentTurnConfig(
             model=request.request_model,
-            max_iterations=MAX_TURN_ITERATIONS,
+            max_iterations=MAX_V1_TURN_ITERATIONS,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
             tool_choice=_tool_choice_for(registry),

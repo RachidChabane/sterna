@@ -78,6 +78,16 @@ class NoWaitRateLimiter:
         return None
 
 
+class FixtureSandboxExecutor:
+    """Sandbox executor stand-in: answers any call with a fixed result."""
+
+    def __init__(self, **_kwargs):
+        pass
+
+    async def invoke(self, _tool_id, _arguments, _context):
+        return {"success": True, "content": "# Notes\n"}
+
+
 class FakeRegistry:
     """MCP registry stand-in listing a fixed set of tools for any user."""
 
@@ -205,6 +215,30 @@ class V1StreamingEndpointTests(APITestCase):
         self.assertEqual(request.extra["top_p"], 0.8)
         self.assertEqual(request.extra["top_k"], 40)
         self.assertEqual(request.extra["frequency_penalty"], 0.5)
+
+    def test_a_turn_takes_at_most_one_recall(self):
+        """V1 asks the model again once the tools have run, and no further."""
+
+        tool_calling_generation = [
+            ProviderGenerationIdChunk(generation_id=GENERATION_ID),
+            ProviderToolCallDeltaChunk(
+                index=0,
+                id=FILE_TOOL_CALL_ID,
+                name=FILE_TOOL_NAME,
+                arguments_delta=FILE_TOOL_ARGUMENTS,
+            ),
+            ProviderUsageChunk(
+                usage=Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+                cost=0.0001,
+            ),
+            ProviderDoneChunk(finish_reason=TOOL_CALLS),
+        ]
+        with patch(
+            "llm.agent_service.dependencies.SandboxToolInvoker", FixtureSandboxExecutor
+        ):
+            self._post([tool_calling_generation], enable_file_tools=True)
+
+        self.assertEqual(self.provider.call_count, 2)
 
     def test_a_request_without_tools_offers_the_model_none(self):
         self._post([answering_generation("Done.")])
