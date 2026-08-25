@@ -84,15 +84,13 @@ sandbox/
 **Deployment scope — read this before trusting the claim above in a given environment.**
 gVisor isolation is real and enforced on the **Docker/VPS deployment path**
 (`docker-compose.sandbox.yml`, where `sandbox_executor.py` calls the Docker Engine
-directly via `docker.from_env()`). It is **not** currently wired for the **Kubernetes**
+directly via `docker.from_env()`). It is **not** wired for the **Kubernetes**
 deployment: the orchestrator's Kubernetes `Deployment` mounts no `docker.sock`, and this
 codebase has no Kubernetes API client anywhere — `sandbox_executor.py`'s only
 sandbox-creation path is a raw Docker Engine call. When Docker init fails (as it does in
 the k8s pod), `sandbox_executor` is `None` and sandbox-dependent endpoints no-op rather
-than actually isolating anything. Treat `ORCHESTRATOR_MODE=kubernetes` /
-`SANDBOX_RUNTIME_CLASS=gvisor` as aspirational configuration, not a working feature,
-until a real Kubernetes execution path (a K8s client creating Pods with
-`runtimeClassName: gvisor`) is implemented.
+than actually isolating anything. The Kubernetes manifests deploy the orchestrator with
+no working sandbox execution path.
 
 ### Resources
 

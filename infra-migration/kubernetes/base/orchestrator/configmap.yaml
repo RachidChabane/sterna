@@ -4,9 +4,6 @@ metadata:
   name: orchestrator-config
   namespace: sterna
 data:
-  # Orchestrator mode - kubernetes for K8s pod-based sandboxes
-  ORCHESTRATOR_MODE: "kubernetes"
-
   # Sandbox container image (sandbox-datascience includes numpy, pandas, matplotlib, etc.)
   SANDBOX_IMAGE: "ghcr.io/sterna-ai/sandbox-datascience:latest"
 

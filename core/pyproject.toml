@@ -13,9 +13,9 @@
 # install .` against this directory). The [project] table below exists
 # solely to record the license that applies to this code, matching the
 # root LICENSE/NOTICE and the `license = {text = "..."}` spelling used by
-# the other pyproject.toml files in this repo (core/api-gateway,
-# infra-migration/sandbox-k8s). `version` is set to a fixed placeholder,
-# not derived from core/versions.json, since this table is never built.
+# the other pyproject.toml file in this repo (core/api-gateway).
+# `version` is set to a fixed placeholder, not derived from
+# core/versions.json, since this table is never built.
 [project]
 name = "sterna-web"
 version = "0.0.0"

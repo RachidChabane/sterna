@@ -178,7 +178,6 @@ patches:
       metadata:
         name: orchestrator-config
       data:
-        ORCHESTRATOR_MODE: "kubernetes"
         EGRESS_PROXY_URL: "http://staging-egress-proxy:8888"
     target:
       kind: ConfigMap

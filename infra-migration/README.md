@@ -1,9 +1,8 @@
 # infra-migration
 
 Infrastructure as code for the Sterna platform: Terraform for cloud
-resources, Kustomize for Kubernetes manifests, plus a small Kubernetes
-sandbox-execution adapter. This document maps the directory so the
-current-vs-legacy environment story is explicit.
+resources, Kustomize for Kubernetes manifests. This document maps the
+directory so the current-vs-legacy environment story is explicit.
 
 ## Directory map
 
@@ -16,7 +15,6 @@ infra-migration/
 │   ├── base/              # Environment-agnostic manifests
 │   ├── overlays/          # Per-environment Kustomize overlays
 │   └── components/        # Reusable Kustomize components
-├── sandbox-k8s/           # Kubernetes-mode sandbox executor adapter
 ├── scripts/                # Operational scripts (secret population, apply helpers)
 ├── tests/                  # Runbook lint + Terraform module tests
 └── RUNBOOK.md               # Operational runbook for the Scaleway staging plane
@@ -120,14 +118,6 @@ that script's header) or `scripts/apply-secrets.sh`.
 `base/secrets/secrets-template.yaml` is a plain-Kubernetes-Secret
 fallback template (pre-ExternalSecrets), kept for reference; the
 `external-secrets/` path is what staging and production actually run.
-
-## `sandbox-k8s/`
-
-A Kubernetes-backed implementation of the sandbox executor interface
-used by the orchestrator service, selected at runtime via
-`ORCHESTRATOR_MODE` alongside the Docker-backed executor in
-`core/sandbox/`. Runs untrusted agent code in per-session Pods instead
-of per-session containers.
 
 ## `scripts/`
 

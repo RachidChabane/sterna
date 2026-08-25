@@ -63,12 +63,8 @@ spec:
                   key: R2_ENDPOINT
                   optional: true
             # Kubernetes-specific config
-            - name: ORCHESTRATOR_MODE
-              value: "kubernetes"
             - name: SANDBOX_NAMESPACE
               value: "sterna-sandboxes"
-            - name: SANDBOX_RUNTIME_CLASS
-              value: "gvisor"
             - name: SANDBOX_IMAGE
               valueFrom:
                 configMapKeyRef:
