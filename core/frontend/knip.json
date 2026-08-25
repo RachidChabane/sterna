@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}",
+    "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}"
+  ],
+  "project": [
+    "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}",
+    "!**/dist/**",
+    "!**/build/**",
+    "!**/coverage/**",
+    "!**/node_modules/**"
+  ]
+}

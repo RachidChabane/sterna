@@ -6,6 +6,7 @@
   "eslint_warnings": 89,
   "eslint_files_linted": 544,
   "eslint_config_sha256": "088e9031a1668aacb8163463e8c1238c82f9188075c4216b04a615e7ad4c92d4",
+  "knip_config_sha256": "9f1a3d5b1fe09f8d866ef4fdc2f3d83a4cc31c850548ef47510e6cbd56e73e45",
   "dead_code": {
     "backend_vulture": 20,
     "backend_files_scanned": 414,
