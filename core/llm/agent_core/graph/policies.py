@@ -5,20 +5,40 @@ the loop needs to build each `ChatCompletionRequest` plus the two
 policies the loop applies on its own behalf — how many model/tool
 round trips it will take before it stops, and whether a failed
 provider call is retried before the turn ends.
+
+A third policy, `ApprovalPolicy`, governs a call the loop is about to
+gate: it is a `GraphDependencies` field rather than part of
+`AgentTurnConfig`, since a caller with no opinion supplies none at all
+and gets each `ToolDefinition`'s own `approval` back unchanged.
 """
 
 from __future__ import annotations
 
 import dataclasses
-from typing import Optional, Tuple, Type, Union
+from typing import Callable, Optional, Tuple, Type, Union
 
-from ..events import JsonDict
+from ..events import JsonDict, ToolCall
 from ..provider_errors import (
     ProviderError,
     ProviderOverloadedError,
     ProviderRateLimitError,
     ProviderTransportError,
 )
+from ..registry import ToolApproval, ToolDefinition
+
+ApprovalPolicy = Callable[[ToolDefinition, ToolCall], ToolApproval]
+"""Overrides a tool call's approval requirement ahead of its own `ToolDefinition`.
+
+`gated_calls` (`graph.approval_nodes`) calls this, when
+`GraphDependencies.approval_policy` supplies one, with the call's
+`ToolDefinition` and the `ToolCall` itself, and gates the call on
+whatever `ToolApproval` comes back — regardless of what the
+definition's own `approval` says. A caller that wants every tool to
+run without a pause (V2's wiring) passes a policy that always returns
+`ToolApproval.AUTO`; one that wants V1's classification passes no
+policy at all, since that classification is already each
+`ToolDefinition`'s default.
+"""
 
 DEFAULT_MAX_ITERATIONS = 10
 """Model calls one turn may make before the loop stops on its own."""

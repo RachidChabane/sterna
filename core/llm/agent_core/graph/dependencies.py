@@ -11,10 +11,11 @@ testable by constructing this object directly.
 from __future__ import annotations
 
 import dataclasses
+from typing import Optional
 
 from ..provider import ModelProvider
 from ..registry import ToolExecutionContext, ToolRegistry
-from .policies import AgentTurnConfig
+from .policies import AgentTurnConfig, ApprovalPolicy
 from .ports import (
     ApprovalPort,
     ContextWindowPort,
@@ -36,6 +37,7 @@ class GraphDependencies:
     config: AgentTurnConfig
     tool_context: ToolExecutionContext
     approvals: ApprovalPort = dataclasses.field(default_factory=LocalApprovals)
+    approval_policy: Optional[ApprovalPolicy] = None
     context_window: ContextWindowPort = dataclasses.field(default_factory=UnboundedContextWindow)
     cost_accountant: CostAccountantPort = dataclasses.field(default_factory=ProviderReportedCost)
     tool_result_events: ToolResultEventsPort = dataclasses.field(

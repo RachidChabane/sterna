@@ -25,6 +25,24 @@ from .ports import ApprovalDecision, ToolApprovalDecision
 from .state import AgentTurnState, ApprovalRequest
 
 
+def _approval_for(
+    call: ToolCall, definition: ToolDefinition, deps: GraphDependencies
+) -> ToolApproval:
+    """The approval a call is actually held to: the policy's answer if one is
+    configured, else the tool's own default.
+
+    `GraphDependencies.approval_policy`, when set, is consulted for
+    every call and its answer used unconditionally — it may loosen a
+    `REQUIRED` default to `AUTO` just as readily as it may tighten an
+    `AUTO` one to `REQUIRED`. Leaving it unset reproduces each tool's
+    own classification, which is V1's.
+    """
+
+    if deps.approval_policy is not None:
+        return deps.approval_policy(definition, call)
+    return definition.approval
+
+
 def gated_calls(
     tool_calls: Sequence[ToolCall], deps: GraphDependencies
 ) -> List[Tuple[ToolCall, ToolDefinition]]:
@@ -38,7 +56,7 @@ def gated_calls(
     gated: List[Tuple[ToolCall, ToolDefinition]] = []
     for call in tool_calls:
         definition = deps.registry.get(call.function.name)
-        if definition is not None and definition.approval is ToolApproval.REQUIRED:
+        if definition is not None and _approval_for(call, definition, deps) is ToolApproval.REQUIRED:
             gated.append((call, definition))
     return gated
 

@@ -15,6 +15,6 @@ TOOL = ToolDefinition(
     description=_LEGACY.description,
     input_schema=_LEGACY.input_schema,
     handler=delegate_to_invoker(_LEGACY.id),
-    approval=ToolApproval.AUTO,
+    approval=ToolApproval.REQUIRED,
     prompt_snippet=PROMPT_SNIPPET,
 )

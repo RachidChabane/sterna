@@ -17,7 +17,7 @@ from .builder import build_agent_graph
 from .dependencies import GraphDependencies
 from .emission import EventStream, Heartbeat
 from .errors import to_error_event
-from .policies import AgentTurnConfig, RetryPolicy
+from .policies import AgentTurnConfig, ApprovalPolicy, RetryPolicy
 from .ports import (
     ApprovalDecision,
     ApprovalPort,
@@ -41,6 +41,7 @@ __all__ = [
     "AgentTurnConfig",
     "AgentTurnState",
     "ApprovalDecision",
+    "ApprovalPolicy",
     "ApprovalPort",
     "ApprovalRequest",
     "ContextRelief",

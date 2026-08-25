@@ -18,6 +18,7 @@ from llm.agent_core.graph import (
     ToolApprovalDecision,
     TurnNotPausedError,
 )
+from llm.agent_core.graph.approval_nodes import gated_calls
 from llm.agent_core.registry import ToolApproval
 from llm.tests.agent_core_doubles import (
     RecordingTool,
@@ -35,6 +36,18 @@ from llm.tests.agent_core_doubles import (
 )
 
 THREAD = "thread-approval"
+
+
+def _auto_all_policy(definition, call) -> ToolApproval:
+    """An `ApprovalPolicy` that always lets a call through: what V2's future wiring passes."""
+
+    return ToolApproval.AUTO
+
+
+def _require_all_policy(definition, call) -> ToolApproval:
+    """An `ApprovalPolicy` that always gates a call, for the opposite override direction."""
+
+    return ToolApproval.REQUIRED
 
 
 def _gated_loop(**overrides):
@@ -359,6 +372,99 @@ class ApprovalResumeTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(search.calls, [{"query": "sterna streaming"}])
+
+
+class ApprovalPolicyOverrideTests(unittest.TestCase):
+    """`GraphDependencies.approval_policy`, consulted ahead of each tool's own default.
+
+    Unit-level, against `gated_calls` directly, rather than through a
+    full turn: the policy port's contract is what it is handed and what
+    it is allowed to override, and that is exactly what `gated_calls`
+    computes.
+    """
+
+    def _call_and_definition(self, tool: RecordingTool, **arguments):
+        call = tool_call(f"call-{tool.tool_id}", tool.tool_id, **arguments)
+        definition = tool.definition()
+        return call, definition
+
+    def test_no_policy_reproduces_each_tool_s_own_default(self):
+        required_tool = RecordingTool("brave_web_search", approval=ToolApproval.REQUIRED)
+        auto_tool = RecordingTool("read_file", approval=ToolApproval.AUTO)
+        required_call, _ = self._call_and_definition(required_tool, query="x")
+        auto_call, _ = self._call_and_definition(auto_tool, path="/a")
+        deps = dependencies(
+            ScriptedProvider([]), [required_tool, auto_tool], approval_policy=None
+        )
+
+        gated_ids = {call.id for call, _ in gated_calls([required_call, auto_call], deps)}
+
+        self.assertEqual(gated_ids, {required_call.id})
+
+    def test_a_policy_can_loosen_a_required_default_to_auto(self):
+        search = RecordingTool("brave_web_search", approval=ToolApproval.REQUIRED)
+        call, _ = self._call_and_definition(search, query="x")
+        deps = dependencies(
+            ScriptedProvider([]), [search], approval_policy=_auto_all_policy
+        )
+
+        self.assertEqual(gated_calls([call], deps), [])
+
+    def test_a_policy_can_tighten_an_auto_default_to_required(self):
+        reader = RecordingTool("read_file", approval=ToolApproval.AUTO)
+        call, _ = self._call_and_definition(reader, path="/a")
+        deps = dependencies(
+            ScriptedProvider([]), [reader], approval_policy=_require_all_policy
+        )
+
+        gated = gated_calls([call], deps)
+
+        self.assertEqual([c.id for c, _ in gated], [call.id])
+
+    def test_the_policy_receives_the_call_s_own_definition_and_the_call_itself(self):
+        reader = RecordingTool("read_file", approval=ToolApproval.AUTO)
+        call, definition = self._call_and_definition(reader, path="/a")
+        received = []
+
+        def recording_policy(tool_definition, tool_call_arg):
+            received.append((tool_definition, tool_call_arg))
+            return ToolApproval.AUTO
+
+        deps = dependencies(
+            ScriptedProvider([]), [reader], approval_policy=recording_policy
+        )
+
+        gated_calls([call], deps)
+
+        self.assertEqual(len(received), 1)
+        received_definition, received_call = received[0]
+        self.assertEqual(received_definition.id, "read_file")
+        self.assertIs(received_call, call)
+
+
+class ApprovalPolicyOverrideTurnTests(unittest.IsolatedAsyncioTestCase):
+    async def test_an_auto_all_policy_lets_a_turn_run_a_normally_gated_tool_without_pausing(
+        self,
+    ):
+        search = RecordingTool(
+            "brave_web_search",
+            result={"success": True, "results": ["one"]},
+            approval=ToolApproval.REQUIRED,
+        )
+        provider = ScriptedProvider(
+            [
+                tool_call_generation("gen-1", tool_call("call-search", "brave_web_search", query="x")),
+                text_generation("gen-2", "done"),
+            ]
+        )
+        loop = AgentLoop(
+            dependencies(provider, [search], approval_policy=_auto_all_policy)
+        )
+
+        events = await run_turn(loop, thread_id="thread-auto-all-policy")
+
+        self.assertEqual(all_of(events, EventType.TOOL_CALL_REQUEST), [])
+        self.assertEqual(search.calls, [{"query": "x"}])
 
 
 if __name__ == "__main__":
