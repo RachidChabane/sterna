@@ -22,7 +22,7 @@ export interface TTSProvider {
  * Voice information (provider-agnostic)
  */
 /** Language-specific voice preview info (ElevenLabs) */
-export interface VoiceLanguagePreview {
+interface VoiceLanguagePreview {
   language: string
   model_id: string
   accent?: string
@@ -50,9 +50,9 @@ export interface VoiceInfo {
  * TTS model options (provider-specific)
  */
 // OpenAI models
-export type OpenAITTSModel = 'tts-1' | 'tts-1-hd'
+type OpenAITTSModel = 'tts-1' | 'tts-1-hd'
 // ElevenLabs models
-export type ElevenLabsTTSModel = 'eleven_v3' | 'eleven_turbo_v2_5' | 'eleven_flash_v2_5' | 'eleven_multilingual_v2'
+type ElevenLabsTTSModel = 'eleven_v3' | 'eleven_turbo_v2_5' | 'eleven_flash_v2_5' | 'eleven_multilingual_v2'
 // Combined type for backwards compatibility
 export type TTSModel = OpenAITTSModel | ElevenLabsTTSModel
 
@@ -169,7 +169,7 @@ export interface UpdateRoomRequest {
 /**
  * Client to server: Audio chunk
  */
-export interface AudioChunkEvent {
+interface AudioChunkEvent {
   type: 'audio_chunk'
   data: string  // base64 encoded
   sequence?: number
@@ -178,21 +178,21 @@ export interface AudioChunkEvent {
 /**
  * Client to server: End speaking signal
  */
-export interface EndSpeakingEvent {
+interface EndSpeakingEvent {
   type: 'end_speaking'
 }
 
 /**
  * Client to server: Control events
  */
-export interface ControlEvent {
+interface ControlEvent {
   type: 'pause' | 'resume' | 'skip_agent' | 'end_session'
 }
 
 /**
  * Client to server: Voice settings update
  */
-export interface SettingsEvent {
+interface SettingsEvent {
   type: 'settings'
   silence_timeout: number  // seconds before processing (1-5)
   interruption_threshold: number  // 0-100, higher = harder to interrupt
@@ -202,7 +202,7 @@ export interface SettingsEvent {
 /**
  * Client to server: Audio playback finished for an agent
  */
-export interface AudioPlaybackCompleteEvent {
+interface AudioPlaybackCompleteEvent {
   type: 'audio_playback_complete'
   agent_id: string
 }
@@ -210,14 +210,14 @@ export interface AudioPlaybackCompleteEvent {
 /**
  * Client to server: User interrupt signal from client-side VAD
  */
-export interface UserInterruptEvent {
+interface UserInterruptEvent {
   type: 'user_interrupt'
 }
 
 /**
  * Server to client: Transcript from STT
  */
-export interface TranscriptEvent {
+interface TranscriptEvent {
   type: 'transcript'
   text: string
   is_final: boolean
@@ -228,7 +228,7 @@ export interface TranscriptEvent {
 /**
  * Server to client: Agent state change
  */
-export interface AgentStateEvent {
+interface AgentStateEvent {
   type: 'agent_state'
   agent_id: string
   agent_name: string
@@ -238,7 +238,7 @@ export interface AgentStateEvent {
 /**
  * Server to client: Agent text response (streaming)
  */
-export interface AgentTextEvent {
+interface AgentTextEvent {
   type: 'agent_text'
   agent_id: string
   agent_name: string
@@ -249,7 +249,7 @@ export interface AgentTextEvent {
 /**
  * Server to client: Agent audio chunk
  */
-export interface AgentAudioEvent {
+interface AgentAudioEvent {
   type: 'agent_audio'
   agent_id: string
   data: string  // base64 encoded
@@ -261,7 +261,7 @@ export interface AgentAudioEvent {
 /**
  * Server to client: Turn notification
  */
-export interface TurnEvent {
+interface TurnEvent {
   type: 'turn'
   speaker: 'user' | string  // 'user' or agent_id
   turn_number: number
@@ -270,7 +270,7 @@ export interface TurnEvent {
 /**
  * Server to client: Error event
  */
-export interface ErrorEvent {
+interface ErrorEvent {
   type: 'error'
   code: string
   message: string
@@ -280,7 +280,7 @@ export interface ErrorEvent {
 /**
  * Server to client: Connection acknowledgment
  */
-export interface ConnectedEvent {
+interface ConnectedEvent {
   type: 'connected'
   room_id: string
   session_id: string
@@ -297,7 +297,7 @@ export interface ConnectedEvent {
 /**
  * Server to client: Session ended
  */
-export interface SessionEndedEvent {
+interface SessionEndedEvent {
   type: 'session_ended'
   reason: 'user_ended' | 'timeout' | 'error'
   summary?: {
@@ -310,14 +310,14 @@ export interface SessionEndedEvent {
 /**
  * Server to client: Stop audio playback
  */
-export interface StopAudioEvent {
+interface StopAudioEvent {
   type: 'stop_audio'
 }
 
 /**
  * Server to client: User interrupted AI
  */
-export interface InterruptedEvent {
+interface InterruptedEvent {
   type: 'interrupted'
   message: string
   interrupted_agent?: string
@@ -326,7 +326,7 @@ export interface InterruptedEvent {
 /**
  * Server to client: Room state update
  */
-export interface RoomStateEvent {
+interface RoomStateEvent {
   type: 'room_state'
   status: RoomStatus
   current_speaker?: string
@@ -338,7 +338,7 @@ export interface RoomStateEvent {
 /**
  * Server to client: Word-level alignment for live transcript sync
  */
-export interface AlignmentEvent {
+interface AlignmentEvent {
   type: 'alignment'
   agent_id: string
   text: string
@@ -354,7 +354,7 @@ export interface AlignmentEvent {
  * Server to client: All audio has been sent for an agent
  * Client should wait for this before sending audio_playback_complete
  */
-export interface AgentAudioCompleteEvent {
+interface AgentAudioCompleteEvent {
   type: 'agent_audio_complete'
   agent_id: string
 }
@@ -387,26 +387,6 @@ export type ClientEvent =
   | SettingsEvent
   | AudioPlaybackCompleteEvent
   | UserInterruptEvent
-
-/**
- * Voice room filter options
- */
-export interface VoiceRoomFilter {
-  search?: string
-  isActive?: boolean
-  sortBy?: 'name' | 'created_at' | 'updated_at'
-  order?: 'asc' | 'desc'
-}
-
-/**
- * Voice room stats
- */
-export interface VoiceRoomStats {
-  total_rooms: number
-  total_sessions: number
-  total_messages: number
-  total_duration_ms: number
-}
 
 /**
  * Language info from ElevenLabs

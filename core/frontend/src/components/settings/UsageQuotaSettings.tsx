@@ -179,5 +179,3 @@ export function UsageQuotaSettings() {
     </div>
   )
 }
-
-export default UsageQuotaSettings

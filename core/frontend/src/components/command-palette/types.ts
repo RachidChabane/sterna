@@ -9,10 +9,10 @@ import type { MCPPreconfiguredServer } from '@/api/mcp'
  */
 
 // Supported item types
-export type CommandItemType = 'page' | 'conversation' | 'model' | 'action' | 'integration' | 'image' | 'video' | 'spark'
+type CommandItemType = 'page' | 'conversation' | 'model' | 'action' | 'integration' | 'image' | 'video' | 'spark'
 
 // Base command item interface
-export interface BaseCommandItem {
+interface BaseCommandItem {
   id: string
   type: CommandItemType
   title: string
@@ -24,7 +24,7 @@ export interface BaseCommandItem {
 }
 
 // Page navigation item
-export interface PageCommandItem extends BaseCommandItem {
+interface PageCommandItem extends BaseCommandItem {
   type: 'page'
   href: string
 }
@@ -68,7 +68,7 @@ export interface IntegrationCommandItem extends BaseCommandItem {
 }
 
 // Action for model items
-export interface CommandItemAction {
+interface CommandItemAction {
   label: string
   icon: LucideIcon
   onClick: (e: React.MouseEvent) => void

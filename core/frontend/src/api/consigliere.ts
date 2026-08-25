@@ -125,7 +125,7 @@ export interface ConsigliereSession {
   message_count?: number
 }
 
-export interface ConsigliereSessionSummary {
+interface ConsigliereSessionSummary {
   id: string
   chat_group_id: string
   current_model_at_start: string
@@ -197,19 +197,19 @@ export interface AnalysisProgressEvent {
   timestamp: number
 }
 
-export interface AnalysisProgressUpdate {
+interface AnalysisProgressUpdate {
   event: 'progress'
   data: AnalysisProgressEvent
 }
 
-export interface AnalysisCompleteEvent {
+interface AnalysisCompleteEvent {
   event: 'complete'
   data: {
     analysis: ConversationAnalysis
   }
 }
 
-export interface AnalysisErrorEvent {
+interface AnalysisErrorEvent {
   event: 'error'
   data: {
     error: string
@@ -217,7 +217,7 @@ export interface AnalysisErrorEvent {
   }
 }
 
-export type AnalysisStreamEvent =
+type AnalysisStreamEvent =
   | AnalysisProgressUpdate
   | AnalysisCompleteEvent
   | AnalysisErrorEvent

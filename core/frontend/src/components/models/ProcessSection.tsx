@@ -296,22 +296,3 @@ export function ProcessSection({
     </>
   )
 }
-
-/**
- * ProcessSectionGroup
- *
- * Groups multiple ProcessSection components with consistent spacing
- */
-export function ProcessSectionGroup({
-  children,
-  className,
-}: {
-  children: ReactNode
-  className?: string
-}) {
-  return (
-    <div className={cn('space-y-2', className)}>
-      {children}
-    </div>
-  )
-}

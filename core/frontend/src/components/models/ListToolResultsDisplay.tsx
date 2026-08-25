@@ -1019,8 +1019,6 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
 // PUBLIC API
 // =============================================================================
 
-export const LIST_TOOL_NAMES = Object.keys(TOOL_REGISTRY)
-
 export const isListToolName = (toolName: string): boolean => {
   return toolName in TOOL_REGISTRY
 }

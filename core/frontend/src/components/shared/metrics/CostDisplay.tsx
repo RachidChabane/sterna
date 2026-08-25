@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { DollarSign } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export type CostDisplayVariant = 'inline' | 'badge' | 'detailed'
+type CostDisplayVariant = 'inline' | 'badge' | 'detailed'
 
 interface CostDisplayProps {
   cost?: number

@@ -1702,5 +1702,3 @@ export function ProjectStatusSidePanel({ conversationId, chatId, className }: Pr
     </div>
   )
 }
-
-export default ProjectStatusSidePanel

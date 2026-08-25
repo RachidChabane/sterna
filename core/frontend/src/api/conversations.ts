@@ -17,7 +17,7 @@ import { getDefaultModelParameters } from '@/config/modelParameters'
 /**
  * Conversation as returned from the API
  */
-export interface APIChatModel {
+interface APIChatModel {
   model_id: string
   model_provider: string | null
 }
@@ -70,7 +70,7 @@ export interface APIChat {
 /**
  * Spark as returned from the API (embedded in messages)
  */
-export interface APISpark {
+interface APISpark {
   id: string
   title: string
   framework: 'react' | 'html' | 'svg' | 'markdown' | 'mermaid' | 'pdf' | 'docx' | 'ics' | 'csv' | 'xlsx'
@@ -774,5 +774,3 @@ function getDefaultParameters(): ModelParameters {
   // Use the centralized defaults so all features are enabled
   return getDefaultModelParameters()
 }
-
-export default conversationsAPI

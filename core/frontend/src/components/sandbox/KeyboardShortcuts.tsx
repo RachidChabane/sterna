@@ -46,15 +46,6 @@ export const KeyboardShortcuts = memo(function KeyboardShortcuts({
 })
 
 // Common IDE shortcuts
-export const IDE_SHORTCUTS = {
-  save: { keys: ['⌘', 'S'], label: 'Save' },
-  saveAll: { keys: ['⌘', '⇧', 'S'], label: 'Save All' },
-  find: { keys: ['⌘', 'F'], label: 'Find' },
-  findFiles: { keys: ['⌘', 'P'], label: 'Find Files' },
-  run: { keys: ['⌘', 'Enter'], label: 'Run' },
-  closeTab: { keys: ['⌘', 'W'], label: 'Close' },
-  newFile: { keys: ['⌘', 'N'], label: 'New' },
-}
 
 // Platform-aware shortcuts
 export function getPlatformShortcuts(isMac: boolean) {

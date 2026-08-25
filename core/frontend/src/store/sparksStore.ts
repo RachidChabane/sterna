@@ -7,7 +7,7 @@
 
 import type { SparkAsset } from '@/components/models/SparkRenderer'
 
-export interface SparkLatestDeployment {
+interface SparkLatestDeployment {
   id: string
   status: string
   preview_url: string

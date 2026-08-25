@@ -754,5 +754,3 @@ function VideoCard({ video, onClick }: VideoCardProps) {
     </div>
   )
 }
-
-export default VideosGalleryPage

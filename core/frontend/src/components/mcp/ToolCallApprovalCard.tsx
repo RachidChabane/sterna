@@ -19,7 +19,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 
-export interface ToolCallApproval {
+interface ToolCallApproval {
   id: string
   tool_id: string
   tool_name: string

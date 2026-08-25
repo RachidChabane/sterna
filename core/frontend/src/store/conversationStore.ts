@@ -29,7 +29,7 @@ import { getDefaultModelParameters } from '@/config/modelParameters'
 /**
  * Model info for a single chat
  */
-export interface ChatModelInfo {
+interface ChatModelInfo {
   modelId: string
   modelProvider: string | null
 }

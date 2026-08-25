@@ -6,11 +6,11 @@
 
 import type { LoginResponse, User } from './types'
 
-export const DEV_MODE = import.meta.env.DEV
-export const ENABLE_DEV_AUTH = import.meta.env.VITE_ENABLE_DEV_AUTH === 'true'
+const DEV_MODE = import.meta.env.DEV
+const ENABLE_DEV_AUTH = import.meta.env.VITE_ENABLE_DEV_AUTH === 'true'
 
 // Mock user for development
-export const mockUser: User = {
+const mockUser: User = {
   id: '1',
   email: 'dev@example.com',
   first_name: 'Dev',
@@ -22,7 +22,7 @@ export const mockUser: User = {
 }
 
 // Mock tokens for development
-export const mockTokens = {
+const mockTokens = {
   access: 'dev-access-token-' + Date.now(),
   refresh: 'dev-refresh-token-' + Date.now()
 }
@@ -56,23 +56,6 @@ export async function devLogin(email: string, password: string): Promise<LoginRe
   }
 
   throw new Error('Invalid credentials')
-}
-
-/**
- * Mock refresh token function for development
- */
-export async function devRefreshToken(refreshToken: string) {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 200))
-
-  if (refreshToken === mockTokens.refresh) {
-    return {
-      access: 'dev-access-token-refreshed-' + Date.now(),
-      refresh: mockTokens.refresh
-    }
-  }
-
-  throw new Error('Invalid refresh token')
 }
 
 /**

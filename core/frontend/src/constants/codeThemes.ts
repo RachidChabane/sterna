@@ -383,27 +383,6 @@ export function getCodeTheme(themeId: CodeThemeId): CodeTheme {
 }
 
 /**
- * Get the syntax highlighter style for a theme
- */
-export function getCodeThemeStyle(themeId: CodeThemeId): { [key: string]: React.CSSProperties } {
-  return getCodeTheme(themeId).style
-}
-
-/**
- * Get the token colors for Prism.js manual highlighting
- */
-export function getCodeThemeTokenColors(themeId: CodeThemeId): Record<string, string> {
-  return getCodeTheme(themeId).tokenColors
-}
-
-/**
- * Get the default text color for a theme
- */
-export function getCodeThemeTextColor(themeId: CodeThemeId): string {
-  return getCodeTheme(themeId).textColor
-}
-
-/**
  * Generate Monaco Editor theme data from a CodeTheme.
  * Maps Prism token colors → Monaco token rules + editor chrome colors.
  */

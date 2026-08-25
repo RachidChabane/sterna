@@ -6,7 +6,7 @@ import type { CommandProvider, GroupedCommandItems } from './types'
  * Central registry for managing command providers
  * Handles provider registration and search across all providers
  */
-export class CommandRegistry {
+class CommandRegistry {
   private providers = new Map<string, CommandProvider>()
 
   /**

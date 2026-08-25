@@ -182,5 +182,3 @@ export const useUsageQuotaStore = create<UsageQuotaState>()((set, get) => ({
     return percentRemaining < 20
   },
 }))
-
-export default useUsageQuotaStore

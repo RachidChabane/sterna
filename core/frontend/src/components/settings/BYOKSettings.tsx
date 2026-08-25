@@ -396,5 +396,3 @@ export function BYOKSettings() {
     </div>
   )
 }
-
-export default BYOKSettings

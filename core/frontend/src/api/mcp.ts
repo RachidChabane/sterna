@@ -80,7 +80,7 @@ export interface MCPToolMinimal {
   description: string
 }
 
-export interface MCPToolServer {
+interface MCPToolServer {
   id: string
   name: string
   transport_type: 'websocket' | 'stdio'
@@ -166,10 +166,6 @@ export interface MCPSandboxStartResponse {
   container_name?: string
 }
 
-export interface MCPApproveRequest {
-  scope?: 'once' | 'session' | 'permanent'
-}
-
 export interface MCPServersResponse {
   results: MCPServer[]
   count: number
@@ -217,7 +213,7 @@ export interface MCPExecutionsResponse {
   count: number
 }
 
-export interface MCPConfigRequirement {
+interface MCPConfigRequirement {
   name: string
   label: string
   description: string

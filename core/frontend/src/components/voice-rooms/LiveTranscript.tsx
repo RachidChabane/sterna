@@ -257,5 +257,3 @@ export function LiveTranscript({ className, isDark = true, wordsPerLine = 8, age
     </div>
   )
 }
-
-export default LiveTranscript

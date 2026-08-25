@@ -102,29 +102,6 @@ export const openRouterApi = {
 }
 
 // Image generation model endpoints
-export const imageModelsApi = {
-  list: (params?: {
-    page?: number;
-    search?: string;
-    provider?: string;
-    available_only?: boolean;
-    supports_editing?: boolean;
-    supports_variations?: boolean;
-    best_for_text?: boolean;
-    best_for_photorealism?: boolean;
-    is_fast?: boolean;
-    max_price?: number;
-    sort_by?: 'none' | 'price' | 'name' | 'provider';
-    order?: 'asc' | 'desc';
-  }) =>
-    apiClient.get('/llm/image-models/', { params }),
-
-  get: (modelId: string) =>
-    apiClient.get(`/llm/image-models/${modelId}/`),
-
-  refresh: () =>
-    apiClient.post('/llm/image-models/refresh/'),
-}
 
 // Usage Quota endpoints
 export const usageQuotaApi = {

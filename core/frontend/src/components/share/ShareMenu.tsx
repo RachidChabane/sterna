@@ -190,5 +190,3 @@ export function ShareMenu({ assetId, isOpen, onClose, className }: ShareMenuProp
     </>
   )
 }
-
-export default ShareMenu

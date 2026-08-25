@@ -140,5 +140,3 @@ export function CachedAvatar({
     </Avatar>
   )
 }
-
-export default CachedAvatar

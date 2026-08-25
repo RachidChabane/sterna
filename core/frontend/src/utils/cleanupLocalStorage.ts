@@ -34,27 +34,6 @@ export function cleanupOrphanedIdeState(): number {
 }
 
 /**
- * Remove old attachment cache entries
- * Attachments older than maxAgeMs are removed
- */
-export function cleanupOldAttachments(_maxAgeMs: number = 7 * 24 * 60 * 60 * 1000): number {
-  // Note: Attachment cache is in IndexedDB, not localStorage
-  // This function is a placeholder for future implementation
-  
-  return 0
-}
-
-/**
- * Remove old conversation groups from localStorage
- * Keeps only the most recent N groups
- */
-export function cleanupOldConversations(_maxGroups: number = 10): number {
-  // This is handled by useConversationsSync
-  
-  return 0
-}
-
-/**
  * Get localStorage usage statistics
  */
 export function getLocalStorageStats(): {
@@ -99,36 +78,3 @@ export function getLocalStorageStats(): {
   }
 }
 
-/**
- * Run full localStorage cleanup
- * Returns total bytes freed
- */
-export function runFullCleanup(): {
-  bytesFreed: number
-  itemsRemoved: number
-  stats: ReturnType<typeof getLocalStorageStats>
-} {
-  
-
-  const beforeStats = getLocalStorageStats()
-
-  let itemsRemoved = 0
-  itemsRemoved += cleanupOrphanedIdeState()
-  itemsRemoved += cleanupOldAttachments()
-  itemsRemoved += cleanupOldConversations()
-
-  const afterStats = getLocalStorageStats()
-  const bytesFreed = beforeStats.totalSizeBytes - afterStats.totalSizeBytes
-
-  
-  
-  
-  
-  
-
-  return {
-    bytesFreed,
-    itemsRemoved,
-    stats: afterStats
-  }
-}

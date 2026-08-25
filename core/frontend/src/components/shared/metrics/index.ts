@@ -1,2 +1,2 @@
-export { MetricCard, type MetricCardVariant } from './MetricCard'
-export { CostDisplay, type CostDisplayVariant } from './CostDisplay'
+export { MetricCard } from './MetricCard'
+export { CostDisplay } from './CostDisplay'

@@ -78,11 +78,6 @@ export const MODEL_PARAMETERS_DEFAULTS = {
 import type { ModelParameters } from '@/components/models/types'
 
 /**
- * Type for the model parameters defaults object
- */
-export type ModelParametersDefaults = typeof MODEL_PARAMETERS_DEFAULTS
-
-/**
  * Get default model parameters as a complete ModelParameters object.
  * This includes all required fields from the ModelParameters interface.
  *

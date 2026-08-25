@@ -422,5 +422,3 @@ export const useKnowledgeStore = create<KnowledgeStore>()(
     }
   )
 )
-
-export default useKnowledgeStore

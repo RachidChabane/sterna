@@ -8,7 +8,7 @@ import apiClient from './client'
 
 // Types
 
-export interface FileVersion {
+interface FileVersion {
   id: string
   version_number: number
   path: string
@@ -44,7 +44,7 @@ export interface VersionContentResponse {
   content: string | null
 }
 
-export interface VersionInfo {
+interface VersionInfo {
   id: string
   version_number: number
   source_type: string
@@ -61,7 +61,7 @@ export interface CompareVersionsResponse {
   modified_content: string | null
 }
 
-export interface TimelineEntry {
+interface TimelineEntry {
   id: string
   path: string
   filename: string
@@ -82,7 +82,7 @@ export interface WorkspaceTimelineResponse {
   timeline: TimelineEntry[]
 }
 
-export interface FileChangeVersion {
+interface FileChangeVersion {
   id: string
   version_number: number
   is_deleted: boolean
@@ -158,78 +158,3 @@ export const versionsApi = {
 
 // Helper functions
 
-/**
- * Get icon name for source type.
- */
-export function getSourceTypeIcon(sourceType: string): string {
-  switch (sourceType) {
-    case 'user_edit':
-      return 'User'
-    case 'file_tool':
-      return 'Code'
-    case 'coding_agent':
-      return 'Bot'
-    case 'upload':
-      return 'Upload'
-    case 'restore':
-      return 'RotateCcw'
-    case 'initial':
-      return 'FileText'
-    default:
-      return 'File'
-  }
-}
-
-/**
- * Get color class for source type.
- */
-export function getSourceTypeColor(sourceType: string): string {
-  switch (sourceType) {
-    case 'user_edit':
-      return 'text-blue-500'
-    case 'file_tool':
-      return 'text-purple-500'
-    case 'coding_agent':
-      return 'text-green-500'
-    case 'upload':
-      return 'text-orange-500'
-    case 'restore':
-      return 'text-gray-500'
-    case 'initial':
-      return 'text-gray-400'
-    default:
-      return 'text-gray-500'
-  }
-}
-
-/**
- * Get color class for change type.
- */
-export function getChangeTypeColor(changeType: string): string {
-  switch (changeType) {
-    case 'created':
-      return 'text-green-500'
-    case 'modified':
-      return 'text-yellow-500'
-    case 'deleted':
-      return 'text-red-500'
-    default:
-      return 'text-gray-500'
-  }
-}
-
-/**
- * Get badge variant for change type.
- */
-export function getChangeTypeBadgeVariant(changeType: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (changeType) {
-    case 'created':
-      return 'default'
-    case 'modified':
-      return 'secondary'
-    case 'deleted':
-      return 'destructive'
-    default:
-      return 'outline'
-  }
-}

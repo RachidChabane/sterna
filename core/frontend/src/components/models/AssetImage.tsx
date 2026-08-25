@@ -120,5 +120,3 @@ export function AssetImage({
     </div>
   )
 }
-
-export default AssetImage

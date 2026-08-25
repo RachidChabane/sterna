@@ -672,5 +672,3 @@ function ImageCard({ image, onClick }: ImageCardProps) {
     </div>
   )
 }
-
-export default ImagesGalleryPage

@@ -7,15 +7,8 @@
  * - DRY: Shared configuration and utilities used by all components
  */
 
-export {
-  SHARE_PLATFORMS,
-  DEFAULT_SHARE_CONFIG,
-  getPlatform,
-  type SharePlatform,
-  type SharePlatformId,
-  type ShareParams,
-} from './platforms'
+export { SHARE_PLATFORMS } from './platforms'
 
 export { openSharePopup, triggerNativeShare, isNativeShareSupported } from './utils'
 
-export { PlatformIcon, PlatformBadge } from './components'
+export { PlatformBadge } from './components'

@@ -65,25 +65,6 @@ export interface ModelFilter {
   order?: 'asc' | 'desc'
 }
 
-export interface ModelComparison {
-  models: ModelCatalogEntry[]
-  criteria: {
-    cost: boolean
-    speed: boolean
-    capabilities: boolean
-    quality: boolean
-  }
-}
-
-export interface CostEstimate {
-  model_id: string
-  prompt_tokens: number
-  completion_tokens: number
-  estimated_cost: number
-  cost_per_request: number
-  cost_per_1000_requests: number
-}
-
 export interface ModelFavorite {
   model_id: string
   added_at: string
@@ -98,78 +79,4 @@ export interface RecentModel {
   details?: ModelCatalogEntry  // Store complete model details for quick access
 }
 
-export interface ModelStats {
-  total_models: number
-  available_models: number
-  providers: string[]
-  last_refresh: string
-  popular_models: string[]
-}
 
-/**
- * Image generation model types
- */
-
-export interface ImageModelCatalogEntry {
-  id: string
-  model_id: string
-  name: string
-  provider: string
-  provider_icon_slug?: string
-  provider_icon_url?: string
-  model_icon_slug?: string
-  model_icon_url?: string
-  price_per_image: number | null
-  price_per_megapixel: number | null
-  supports_generation: boolean
-  supports_editing: boolean
-  supports_variations: boolean
-  supports_outpainting: boolean
-  supports_upscaling: boolean
-  supported_sizes: string[]
-  supported_aspect_ratios: string[]
-  max_resolution: number | null
-  supported_qualities: string[]
-  supported_styles: string[]
-  max_images_per_request: number
-  max_prompt_length: number | null
-  typical_generation_time_ms: number | null
-  is_fast: boolean
-  best_for_text: boolean
-  best_for_photorealism: boolean
-  best_for_illustration: boolean
-  description?: string
-  tags: string[]
-  is_available: boolean
-  is_new?: boolean
-  first_seen_at?: string | null
-  fetched_at: string
-}
-
-export interface ImageModelFilter {
-  search?: string
-  provider?: string
-  availableOnly?: boolean
-  supports_editing?: boolean
-  supports_variations?: boolean
-  best_for_text?: boolean
-  best_for_photorealism?: boolean
-  is_fast?: boolean
-  maxPrice?: number
-  sortBy?: 'none' | 'price' | 'name' | 'provider'
-  order?: 'asc' | 'desc'
-}
-
-export interface ImageModelFavorite {
-  model_id: string
-  added_at: string
-  notes?: string
-  details?: ImageModelCatalogEntry
-}
-
-export interface ImageModelStats {
-  total_models: number
-  available_models: number
-  providers: string[]
-  last_refresh: string
-}

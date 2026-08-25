@@ -8,9 +8,6 @@ import type { Model, WebSource } from '@/api/llm'
 import type { SparkFramework } from '@/api/sparks'
 export type { Model, WebSource }
 
-// Re-export asset types
-export type { AssetReference, AssetType } from '@/api/assets'
-
 // Message content types for multimodal support
 export type MessageContentPart =
   | { type: 'text'; text: string }

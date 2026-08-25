@@ -18,23 +18,12 @@ export interface SparkDefinition {
   version: number
 }
 
-/**
- * Spark update instruction
- */
-export interface SparkUpdateInstruction {
-  sparkId: string
-  instructions: string
-}
-
 // Pattern for new fenced code block format: ```tsx spark:Title or ```html spark:Title
 // Matches: ```tsx spark:Title Name\ncode\n``` or ```html spark:Title\ncode\n```
 const SPARK_FENCED_PATTERN = /```(tsx|jsx|html|svg)\s+spark:([^\n]+)\n([\s\S]*?)```/gi
 
 // Legacy pattern for spark create tags: <spark title="...">code</spark>
 const SPARK_CREATE_PATTERN = /<spark\s+title="([^"]+)"(?:\s+framework="([^"]+)")?\s*>\s*([\s\S]*?)\s*<\/spark>/gi
-
-// Pattern for spark update tags: <spark-update id="...">instructions</spark-update>
-const SPARK_UPDATE_PATTERN = /<spark-update\s+id="([^"]+)"\s*>\s*([\s\S]*?)\s*<\/spark-update>/gi
 
 /**
  * Generate a unique spark ID
@@ -152,66 +141,3 @@ export function extractSparks(content: string): SparkDefinition[] {
   return sparks
 }
 
-/**
- * Extract spark update instructions from LLM response content
- *
- * @param content - The LLM response content
- * @returns Array of update instructions
- */
-export function extractSparkUpdates(content: string): SparkUpdateInstruction[] {
-  const updates: SparkUpdateInstruction[] = []
-
-  // Reset regex lastIndex to ensure fresh matching
-  SPARK_UPDATE_PATTERN.lastIndex = 0
-
-  let match: RegExpExecArray | null
-  while ((match = SPARK_UPDATE_PATTERN.exec(content)) !== null) {
-    const sparkId = match[1]
-    const instructions = match[2].trim()
-
-    updates.push({
-      sparkId,
-      instructions,
-    })
-  }
-
-  return updates
-}
-
-/**
- * Check if content contains any spark tags or spark code blocks
- *
- * @param content - The content to check
- * @returns True if content contains spark tags or blocks
- */
-export function containsSparks(content: string): boolean {
-  // Reset lastIndex for accurate testing
-  SPARK_FENCED_PATTERN.lastIndex = 0
-  SPARK_CREATE_PATTERN.lastIndex = 0
-  SPARK_UPDATE_PATTERN.lastIndex = 0
-
-  return (
-    SPARK_FENCED_PATTERN.test(content) ||
-    SPARK_CREATE_PATTERN.test(content) ||
-    SPARK_UPDATE_PATTERN.test(content)
-  )
-}
-
-/**
- * Strip spark tags and spark code blocks from content for display
- * Note: We DON'T strip fenced spark blocks since the code is copy-pastable.
- * We only strip legacy <spark> tags.
- *
- * @param content - The content to strip
- * @returns Content with legacy spark tags removed (fenced blocks remain)
- */
-export function stripSparkTags(content: string): string {
-  // Reset regex lastIndex
-  SPARK_CREATE_PATTERN.lastIndex = 0
-  SPARK_UPDATE_PATTERN.lastIndex = 0
-
-  return content
-    .replace(SPARK_CREATE_PATTERN, '')
-    .replace(SPARK_UPDATE_PATTERN, '')
-    .trim()
-}

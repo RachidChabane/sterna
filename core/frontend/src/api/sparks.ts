@@ -17,11 +17,6 @@ import { api } from './client'
 export type SparkFramework = 'react' | 'html' | 'svg' | 'markdown' | 'mermaid' | 'pdf' | 'docx' | 'ics' | 'csv' | 'xlsx'
 
 /**
- * Storage type for the spark code
- */
-export type StorageType = 'inline' | 'r2'
-
-/**
  * Asset referenced by a spark (image/video)
  */
 export interface SparkAsset {
@@ -126,7 +121,7 @@ export interface SparkDeployment {
 /**
  * Latest deployment summary (embedded in Spark responses)
  */
-export interface SparkLatestDeployment {
+interface SparkLatestDeployment {
   id: string
   status: string
   preview_url: string
@@ -297,5 +292,3 @@ export const sparksAPI = {
     return results
   },
 }
-
-export default sparksAPI

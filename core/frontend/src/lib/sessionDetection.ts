@@ -6,7 +6,7 @@
  *
  * @returns true if evidence of a previous session exists
  */
-export function hadPreviousSession(): boolean {
+function hadPreviousSession(): boolean {
   try {
     // Check for auth tokens in localStorage
     const hasAccessToken = localStorage.getItem('access_token') !== null

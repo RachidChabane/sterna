@@ -7,7 +7,7 @@ import { create } from 'zustand';
  * tracks the selected model tier, so the tier chosen in ModelSelectionStep
  * and displayed in CostEstimationStep lives in this local store instead.
  */
-export type OnboardingModelTier = 'budget' | 'balanced' | 'quality';
+type OnboardingModelTier = 'budget' | 'balanced' | 'quality';
 
 interface OnboardingTierState {
   selectedModelTier: OnboardingModelTier | null;

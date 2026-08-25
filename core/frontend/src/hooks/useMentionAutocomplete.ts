@@ -162,7 +162,7 @@ const TOOL_SECONDARY_PICKER: Record<string, 'issues' | 'plans'> = {
   edit_plan: 'plans',
 }
 
-export interface MentionState {
+interface MentionState {
   start: number      // Position of @ in input
   serverQuery: string
   hasColon: boolean

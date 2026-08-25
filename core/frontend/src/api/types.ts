@@ -45,48 +45,10 @@ export interface PaginatedResponse<T> {
   results: T[]
 }
 
-export interface ErrorResponse {
-  error: {
-    code: string
-    message: string
-    details?: Record<string, any>
-  }
-}
-
 // Model catalog comparison (feature-based) types
 export type PriorityLevel = 'off' | 'nice' | 'important' | 'critical'
 
-export interface CatalogComparisonRequest {
-  model_ids: string[]
-  priorities?: {
-    cost?: PriorityLevel
-    context?: PriorityLevel
-    capabilities?: PriorityLevel
-    multimodality?: PriorityLevel
-    availability?: PriorityLevel
-  }
-  constraints?: {
-    mustSupportFunctions?: boolean
-    mustSupportStructuredOutputs?: boolean
-    mustSupportReasoning?: boolean
-    mustSupportPromptCaching?: boolean
-    mustSupportStreamCancellation?: boolean
-    mustBeAvailable?: boolean
-    mustBeMultimodal?: boolean
-    minContextTokens?: number | null
-    maxCostPer1MTokens?: number | null
-  }
-  costDirection?: 'lower' | 'higher'
-  capabilityWeights?: Partial<{
-    functions: number
-    structured_outputs: number
-    reasoning: number
-    prompt_caching: number
-    stream_cancellation: number
-  }>
-}
-
-export interface CatalogModelScoreBreakdown {
+interface CatalogModelScoreBreakdown {
   cost: number
   context: number
   capabilities: number
@@ -108,16 +70,10 @@ export interface CatalogModelScore {
   is_best: boolean
 }
 
-export interface CatalogComparisonResponse {
-  scores: CatalogModelScore[]
-  best_model_id: string | null
-  considered: number
-}
-
 // Usage Quota types
 // extended for task 9 — backend exposes more services + features than these
 // originally listed.
-export type ServiceType =
+type ServiceType =
   | 'openrouter'
   | 'elevenlabs_tts'
   | 'openai_tts'
@@ -131,7 +87,7 @@ export type ServiceType =
   | 'mcp_tool_invocation'
   | 'google_maps'
 
-export type FeatureType =
+type FeatureType =
   | 'chat'
   | 'voice_room'
   | 'code_session'
@@ -140,7 +96,7 @@ export type FeatureType =
   | 'knowledge_base'
   | 'other'
 
-export interface QuotaWeeklyInfo {
+interface QuotaWeeklyInfo {
   limit_usd: string
   used_usd: string
   remaining_usd: string
@@ -148,7 +104,7 @@ export interface QuotaWeeklyInfo {
   window_end: string
 }
 
-export interface QuotaSessionInfo {
+interface QuotaSessionInfo {
   limit_usd: string
   used_usd: string
   remaining_usd: string
@@ -156,7 +112,7 @@ export interface QuotaSessionInfo {
   window_end: string
 }
 
-export interface ServiceUsage {
+interface ServiceUsage {
   used_usd: string
   requests?: number
   characters?: number
@@ -164,7 +120,7 @@ export interface ServiceUsage {
   tokens?: number
 }
 
-export interface FeatureUsage {
+interface FeatureUsage {
   used_usd: string
 }
 

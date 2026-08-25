@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 import type { LucideIcon } from 'lucide-react'
 
-export type MetricCardVariant = 'default' | 'highlight' | 'warning'
+type MetricCardVariant = 'default' | 'highlight' | 'warning'
 
 interface MetricCardProps {
   icon: LucideIcon

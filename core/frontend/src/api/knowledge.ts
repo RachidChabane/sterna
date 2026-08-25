@@ -26,7 +26,7 @@ export interface KnowledgeSettings {
   updated_at: string
 }
 
-export type DocumentType = 'pdf' | 'docx' | 'txt' | 'md' | 'csv' | 'html' | 'json'
+type DocumentType = 'pdf' | 'docx' | 'txt' | 'md' | 'csv' | 'html' | 'json'
 export type DocumentStatus = 'pending' | 'processing' | 'indexing' | 'ready' | 'failed'
 
 export interface KnowledgeDocument {
@@ -168,5 +168,3 @@ export const knowledgeApi = {
     }
   },
 }
-
-export default knowledgeApi

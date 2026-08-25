@@ -13,7 +13,7 @@ export interface ClonedRepo {
   cloned_at: string
 }
 
-export interface PlanStep {
+interface PlanStep {
   id: string
   step_number: number
   title: string

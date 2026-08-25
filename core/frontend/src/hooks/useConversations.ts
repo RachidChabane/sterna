@@ -602,5 +602,3 @@ export function useConversations(): UseConversationsResult {
     clearConversation,
   }
 }
-
-export default useConversations

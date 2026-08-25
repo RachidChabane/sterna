@@ -55,7 +55,7 @@ export function RedactedBadge() {
 }
 
 // Replace [...] tokens in React children with RedactedBadge components (exported for use in MessageSteps)
-export function replaceRedactedInChildren(children: React.ReactNode): React.ReactNode {
+function replaceRedactedInChildren(children: React.ReactNode): React.ReactNode {
   if (typeof children === 'string') {
     if (!children.includes('[...]')) return children
     const parts = children.split('[...]')

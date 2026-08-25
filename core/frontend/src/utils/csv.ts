@@ -31,7 +31,7 @@ function countDelims(line: string, delim: CSVDelimiter): number {
   return count
 }
 
-export function detectDelimiter(text: string): CSVDelimiter {
+function detectDelimiter(text: string): CSVDelimiter {
   const sample = stripBOM(text).split(/\r?\n/).slice(0, 10)
   const candidates: CSVDelimiter[] = [',', ';', '\t']
   let best: CSVDelimiter = ','

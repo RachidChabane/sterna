@@ -79,26 +79,3 @@ export function getUserFriendlyErrorMessage(error: unknown): string {
   return 'Something went wrong. Please try again.'
 }
 
-/**
- * Extrait un message user-friendly depuis une réponse API error
- *
- * @param apiError - Erreur Axios ou fetch response
- * @returns Message user-friendly
- */
-export function getApiErrorMessage(apiError: any): string {
-  // Try to extract user-friendly message from API response
-  const userMessage = apiError?.response?.data?.error ||
-                      apiError?.response?.data?.message ||
-                      apiError?.message
-
-  // If the API already returned a user-friendly message (short, no URLs, no technical jargon)
-  if (userMessage && typeof userMessage === 'string' && userMessage.length < 200 &&
-      !userMessage.includes('http') && !userMessage.includes('Error:') &&
-      !userMessage.includes('Exception') && !userMessage.toLowerCase().includes('openrouter') &&
-      !userMessage.includes('api/v1')) {
-    return userMessage
-  }
-
-  // Otherwise, sanitize using our utility
-  return getUserFriendlyErrorMessage(apiError)
-}

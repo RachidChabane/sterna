@@ -99,10 +99,6 @@ export interface PreferenceListResponse {
   count: number
 }
 
-export interface BulkUpdateRequest {
-  preferences: Record<string, any>
-}
-
 /**
  * API Methods
  */
@@ -169,5 +165,3 @@ export const preferencesApi = {
     await preferencesClient.delete(`/preferences/${key}`)
   },
 }
-
-export default preferencesClient

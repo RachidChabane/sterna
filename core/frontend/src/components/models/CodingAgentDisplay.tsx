@@ -1285,5 +1285,3 @@ export function CodingAgentDisplay({
     </div>
   )
 }
-
-export default CodingAgentDisplay

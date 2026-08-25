@@ -620,5 +620,3 @@ export function VideoDetailModal({
     </div>
   )
 }
-
-export default VideoDetailModal

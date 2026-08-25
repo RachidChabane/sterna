@@ -358,5 +358,3 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
     error,
   }
 }
-
-export default useTTS

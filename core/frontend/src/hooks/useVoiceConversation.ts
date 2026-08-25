@@ -28,7 +28,7 @@ import type { Message } from '@/components/models/types'
  * Voice conversation system prompt that guides the AI to respond naturally
  * for spoken dialogue. This is injected when voice mode is active.
  */
-export const VOICE_CONVERSATION_SYSTEM_PROMPT = `You are in a live voice conversation with the user. They are speaking to you through their microphone, and your response will be read aloud to them.
+const VOICE_CONVERSATION_SYSTEM_PROMPT = `You are in a live voice conversation with the user. They are speaking to you through their microphone, and your response will be read aloud to them.
 
 VOICE CONVERSATION GUIDELINES:
 - Speak naturally and conversationally, as if talking to a friend
@@ -280,5 +280,3 @@ export function useVoiceConversation(options: UseVoiceConversationOptions = {}):
     voiceSystemPrompt: VOICE_CONVERSATION_SYSTEM_PROMPT,
   }
 }
-
-export default useVoiceConversation

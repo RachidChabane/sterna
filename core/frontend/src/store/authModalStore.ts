@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type AuthModalVariant = 'session-expired' | 'sign-up-prompt'
+type AuthModalVariant = 'session-expired' | 'sign-up-prompt'
 
 interface AuthModalState {
   isOpen: boolean

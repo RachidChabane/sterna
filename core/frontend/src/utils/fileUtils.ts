@@ -2,9 +2,6 @@
  * File utility functions for handling file attachments
  */
 
-const MAX_FILE_SIZE_MB = 10
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-
 // PDF files - sent as binary with file-parser plugin
 const PDF_FORMATS = [
   'application/pdf'
@@ -82,44 +79,6 @@ const CODE_FILE_EXTENSIONS = [
   '.r', '.dart', '.lua', '.pl', '.vim',          // Other languages
   '.log'                                          // Log files
 ]
-
-const SUPPORTED_FORMATS = [...PDF_FORMATS, ...TEXT_FORMATS, ...OFFICE_FORMATS]
-
-export interface FileValidationResult {
-  valid: boolean
-  error?: string
-}
-
-/**
- * Validate a file
- */
-export function validateFile(file: File): FileValidationResult {
-  // Check file size
-  if (file.size > MAX_FILE_SIZE_BYTES) {
-    return {
-      valid: false,
-      error: `File size must be less than ${MAX_FILE_SIZE_MB}MB`
-    }
-  }
-
-  // Check if format is supported (MIME type or file extension)
-  const hasCodeExtension = CODE_FILE_EXTENSIONS.some(ext =>
-    file.name.toLowerCase().endsWith(ext)
-  )
-
-  const hasOfficeExtension = OFFICE_EXTENSIONS.some(ext =>
-    file.name.toLowerCase().endsWith(ext)
-  )
-
-  if (!SUPPORTED_FORMATS.includes(file.type) && !hasCodeExtension && !hasOfficeExtension) {
-    return {
-      valid: false,
-      error: `Unsupported file format. Supported: Images, PDFs, Office docs, text/code files`
-    }
-  }
-
-  return { valid: true }
-}
 
 /**
  * Convert a file to base64 data URL
@@ -199,28 +158,6 @@ export function readFileAsText(file: File): Promise<string> {
 
     reader.readAsText(file)
   })
-}
-
-/**
- * Get a preview of file content (first N lines)
- */
-export function getFilePreview(content: string, maxLines: number = 10): { preview: string; isTruncated: boolean; additionalLines: number } {
-  const lines = content.split('\n')
-
-  if (lines.length <= maxLines) {
-    return {
-      preview: content,
-      isTruncated: false,
-      additionalLines: 0
-    }
-  }
-
-  const preview = lines.slice(0, maxLines).join('\n')
-  return {
-    preview,
-    isTruncated: true,
-    additionalLines: lines.length - maxLines
-  }
 }
 
 /**

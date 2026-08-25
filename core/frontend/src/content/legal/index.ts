@@ -4,7 +4,6 @@ import refundPolicyRaw from './refund-policy.mdx?raw'
 import acceptableUsePolicyRaw from './acceptable-use-policy.mdx?raw'
 import dataProcessingAgreementRaw from './data-processing-agreement.mdx?raw'
 import cookiePolicyRaw from './cookie-policy.mdx?raw'
-import templateMeta from './_template-meta.json'
 
 export type LegalSlug =
   | 'privacy'
@@ -47,12 +46,6 @@ export const legalDocuments: Record<LegalSlug, LegalDocument> = {
   aup: parseMdx(acceptableUsePolicyRaw, 'aup'),
   dpa: parseMdx(dataProcessingAgreementRaw, 'dpa'),
   cookies: parseMdx(cookiePolicyRaw, 'cookies'),
-}
-
-export const legalMeta = templateMeta as {
-  last_updated: string
-  version: string
-  contact_email: string
 }
 
 export const legalNavigation: ReadonlyArray<{

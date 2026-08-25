@@ -3,7 +3,7 @@
  */
 
 // Git status for file coloring in the file tree
-export type FileGitStatus = 'new' | 'modified' | 'staged' | 'untracked' | undefined
+type FileGitStatus = 'new' | 'modified' | 'staged' | 'untracked' | undefined
 
 export interface FileNode {
   name: string
@@ -52,7 +52,7 @@ export interface CloseFileDialogState {
   name: string
 }
 
-export const LANGUAGE_MAP: Record<string, string> = {
+const LANGUAGE_MAP: Record<string, string> = {
   'py': 'python',
   'js': 'javascript',
   'ts': 'typescript',

@@ -166,5 +166,3 @@ export function PlanCard() {
     </div>
   )
 }
-
-export default PlanCard

@@ -16,7 +16,7 @@
  * - This avoids hardcoding prompts in the frontend
  */
 
-import { createContext, useContext, useCallback, useMemo, type ReactNode } from 'react'
+import { createContext, useCallback, useMemo, type ReactNode } from 'react'
 import { useSparkAutoFix, type UseSparkAutoFixReturn } from '@/hooks/useSparkAutoFix'
 
 /** Spark fix request data sent to backend */
@@ -113,25 +113,3 @@ export function SparkAutoFixProvider({
 
   return <SparkAutoFixContext.Provider value={value}>{children}</SparkAutoFixContext.Provider>
 }
-
-/**
- * Hook to consume the SparkAutoFixContext
- * Returns null if not within a provider (auto-fix disabled)
- */
-export function useSparkAutoFixContext(): SparkAutoFixContextValue | null {
-  return useContext(SparkAutoFixContext)
-}
-
-/**
- * Hook that throws if not within a SparkAutoFixProvider
- * Use this when auto-fix support is required
- */
-export function useRequiredSparkAutoFixContext(): SparkAutoFixContextValue {
-  const context = useContext(SparkAutoFixContext)
-  if (!context) {
-    throw new Error('useRequiredSparkAutoFixContext must be used within a SparkAutoFixProvider')
-  }
-  return context
-}
-
-export default SparkAutoFixContext

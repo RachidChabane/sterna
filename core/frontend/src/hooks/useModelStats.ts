@@ -70,6 +70,3 @@ export function useModelStats() {
 }
 
 // Function to invalidate cache if needed (e.g., after data changes)
-export function invalidateModelStatsCache() {
-  cachedStats = null
-}

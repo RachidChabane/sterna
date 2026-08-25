@@ -101,5 +101,3 @@ export function useSettingsEffects() {
     }
   }, [highContrast])
 }
-
-export default useSettingsEffects

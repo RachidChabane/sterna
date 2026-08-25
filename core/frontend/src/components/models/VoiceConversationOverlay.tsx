@@ -992,5 +992,3 @@ export function VoiceConversationOverlay({
     </div>
   )
 }
-
-export default VoiceConversationOverlay

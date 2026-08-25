@@ -34,7 +34,7 @@ export interface ModelsResponse {
 }
 
 // Message content types for multimodal support (matches types.ts structure)
-export type MessageContentPart =
+type MessageContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } }
   | { type: 'file'; file: { filename: string; file_data: string } }

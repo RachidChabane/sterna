@@ -561,5 +561,3 @@ export function useStreamingTTS(options: UseStreamingTTSOptions = {}): UseStream
     hasStartedPlaying,
   }
 }
-
-export default useStreamingTTS

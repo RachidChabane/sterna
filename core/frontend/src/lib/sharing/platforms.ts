@@ -5,7 +5,7 @@
  * Following Open/Closed principle - easy to add new platforms without modifying existing code.
  */
 
-export type SharePlatformId = 'twitter' | 'facebook' | 'linkedin' | 'reddit'
+type SharePlatformId = 'twitter' | 'facebook' | 'linkedin' | 'reddit'
 
 export interface SharePlatform {
   id: SharePlatformId
@@ -19,7 +19,7 @@ export interface SharePlatform {
   getShareUrl: (params: ShareParams) => string
 }
 
-export interface ShareParams {
+interface ShareParams {
   url: string
   text?: string
   title?: string
@@ -88,13 +88,6 @@ export const SHARE_PLATFORMS: SharePlatform[] = [
   linkedin,
   reddit,
 ]
-
-/**
- * Get a platform by ID
- */
-export function getPlatform(id: SharePlatformId): SharePlatform | undefined {
-  return SHARE_PLATFORMS.find(p => p.id === id)
-}
 
 /**
  * Default share text used across platforms

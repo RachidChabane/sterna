@@ -45,7 +45,7 @@ function openDB(): Promise<IDBDatabase> {
   })
 }
 
-export async function cacheSet(item: CachedAttachment): Promise<void> {
+async function cacheSet(item: CachedAttachment): Promise<void> {
   const db = await openDB()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')

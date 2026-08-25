@@ -189,7 +189,7 @@ SternaIcon.colorPrimary = '#3d5ce4'
  * Registry of icon components for common providers.
  * Stores complete icon objects with colorPrimary and .Color properties.
  */
-export const PROVIDER_ICON_COMPONENTS: Record<string, IconComponent> = {
+const PROVIDER_ICON_COMPONENTS: Record<string, IconComponent> = {
   // Monochrome providers (no .Color variant available)
   openai: OpenAI,
   anthropic: Anthropic,
@@ -265,18 +265,6 @@ export function getColoredIconComponent(slug: string | undefined): IconComponent
 }
 
 /**
- * Check if a colored icon component is available for a slug.
- *
- * @param slug - The provider or model icon slug
- * @returns True if colored icon is available
- */
-export function hasColoredIcon(slug: string | undefined): boolean {
-  if (!slug) return false
-  const normalizedSlug = slug.toLowerCase()
-  return normalizedSlug in PROVIDER_ICON_COMPONENTS
-}
-
-/**
  * Get the render component for an icon (prefers .Color variant if available).
  *
  * @param iconComponent - The complete icon component
@@ -295,7 +283,7 @@ export function getIconRenderComponent(iconComponent: IconComponent | null): Com
  * @param iconComponent - The complete icon component
  * @returns The primary color if available
  */
-export function getIconColorPrimary(iconComponent: IconComponent | null): string | undefined {
+function getIconColorPrimary(iconComponent: IconComponent | null): string | undefined {
   if (!iconComponent) return undefined
   return iconComponent.colorPrimary
 }

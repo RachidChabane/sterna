@@ -94,18 +94,6 @@ function resolveColor(type: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Badge color classes for a given type.
- *
- * Returns bg, text (light + dark), and border classes in a single string.
- * Works for both filled pill badges (`border` class dormant) and outline
- * badges (`border` class from Badge component activates the border color).
- */
-export function getTypeBadgeColor(type: string): string {
-  const c = resolveColor(type)
-  return `bg-${c}-500/15 text-${c}-600 dark:text-${c}-400 border-${c}-500/30`
-}
-
-/**
  * Icon text color for a given type.
  *
  * ```tsx

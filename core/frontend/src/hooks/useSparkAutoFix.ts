@@ -15,7 +15,7 @@ import { useState, useCallback, useRef } from 'react'
 
 const MAX_ATTEMPTS = 3
 
-export interface SparkError {
+interface SparkError {
   sparkId: string
   code: string
   error: string
@@ -163,5 +163,3 @@ export function useSparkAutoFix(): UseSparkAutoFixReturn {
     errors,
   }
 }
-
-export default useSparkAutoFix

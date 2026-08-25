@@ -4,7 +4,7 @@ import { createUserScopedStorage } from '../lib/userScopedStorage';
 import { preferencesSync } from '../lib/preferencesSync';
 import { PREFERENCE_KEYS } from '../hooks/usePreferencesLoader';
 
-export interface OnboardingStep {
+interface OnboardingStep {
   id: string;
   title: string;
   description: string;

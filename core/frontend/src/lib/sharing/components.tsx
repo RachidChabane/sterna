@@ -14,7 +14,7 @@ interface PlatformIconProps {
 /**
  * Renders the platform icon with brand colors
  */
-export function PlatformIcon({ platform, size = 16 }: PlatformIconProps) {
+function PlatformIcon({ platform, size = 16 }: PlatformIconProps) {
   return (
     <svg
       className="text-white"

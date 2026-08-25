@@ -426,5 +426,3 @@ export function PreviewSidePanel({ conversationId, chatId, className }: PreviewS
     </div>
   )
 }
-
-export default PreviewSidePanel

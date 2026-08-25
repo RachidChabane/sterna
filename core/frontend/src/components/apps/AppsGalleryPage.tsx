@@ -621,5 +621,3 @@ function PaginationBar({
     </div>
   )
 }
-
-export default AppsGalleryPage

@@ -15,7 +15,7 @@ const getWebSocketUrl = () => {
 
 const VOICE_ROOM_WS_BASE = getWebSocketUrl()
 
-export interface VoiceSettings {
+interface VoiceSettings {
   silenceTimeout: number // seconds before processing (1-5)
   interruptionThreshold: number // 0-100, higher = harder to interrupt
   allowInterruptions: boolean

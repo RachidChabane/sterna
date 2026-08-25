@@ -408,8 +408,6 @@ export function VideoPlayer({
   )
 }
 
-export default VideoPlayer
-
 // ============================================================================
 // VideoThumbnail Component - Lightweight thumbnail using video's first frame
 // ============================================================================

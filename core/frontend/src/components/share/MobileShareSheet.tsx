@@ -231,5 +231,3 @@ export function MobileShareSheet({ assetId, isOpen, onClose }: MobileShareSheetP
     </div>
   )
 }
-
-export default MobileShareSheet

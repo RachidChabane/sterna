@@ -123,5 +123,3 @@ export function CreationsPage() {
     </div>
   )
 }
-
-export default CreationsPage

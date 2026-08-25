@@ -19,7 +19,7 @@ export type AssetType = 'image' | 'video' | 'audio' | 'thumbnail' | 'generated' 
 /**
  * Storage type for the asset
  */
-export type StorageType = 'inline' | 'r2'
+type StorageType = 'inline' | 'r2'
 
 /**
  * Asset metadata returned from the API
@@ -66,14 +66,6 @@ export interface AssetUploadResponse {
   asset?: Asset
   deduplicated?: boolean
   error?: string
-}
-
-/**
- * Response from listing assets
- */
-export interface AssetListResponse {
-  assets: Asset[]
-  count: number
 }
 
 /**
@@ -157,13 +149,6 @@ export interface ShareLinkListResponse {
   results: ShareLink[]
 }
 
-/**
- * Response from getting asset share links
- */
-export interface AssetShareLinksResponse {
-  share_links: ShareLink[]
-}
-
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -184,7 +169,7 @@ export function getAssetTypeFromMime(mimeType: string): AssetType {
 /**
  * Convert a File to base64
  */
-export async function fileToBase64(file: File): Promise<string> {
+async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
@@ -201,7 +186,7 @@ export async function fileToBase64(file: File): Promise<string> {
 /**
  * Get image dimensions from a File
  */
-export async function getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
+async function getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
   if (!file.type.startsWith('image/')) return null
 
   return new Promise((resolve) => {
@@ -565,5 +550,3 @@ export const assetsAPI = {
     }
   },
 }
-
-export default assetsAPI

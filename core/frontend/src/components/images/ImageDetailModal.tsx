@@ -595,5 +595,3 @@ export function ImageDetailModal({
     </div>
   )
 }
-
-export default ImageDetailModal

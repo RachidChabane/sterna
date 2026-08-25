@@ -2,46 +2,6 @@
  * Image utility functions for handling image attachments
  */
 
-const MAX_IMAGE_SIZE_MB = 5
-const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
-const SUPPORTED_FORMATS = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif', 'image/svg+xml']
-
-export interface ImageValidationResult {
-  valid: boolean
-  error?: string
-}
-
-/**
- * Validate an image file
- */
-export function validateImage(file: File): ImageValidationResult {
-  // Check if file is an image
-  if (!file.type.startsWith('image/')) {
-    return {
-      valid: false,
-      error: 'File must be an image'
-    }
-  }
-
-  // Check if format is supported
-  if (!SUPPORTED_FORMATS.includes(file.type)) {
-    return {
-      valid: false,
-      error: `Unsupported image format. Supported formats: PNG, JPEG, WebP, GIF, SVG`
-    }
-  }
-
-  // Check file size
-  if (file.size > MAX_IMAGE_SIZE_BYTES) {
-    return {
-      valid: false,
-      error: `Image size must be less than ${MAX_IMAGE_SIZE_MB}MB`
-    }
-  }
-
-  return { valid: true }
-}
-
 /**
  * Convert an image file to base64 data URL
  */

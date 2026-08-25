@@ -256,16 +256,3 @@ class PreferencesSyncManager {
 // Create singleton instance
 export const preferencesSync = new PreferencesSyncManager()
 
-/**
- * Hook for React components
- */
-export const usePreferencesSync = () => {
-  return {
-    update: (key: string, value: any, category?: string) =>
-      preferencesSync.update(key, value, category || 'general'),
-    flush: () => preferencesSync.flush(),
-    loadAll: (category?: string) => preferencesSync.loadAll(category),
-    get: (key: string) => preferencesSync.get(key),
-    getStatus: () => preferencesSync.getStatus(),
-  }
-}

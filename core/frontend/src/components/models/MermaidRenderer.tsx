@@ -301,5 +301,3 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
     </div>
   )
 }
-
-export default MermaidRenderer

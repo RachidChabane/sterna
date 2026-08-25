@@ -68,7 +68,7 @@ import { appsAPI, type AppListItem } from '@/api/apps'
 import { useAppsStore } from '@/store/appsStore'
 
 /** Chat data with sparks for multi-chat mode */
-export interface ChatWithSparks {
+interface ChatWithSparks {
   id: string
   model: {
     name: string
@@ -1140,5 +1140,3 @@ export function ArtifactsSidePanel({ chatId, conversationId, sparks, chats, clas
     </div>
   )
 }
-
-export default ArtifactsSidePanel

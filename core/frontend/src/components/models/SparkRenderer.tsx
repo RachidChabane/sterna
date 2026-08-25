@@ -692,5 +692,3 @@ export const SparkRenderer: React.FC<SparkRendererProps> = ({
     </div>
   )
 }
-
-export default SparkRenderer

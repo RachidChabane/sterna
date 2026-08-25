@@ -823,5 +823,3 @@ function PaginationBar({
     </div>
   )
 }
-
-export default SparksPage

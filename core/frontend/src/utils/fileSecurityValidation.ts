@@ -10,12 +10,12 @@
  * Used across: Chat attachments, IDE uploads, drag & drop, paste handlers
  */
 
-export interface FileTypeDetectionResult {
+interface FileTypeDetectionResult {
   mimeType: string
   category: 'image' | 'document' | 'archive' | 'executable' | 'media' | 'unknown'
 }
 
-export interface FileValidationResult {
+interface FileValidationResult {
   valid: boolean
   warning?: string
   shouldBlock?: boolean
@@ -26,7 +26,7 @@ export interface FileValidationResult {
  * Detect real file type using magic bytes (file signature)
  * Reads the first 16 bytes of the file to identify its true type
  */
-export const detectRealFileType = async (file: File): Promise<FileTypeDetectionResult> => {
+const detectRealFileType = async (file: File): Promise<FileTypeDetectionResult> => {
   return new Promise((resolve) => {
     const reader = new FileReader()
 
@@ -113,7 +113,7 @@ export const detectRealFileType = async (file: File): Promise<FileTypeDetectionR
  * Validate file type matches extension and is not malicious
  * Returns validation result with warnings or blocking flags
  */
-export const validateFileType = async (file: File): Promise<FileValidationResult> => {
+const validateFileType = async (file: File): Promise<FileValidationResult> => {
   const declaredExt = file.name.split('.').pop()?.toLowerCase() || ''
   const realType = await detectRealFileType(file)
 
@@ -235,7 +235,7 @@ export const validateFileType = async (file: File): Promise<FileValidationResult
 /**
  * Validate file size is within limits
  */
-export const validateFileSize = (file: File, maxSizeMB: number = 10): FileValidationResult => {
+const validateFileSize = (file: File, maxSizeMB: number = 10): FileValidationResult => {
   const maxSizeBytes = maxSizeMB * 1024 * 1024
 
   if (file.size > maxSizeBytes) {
@@ -252,7 +252,7 @@ export const validateFileSize = (file: File, maxSizeMB: number = 10): FileValida
 /**
  * Comprehensive file validation combining size and type checks
  */
-export const validateFile = async (file: File, maxSizeMB: number = 10): Promise<FileValidationResult> => {
+const validateFile = async (file: File, maxSizeMB: number = 10): Promise<FileValidationResult> => {
   // Check size first (faster)
   const sizeValidation = validateFileSize(file, maxSizeMB)
   if (!sizeValidation.valid) {

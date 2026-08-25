@@ -224,5 +224,3 @@ export function UserVoicePulse({
     />
   )
 }
-
-export default UserVoicePulse
