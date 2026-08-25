@@ -1,15 +1,12 @@
 """System-prompt assembly for one chat turn.
 
-Builder. Tries the V2 optimized prompt builder, falls back to the V1
-`build_system_prompt` on any failure or when V2 is switched off, then
+Builds the system prompt from the layered prompts_v2 builder, then
 appends the media-generation hints that an `@mention` may have carried.
 """
 
 import logging
 from typing import Dict, Optional
 
-from ..constants import ENABLE_OPTIMIZED_PROMPTS
-from ..prompt_builder import build_system_prompt
 from .feature_flags import AgentFeatureFlags, FEATURE_VOICE_MODE
 
 # Child of the configured "llm" logger (see sterna/logging.py APP_LOGGERS).
@@ -36,23 +33,7 @@ _MEDIA_PARAM_HINT_LABELS = (
 VOICE_MODE_PROMPT_MARKER = "[VOICE CONVERSATION MODE]"
 
 
-def _build_v1_prompt(custom_prompt, flags: AgentFeatureFlags, model_name) -> str:
-    return build_system_prompt(
-        custom_prompt=custom_prompt,
-        enable_brave_search=flags.brave_search,
-        enable_google_maps=flags.google_maps,
-        enable_reasoning=flags.reasoning,
-        enable_file_tools=flags.file_tools,
-        enable_image_generation=flags.image_generation,
-        enable_video_generation=flags.video_generation,
-        enable_sparks=flags.sparks,
-        has_mcp_tools=False,
-        mcp_tools=None,
-        model_name=model_name,
-    )
-
-
-def _build_v2_prompt(
+def _build_prompt(
     custom_prompt,
     flags: AgentFeatureFlags,
     discovery_context,
@@ -85,7 +66,7 @@ def _build_v2_prompt(
         spark_fix_request=spark_fix_request,
         spark_ignite_request=spark_ignite_request,
     )
-    logger.info(f"[LangChain] V2 Optimized prompt: ~{metadata['estimated_tokens']} tokens")
+    logger.info(f"[LangChain] Optimized prompt: ~{metadata['estimated_tokens']} tokens")
     if FEATURE_VOICE_MODE in enabled_features:
         # Log if voice mode prompt is actually in the system prompt
         if VOICE_MODE_PROMPT_MARKER in system_prompt:
@@ -126,30 +107,18 @@ def build_agent_system_prompt(
     forced_tool_name: Optional[str],
     media_tool_params: Optional[Dict[str, str]],
 ) -> str:
-    """The full system prompt for this agent instance.
-
-    Always uses V2 optimized prompts when enabled — `discovery_context`
-    is optional there — and degrades to V1 on any V2 failure.
-    """
-    if ENABLE_OPTIMIZED_PROMPTS:
-        try:
-            system_prompt = _build_v2_prompt(
-                custom_prompt,
-                flags,
-                discovery_context,
-                model_name,
-                user_first_name,
-                user_last_name,
-                user_email,
-                spark_fix_request,
-                spark_ignite_request,
-            )
-        except Exception as e:
-            logger.warning(f"[LangChain] V2 prompt builder failed: {e}, falling back to V1")
-            system_prompt = _build_v1_prompt(custom_prompt, flags, model_name)
-    else:
-        # V1 legacy prompt building
-        system_prompt = _build_v1_prompt(custom_prompt, flags, model_name)
+    """The full system prompt for this agent instance."""
+    system_prompt = _build_prompt(
+        custom_prompt,
+        flags,
+        discovery_context,
+        model_name,
+        user_first_name,
+        user_last_name,
+        user_email,
+        spark_fix_request,
+        spark_ignite_request,
+    )
 
     # Append media generation parameter hints if user pre-selected via @mention
     if media_tool_params and forced_tool_name in MEDIA_TOOL_NAMES:

@@ -29,7 +29,6 @@ from .constants import (
 )
 from .context_utils import calculate_dynamic_max_tokens
 from .error_messages import error_payload
-from .prompt_builder import build_system_prompt
 from .reasoning_filter import ReasoningFilter
 
 if TYPE_CHECKING:
@@ -479,16 +478,24 @@ class OpenRouterClient:
             else:
                 other_messages.append(msg)
 
-        # Build combined system prompt
-        combined_prompt = build_system_prompt(
+        # Lazy imports to avoid Django app-loading order issues (see
+        # llm/__init__.py docstring).
+        from .prompts_v2 import get_prompt_builder
+        from mcp.prompts import build_mcp_system_prompt
+
+        combined_prompt = get_prompt_builder().build_direct_completion_prompt(
             custom_prompt=custom_prompt,
-            enable_mcp_tools=enable_mcp_tools,
             enable_reasoning=enable_reasoning,
             enable_file_tools=enable_file_tools,
             enable_image_generation=enable_image_generation,
-            has_mcp_tools=has_mcp_tools,
-            mcp_tools=mcp_tools,
         )
+
+        # MCP tools get a dynamic section naming the actual tools
+        # available, appended after the static feature notices above.
+        if enable_mcp_tools and has_mcp_tools and mcp_tools:
+            mcp_prompt = build_mcp_system_prompt(mcp_tools)
+            if mcp_prompt:
+                combined_prompt = f"{combined_prompt}\n\n{mcp_prompt}" if combined_prompt else mcp_prompt
 
         # If we have a system prompt, inject it at the start
         if combined_prompt:

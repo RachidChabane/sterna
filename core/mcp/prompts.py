@@ -1,39 +1,31 @@
 """System prompts for MCP tool integration."""
 
-import json
 import logging
-from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Cache for template to avoid loading JSON on every call
-_template_cache: Optional[str] = None
-
-
-def _load_template() -> str:
-    """Load MCP tools prompt template from JSON file."""
-    global _template_cache
-
-    if _template_cache is not None:
-        return _template_cache
-
-    try:
-        template_path = Path(__file__).parent.parent / "llm" / "prompts" / "mcp_tools_template.json"
-        with open(template_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-            _template_cache = config["template"]
-            return _template_cache
-    except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
-        logger.error(f"Failed to load MCP tools template: {e}")
-        # Fallback to a minimal template
-        return "You have access to {tools_count} external tool(s) from {servers_count} MCP server(s).\n\n{tools_content}"
+# Template for the MCP tools system prompt section. {tools_count},
+# {servers_count}, and {tools_content} are filled in by
+# build_mcp_system_prompt().
+_MCP_TOOLS_PROMPT_TEMPLATE = (
+    "# External Tools (MCP)\n\n"
+    "You have access to {tools_count} tool(s) from {servers_count} MCP server(s):\n\n"
+    "{tools_content}\n\n"
+    "## Usage Guidelines:\n\n"
+    "1. **Extract parameters intelligently**: Analyze the user's message and conversation "
+    "context to determine parameter values. Only ask for clarification when genuinely ambiguous.\n\n"
+    "2. **Be transparent**: Briefly explain what you'll do before calling a tool.\n\n"
+    "3. **User approval**: Tool calls require user approval. Wait for execution results before continuing.\n\n"
+    "4. **Handle errors**: If a tool fails or is rejected, adapt and explain alternatives.\n\n"
+    "5. **Explain results**: Interpret tool outputs in plain language for the user."
+)
 
 
 def build_mcp_system_prompt(tools: list) -> str:
     """Build system prompt for MCP-enabled conversations.
 
-    This function is called dynamically by llm.prompt_builder when MCP tools are enabled.
+    Called by llm.client's direct completion path when MCP tools are
+    enabled and available, to describe the actual tool list by name.
 
     Args:
         tools: List of MCPTool instances available to the model
@@ -76,10 +68,7 @@ def build_mcp_system_prompt(tools: list) -> str:
 
     tools_content = "\n\n".join(sections)
 
-    # Load template and fill in variables
-    template = _load_template()
-
-    return template.format(
+    return _MCP_TOOLS_PROMPT_TEMPLATE.format(
         tools_count=len(tools),
         servers_count=len(servers_map),
         tools_content=tools_content
