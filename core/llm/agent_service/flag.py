@@ -10,11 +10,6 @@ Precedence, highest first:
 1. the `X-Sterna-Agent-Core` request header, when it names a stack,
 2. the `LLM_AGENT_CORE_V2_STREAMING` Django setting,
 3. `DEFAULT_ENABLED`.
-
-A turn that asks for reasoning traces or image output is answered by
-the LangChain stack whatever the flag says: those two capabilities are
-served by a separate path with a wire format of its own, and routing
-them through the agent core would change what their clients read.
 """
 
 from __future__ import annotations
@@ -59,12 +54,8 @@ def configured_default() -> bool:
     return bool(getattr(settings, SETTING_NAME, DEFAULT_ENABLED))
 
 
-def serves_agent_core(
-    request, *, enable_reasoning: bool, supports_image_output: bool
-) -> bool:
+def serves_agent_core(request) -> bool:
     """Whether the agent core answers this request."""
 
-    if enable_reasoning or supports_image_output:
-        return False
     chosen = header_choice(request)
     return configured_default() if chosen is None else chosen

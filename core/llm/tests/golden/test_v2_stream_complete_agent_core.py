@@ -22,6 +22,8 @@ from llm.agent_core.provider import (
     ProviderContentDeltaChunk,
     ProviderDoneChunk,
     ProviderGenerationIdChunk,
+    ProviderImageChunk,
+    ProviderReasoningDeltaChunk,
     ProviderToolCallDeltaChunk,
     ProviderUsageChunk,
 )
@@ -89,6 +91,14 @@ def generation_id_chunk(generation_id):
 
 def content_chunk(text):
     return ProviderContentDeltaChunk(content=text)
+
+
+def reasoning_chunk(text):
+    return ProviderReasoningDeltaChunk(content=text)
+
+
+def image_chunk(image_url):
+    return ProviderImageChunk(image=image_url)
 
 
 def usage_chunk(prompt_tokens, completion_tokens):
@@ -288,6 +298,45 @@ class V2StreamCompleteAgentCoreGoldenTests(APITestCase):
 
         assert_stream_is_substantive(self, raw, ["content", "error"])
         assert_matches_golden(self, "v2_provider_error_mid_stream", raw)
+
+    # --- (d) native reasoning / image output ---------------------------
+
+    def test_reasoning_turn_transcript(self):
+        raw = self._post(
+            [
+                [
+                    generation_id_chunk(GENERATION_ID),
+                    reasoning_chunk("The notes mention two open items."),
+                    content_chunk("There are two open items."),
+                    usage_chunk(120, 40),
+                    ProviderDoneChunk(finish_reason=STOP),
+                ]
+            ],
+            enable_reasoning=True,
+        )
+
+        assert_stream_is_substantive(
+            self, raw, ["generation_id", "reasoning", "content", "done"]
+        )
+        assert_matches_golden(self, "v2_reasoning_turn", raw)
+
+    def test_image_output_turn_transcript(self):
+        seed_model_catalog(["text", "image"])
+
+        raw = self._post([
+            [
+                generation_id_chunk(GENERATION_ID),
+                content_chunk("Here is the requested image."),
+                image_chunk("https://example.invalid/golden-fixture.png"),
+                usage_chunk(120, 40),
+                ProviderDoneChunk(finish_reason=STOP),
+            ]
+        ])
+
+        assert_stream_is_substantive(
+            self, raw, ["generation_id", "content", "image", "done"]
+        )
+        assert_matches_golden(self, "v2_image_output_turn", raw)
 
 
 class NoWaitRateLimiter:

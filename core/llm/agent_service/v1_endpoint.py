@@ -33,6 +33,7 @@ from ..exceptions import ContextLimitExceededException
 from ..provider_registry import is_openrouter_url, native_model_name
 from .dependencies import TurnRequest
 from .mcp_port import ListedMCPTools, published_tool_id
+from .provider_extra import reasoning_extra
 from .v1_stream import V1TurnRunner
 
 # Child of the configured "llm" logger (see sterna/logging.py APP_LOGGERS).
@@ -213,14 +214,15 @@ def _provider_extra(
         extra[STREAM_OPTIONS_FIELD] = dict(INCLUDE_USAGE_OPTION)
         return extra
 
-    if data.get("enable_reasoning", False):
-        from ..reasoning_options import build_reasoning_option
-
-        extra[REASONING_FIELD] = build_reasoning_option(
-            model=model,
-            reasoning_effort=data.get("reasoning_effort"),
-            reasoning_max_tokens=data.get("reasoning_max_tokens"),
-        )
+    reasoning = reasoning_extra(
+        is_openrouter=is_openrouter,
+        enable_reasoning=data.get("enable_reasoning", False),
+        model=model,
+        reasoning_effort=data.get("reasoning_effort"),
+        reasoning_max_tokens=data.get("reasoning_max_tokens"),
+    )
+    if reasoning is not None:
+        extra[REASONING_FIELD] = reasoning
     return extra
 
 

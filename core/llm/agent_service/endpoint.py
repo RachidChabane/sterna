@@ -23,6 +23,7 @@ from ..agent.prompt_assembly import build_agent_system_prompt
 from ..agent_core import sse
 from ..provider_registry import OPENROUTER_BASE_URL, is_openrouter_url, native_model_name
 from .dependencies import TurnRequest
+from .provider_extra import reasoning_extra
 from .stream import V2TurnRunner
 
 # Child of the configured "llm" logger (see sterna/logging.py APP_LOGGERS).
@@ -35,6 +36,10 @@ STREAM_CONTENT_TYPE = "text/event-stream"
 STREAM_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 ROUTE_EVENT_NAME = "sterna_route"
+
+REASONING_FIELD = "reasoning"
+MODALITIES_FIELD = "modalities"
+IMAGE_MODALITY = "image"
 
 
 class SmartRouterReroute:
@@ -93,6 +98,9 @@ def agent_core_streaming_response(
     spark_fix_request: Optional[Dict[str, Any]] = None,
     spark_ignite_request: Optional[Dict[str, Any]] = None,
     forced_tool_name: Optional[str] = None,
+    reasoning_effort: Optional[str] = None,
+    reasoning_max_tokens: Optional[int] = None,
+    output_modalities: Optional[Sequence[str]] = None,
 ) -> StreamingHttpResponse:
     """Stream this request's turn through the agent core."""
 
@@ -118,6 +126,14 @@ def agent_core_streaming_response(
         temperature=temperature,
         max_tokens=max_tokens,
         flags=flags,
+        extra=_provider_extra(
+            is_openrouter=is_openrouter,
+            model=model,
+            enable_reasoning=flags.reasoning,
+            reasoning_effort=reasoning_effort,
+            reasoning_max_tokens=reasoning_max_tokens,
+            output_modalities=output_modalities,
+        ),
     )
     runner = V2TurnRunner(
         turn=turn,
@@ -232,3 +248,36 @@ def _rebound(
         api_key=api_key or turn.api_key,
         base_url=resolved,
     )
+
+
+def _provider_extra(
+    *,
+    is_openrouter: bool,
+    model: str,
+    enable_reasoning: bool,
+    reasoning_effort: Optional[str],
+    reasoning_max_tokens: Optional[int],
+    output_modalities: Optional[Sequence[str]],
+) -> Optional[Dict[str, Any]]:
+    """The request fields this turn's provider call carries beyond the wire's own.
+
+    Both a native reasoning trace and model-native image output are
+    OpenRouter extensions: a direct provider endpoint gets neither.
+    """
+
+    extra: Dict[str, Any] = {}
+
+    reasoning = reasoning_extra(
+        is_openrouter=is_openrouter,
+        enable_reasoning=enable_reasoning,
+        model=model,
+        reasoning_effort=reasoning_effort,
+        reasoning_max_tokens=reasoning_max_tokens,
+    )
+    if reasoning is not None:
+        extra[REASONING_FIELD] = reasoning
+
+    if is_openrouter and output_modalities and IMAGE_MODALITY in output_modalities:
+        extra[MODALITIES_FIELD] = list(output_modalities)
+
+    return extra or None

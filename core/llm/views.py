@@ -2293,16 +2293,11 @@ Files remain available throughout the conversation."""
 
     # Which stack serves this turn: the agent core, or the LangChain
     # streaming agent below. See llm.agent_service.flag for the header
-    # and the setting that decide, and for the capabilities that stay
-    # on the LangChain path whatever they say.
+    # and the setting that decide.
     from llm.agent.feature_flags import AgentFeatureFlags
     from llm.agent_service import serves_agent_core
     from llm.agent_service.endpoint import agent_core_streaming_response
-    if serves_agent_core(
-        request,
-        enable_reasoning=enable_reasoning,
-        supports_image_output="image" in output_modalities,
-    ):
+    if serves_agent_core(request):
         return agent_core_streaming_response(
             request=request,
             model=model,
@@ -2336,6 +2331,9 @@ Files remain available throughout the conversation."""
             spark_fix_request=spark_fix_request,
             spark_ignite_request=spark_ignite_request,
             forced_tool_name=forced_tool_name,
+            reasoning_effort=reasoning_effort,
+            reasoning_max_tokens=reasoning_max_tokens,
+            output_modalities=output_modalities,
         )
 
     agent = LangChainStreamingAgent(
