@@ -1,10 +1,13 @@
 """Execute Programming Task tool: runs Python in the sandbox for programmatic tool calling.
 
-No entry exists for this tool in `llm.tool_catalog.core_tools`, so its
-schema is transcribed here from
-`HTTPToolExecutor._handle_execute_programming_task` in
-`llm.http_tool_executor`, the handler this tool's execution delegates
-to via the injected legacy invoker.
+No entry exists for this tool in `llm.tool_catalog.core_tools`. Its
+schema is transcribed verbatim from the `execute_programming_task`
+entry of `FILE_TOOLS` in `sandbox.orchestrator.file_tools` — the
+model-facing tool contract legacy V1 sends the model via
+`get_file_tools()` (`llm.file_tools_integration`, called from
+`llm.views.stream_complete`). Execution delegates to that same tool
+id via the injected legacy invoker. `test_agent_core_file_tools_drift.py`
+guards this module against drifting from that source.
 """
 
 from __future__ import annotations
@@ -18,23 +21,31 @@ TOOL = ToolDefinition(
     id=TOOL_ID,
     display=ToolDisplay(name="Execute Programming Task"),
     description=(
-        "Run Python code in the sandbox to perform a complex, multi-file "
-        "operation programmatically rather than through individual file-tool calls."
+        "For COMPLEX multi-file programming tasks: refactoring across "
+        "files, codebase-wide searches/replacements, batch operations, "
+        "running tests and fixing errors. Generate Python code that "
+        "performs the task - intermediate results stay in code context "
+        "(37% token savings). Use relative paths (Path('.')). Print JSON "
+        "summary at end."
     ),
     input_schema={
         "type": "object",
         "properties": {
             "code": {
                 "type": "string",
-                "description": "The Python code to execute.",
+                "description": (
+                    "Python code for multi-file tasks. Use relative "
+                    "paths like Path('.'). Available: pathlib, "
+                    "subprocess, json, re, os. Print JSON summary at end "
+                    "for results."
+                ),
             },
             "task_description": {
                 "type": "string",
-                "description": "A short description of what the code accomplishes.",
-                "default": "Programming task",
+                "description": "Brief description of what this programming task accomplishes",
             },
         },
-        "required": ["code"],
+        "required": ["code", "task_description"],
     },
     handler=delegate_to_invoker(TOOL_ID),
     approval=ToolApproval.AUTO,

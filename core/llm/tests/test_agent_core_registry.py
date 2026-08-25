@@ -5,7 +5,6 @@ handler/context/invoker seam a legacy-backed tool calls through.
 import unittest
 
 from llm.agent_core.registry import (
-    LegacyToolInvoker,
     ToolApproval,
     ToolDefinition,
     ToolDisplay,

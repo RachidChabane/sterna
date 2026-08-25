@@ -25,60 +25,22 @@ literal copied into the tool module and the source of truth it was
 copied from.
 """
 
-import ast
 import unittest
-from pathlib import Path
-from typing import Dict, Set
 
 from llm.agent_core.registry import discover_tools
-from llm.tool_catalog import core_tools as core_tools_module
-from llm.tool_catalog.models import ToolDefinition as LegacyToolDefinition
-
-CORE_ROOT = Path(__file__).resolve().parent.parent.parent
-HTTP_TOOL_EXECUTOR = CORE_ROOT / "llm" / "http_tool_executor.py"
-
-
-def _catalog_tool_definitions() -> Dict[str, LegacyToolDefinition]:
-    """Every `ToolDefinition` constant in `core_tools`, by id.
-
-    Reads the module's namespace directly rather than its curated
-    `CORE_TOOL_DEFINITIONS` list, which is itself hand-maintained and
-    can omit a defined tool without anything catching it.
-    """
-
-    return {
-        value.id: value
-        for value in vars(core_tools_module).values()
-        if isinstance(value, LegacyToolDefinition)
-    }
-
-
-def _http_tool_executor_handler_ids() -> Set[str]:
-    """The tool ids `HTTPToolExecutor.execute_tool_call` dispatches, read from source."""
-
-    tree = ast.parse(HTTP_TOOL_EXECUTOR.read_text(encoding="utf-8"), filename=str(HTTP_TOOL_EXECUTOR))
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-            and node.targets[0].id == "handlers"
-            and isinstance(node.value, ast.Dict)
-        ):
-            return {ast.literal_eval(key) for key in node.value.keys if key is not None}
-    raise AssertionError(
-        f"could not find a `handlers = {{...}}` dict literal in {HTTP_TOOL_EXECUTOR}; "
-        "this test's characterization of the legacy dispatch table is stale."
-    )
+from llm.tests.legacy_tool_sources import (
+    catalog_tool_definitions,
+    http_tool_executor_handler_ids,
+)
 
 
 class ToolCoverageTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.discovered = discover_tools()
-        cls.catalog_tools = _catalog_tool_definitions()
+        cls.catalog_tools = catalog_tool_definitions()
         cls.catalog_ids = set(cls.catalog_tools)
-        cls.http_handler_ids = _http_tool_executor_handler_ids()
+        cls.http_handler_ids = http_tool_executor_handler_ids()
 
     def test_every_catalog_tool_has_a_registry_entry(self):
         missing = self.catalog_ids - set(self.discovered)

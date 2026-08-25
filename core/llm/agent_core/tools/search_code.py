@@ -1,9 +1,13 @@
 """Search Code tool: searches for a pattern across sandbox files.
 
-No entry exists for this tool in `llm.tool_catalog.core_tools`, so its
-schema is transcribed here from `HTTPToolExecutor._handle_search_code`
-in `llm.http_tool_executor`, the handler this tool's execution
-delegates to via the injected legacy invoker.
+No entry exists for this tool in `llm.tool_catalog.core_tools`. Its
+schema is transcribed verbatim from the `search_code` entry of
+`FILE_TOOLS` in `sandbox.orchestrator.file_tools` — the model-facing
+tool contract legacy V1 sends the model via `get_file_tools()`
+(`llm.file_tools_integration`, called from `llm.views.stream_complete`).
+Execution delegates to that same tool id via the injected legacy
+invoker. `test_agent_core_file_tools_drift.py` guards this module
+against drifting from that source.
 """
 
 from __future__ import annotations
@@ -17,38 +21,55 @@ TOOL = ToolDefinition(
     id=TOOL_ID,
     display=ToolDisplay(name="Search Code"),
     description=(
-        "Search for a pattern across files in the sandbox workspace and "
-        "return matching lines with surrounding context."
+        "Search for patterns in files using regex. Faster than reading "
+        "multiple files. Returns matching lines with file paths and line "
+        "numbers. Use for: finding function definitions, locating "
+        "imports, finding all usages of a variable/function, searching "
+        "for TODOs/FIXMEs."
     ),
     input_schema={
         "type": "object",
         "properties": {
             "pattern": {
                 "type": "string",
-                "description": "Regular expression or literal text to search for.",
+                "description": (
+                    "Regex pattern to search for. Examples: "
+                    "'def process_', 'import.*requests', 'TODO|FIXME', "
+                    "'class.*Controller'"
+                ),
             },
             "path": {
                 "type": "string",
-                "description": "Directory or file to search within.",
+                "description": (
+                    "Directory or file to search in (relative to "
+                    "/workspace). Default: '.' (entire workspace). "
+                    "Examples: 'src', 'src/components', 'app.py'"
+                ),
                 "default": ".",
             },
             "include": {
                 "type": "string",
-                "description": "Glob restricting which files are searched, e.g. '*.py'.",
+                "description": (
+                    "Glob pattern to filter files. Examples: '*.py', "
+                    "'*.ts', '*.{js,jsx,ts,tsx}', 'test_*.py'"
+                ),
             },
             "context_lines": {
                 "type": "integer",
-                "description": "Number of lines of context to include around each match.",
+                "description": (
+                    "Number of lines to show before and after each match "
+                    "(like grep -C). Default: 0"
+                ),
                 "default": 0,
             },
             "max_results": {
                 "type": "integer",
-                "description": "Maximum number of matches to return (capped at 100).",
+                "description": "Maximum number of matches to return. Default: 50",
                 "default": 50,
             },
             "ignore_case": {
                 "type": "boolean",
-                "description": "Whether the search is case-insensitive.",
+                "description": "Case-insensitive search. Default: false",
                 "default": False,
             },
         },
