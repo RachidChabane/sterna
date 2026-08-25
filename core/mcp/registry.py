@@ -1,13 +1,13 @@
-"""MCP Registry for managing multiple MCP servers and their tools.
+"""MCP Registry for managing OAuth-connected MCP servers and their tools.
 
-DEPRECATION NOTICE:
-This registry (V1) handles OAuth-connected MCP servers (stdio transport via commands).
-For new functionality, prefer using the UnifiedMCPRegistry from unified_registry.py
-which supports both OAuth servers AND custom npm-based sandboxed servers.
+Owns the WebSocket, HTTP, and STDIO-via-command transports backing an
+MCPServer's stored OAuth/auth state: connecting, health checks, DB-persisted
+tool discovery and caching (MCPTool rows), and tool calls with per-request
+ownership verification.
 
-Migration path:
-- OAuth servers: Still handled here, will be migrated to unified_registry
-- Custom npm servers: Use unified_registry directly
+Sandboxed npm-package servers and orchestrator-managed remote HTTP servers
+are a separate concern owned by UnifiedMCPRegistry (unified_registry.py),
+which keeps its connection state in process memory rather than the database.
 """
 
 import logging

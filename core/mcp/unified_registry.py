@@ -1,8 +1,8 @@
 """
 Unified MCP Registry
 
-Single registry managing ALL MCP servers for all users.
-Consolidates V1 and V2 registries into one coherent system.
+Manages sandboxed npm-package, WebSocket, and remote HTTP servers with
+per-process state; DB-persisted OAuth servers are registry.py's concern.
 
 Design Principles:
 - Per-user isolation: Each user's servers are independent
