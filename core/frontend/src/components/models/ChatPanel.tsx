@@ -1,9 +1,6 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, memo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { useAttachmentManagement } from '@/hooks/useAttachmentManagement'
 import { useChatCosts } from '@/hooks/useChatCosts'
@@ -11,20 +8,8 @@ import { useTTS } from '@/hooks/useTTS'
 import { useAuthStore } from '@/store/authStore'
 import { useAuthModalStore } from '@/store/authModalStore'
 import { getAuthModalVariant } from '@/lib/sessionDetection'
-import { FilePreviewModal } from './FilePreviewModal'
-import { assetsAPI } from '@/api/assets'
-import { conversationsAPI } from '@/api/conversations'
-import { useMCPStore } from '@/store/mcpStore'
-import type { Model, Message, Filters, ModelParameters, Chat, Attachment, ImageAttachment, FileAttachment } from './types'
-import { extractTextFromContent, buildChatResponsesText, buildChatMetadata, generateFilename } from '@/utils/chatUtils'
 import { revokeImagePreview } from '@/utils/imageUtils'
-import { cacheGet } from '@/utils/attachmentCache'
-import { buildAttachmentsFromFiles, extractFilesFromClipboard, extractFilesFromDataTransfer } from '@/utils/attachmentHandlers'
-import useModelStore from '@/store/modelStore'
-import type { ModelCatalogEntry } from '@/types/models'
-import { toModelCatalogEntry } from './modelCatalog'
-import { ModelDetailsModal } from './ModelDetailsModal'
-import type { CachedAttachment } from '@/utils/attachmentCache'
+import type { Model, Message, Filters, ModelParameters, Chat, Attachment, FileAttachment } from './types'
 
 import { ChatHeader } from './ChatHeader'
 import { MessageInput } from './MessageInput'
@@ -33,6 +18,14 @@ import { AttachmentModals } from './AttachmentModals'
 import { ChatStates } from './ChatStates'
 import { ChatModals } from './ChatModals'
 import { ChatPanelProvider } from './ChatPanelContext'
+import { useChatPanelScroll } from './hooks/useChatPanelScroll'
+import { useChatFeatureToggles } from './hooks/useChatFeatureToggles'
+import { useMessageMutations } from './hooks/useMessageMutations'
+import { useMessageExportActions } from './hooks/useMessageExportActions'
+import { useAttachmentDragAndPaste } from './hooks/useAttachmentDragAndPaste'
+import { useChatPanelModelDetails } from './hooks/useChatPanelModelDetails'
+import { useAttachmentViewerState } from './hooks/useAttachmentViewerState'
+import { useAttachmentCacheHydration } from './hooks/useAttachmentCacheHydration'
 interface ChatPanelProps {
   model: Model | null
   models: Model[]
@@ -160,65 +153,19 @@ function ChatPanelComponent({
   const attachmentManager = useAttachmentManagement()
   const { attachments, addAttachment, addAttachments, removeAttachment, clearAttachments } = attachmentManager
 
-  // MCP store - always available
-  const getActiveServers = useMCPStore((state) => state.getActiveServers)
-
   // Feature toggles for independent mode - simple single-chat states
-  const webSearchState = useMemo(() => ({
-    enabled: parameters?.enable_brave_search === true ? 1 : 0,
-    total: 1,
-    supported: model?.supports_functions === true ? 1 : 0,
-  }), [parameters?.enable_brave_search, model?.supports_functions])
-
-  const reasoningState = useMemo(() => ({
-    enabled: parameters?.enable_reasoning === true ? 1 : 0,
-    total: 1,
-    supported: model?.supports_reasoning === true ? 1 : 0,
-  }), [parameters?.enable_reasoning, model?.supports_reasoning])
-
-  const mcpToolsState = useMemo(() => ({
-    enabled: parameters?.enable_mcp_tools === true ? 1 : 0,
-    total: 1,
-    supported: model?.supports_functions === true ? 1 : 0,
-  }), [parameters?.enable_mcp_tools, model?.supports_functions])
-
-  const hasReasoningSupportValue = model?.supports_reasoning === true
-  const hasFunctionSupportValue = model?.supports_functions === true
-  const activeServersValue = useMemo(() => {
-    try {
-      return getActiveServers ? getActiveServers() : []
-    } catch (e) {
-      console.error('Error getting active servers:', e)
-      return []
-    }
-  }, [getActiveServers])
-
-  // Feature toggle handlers for independent mode
-  const toggleWebSearch = useCallback(() => {
-    if (!onParametersChange || !parameters) return
-    onParametersChange({
-      ...parameters,
-      enable_brave_search: !parameters.enable_brave_search,
-    })
-  }, [onParametersChange, parameters])
-
-  const hasWebSearchSupportValue = model?.supports_functions === true
-
-  const toggleReasoning = useCallback(() => {
-    if (!onParametersChange || !parameters) return
-    onParametersChange({
-      ...parameters,
-      enable_reasoning: !parameters.enable_reasoning,
-    })
-  }, [onParametersChange, parameters])
-
-  const toggleMCPTools = useCallback(() => {
-    if (!onParametersChange || !parameters) return
-    onParametersChange({
-      ...parameters,
-      enable_mcp_tools: !parameters.enable_mcp_tools,
-    })
-  }, [onParametersChange, parameters])
+  const {
+    webSearchState,
+    reasoningState,
+    mcpToolsState,
+    hasReasoningSupportValue,
+    hasFunctionSupportValue,
+    hasWebSearchSupportValue,
+    activeServersValue,
+    toggleWebSearch,
+    toggleReasoning,
+    toggleMCPTools,
+  } = useChatFeatureToggles({ model, parameters, onParametersChange })
 
   // Use cost calculation hook
   const { totalCost, totalPromptCost, totalCompletionCost, totalTokens, formatCost, formatLatency } = useChatCosts({ messages })
@@ -230,10 +177,6 @@ function ChatPanelComponent({
   const [showParametersDialog, setShowParametersDialog] = useState(false)
   const [loadingEstimate, setLoadingEstimate] = useState(false)
   const [showClearDialog, setShowClearDialog] = useState(false)
-  const [isDragOver, setIsDragOver] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<FileAttachment | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [fetchedFileContent, setFetchedFileContent] = useState<string | null>(null)
   const [suppressInterruptedWarning, setSuppressInterruptedWarning] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const [messagesContainer, setMessagesContainer] = useState<HTMLDivElement | null>(null)
@@ -247,77 +190,8 @@ function ChatPanelComponent({
   const { user, isAuthenticated } = useAuthStore()
   const { openModal } = useAuthModalStore()
 
-  // Smart auto-scroll: positions user message at top of viewport when sent,
-  // then follows streaming content at the bottom
-  const prevLastMsgKeyRef = useRef<string | null>(null)
-  useLayoutEffect(() => {
-    const viewport = scrollAreaRef.current?.querySelector(
-      '[data-radix-scroll-area-viewport]'
-    ) as HTMLElement | null
-    if (!viewport || messages.length === 0) return
-
-    const lastMsg = messages[messages.length - 1]
-    const lastMsgKey = `${lastMsg.role}-${lastMsg.timestamp?.getTime()}`
-    const isNewMessage = lastMsgKey !== prevLastMsgKeyRef.current
-    prevLastMsgKeyRef.current = lastMsgKey
-
-    if (isNewMessage && lastMsg.role === 'user') {
-      // New user message — scroll it to the top of the visible area
-      requestAnimationFrame(() => {
-        const userMsgs = viewport.querySelectorAll('[data-message-role="user"]')
-        const lastUserEl = userMsgs[userMsgs.length - 1] as HTMLElement | null
-        if (lastUserEl) {
-          const vRect = viewport.getBoundingClientRect()
-          const mRect = lastUserEl.getBoundingClientRect()
-          const target = viewport.scrollTop + (mRect.top - vRect.top) - 16
-          viewport.scrollTo({ top: target, behavior: 'smooth' })
-        } else {
-          viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' })
-        }
-      })
-    } else {
-      // Streaming update or assistant message — keep scrolled to bottom
-      viewport.scrollTop = viewport.scrollHeight
-    }
-  }, [messages])
-
-  // Scroll clamp: never allow scrolling past the last user message at top of visible area,
-  // but allow normal scrolling when the assistant response overflows the viewport.
-  useEffect(() => {
-    const viewport = scrollAreaRef.current?.querySelector(
-      '[data-radix-scroll-area-viewport]'
-    ) as HTMLElement | null
-    if (!viewport) return
-
-    const paddingBottom = parseFloat(getComputedStyle(viewport).paddingBottom) || 0
-
-    const clampScroll = () => {
-      const userMsgs = viewport.querySelectorAll('[data-message-role="user"]')
-      const lastUserEl = userMsgs[userMsgs.length - 1] as HTMLElement | null
-      if (!lastUserEl) return
-
-      const allMsgs = viewport.querySelectorAll('[data-message-role]')
-      const lastMsgEl = allMsgs[allMsgs.length - 1] as HTMLElement | null
-      if (!lastMsgEl) return
-
-      const viewportRect = viewport.getBoundingClientRect()
-      const userMsgRect = lastUserEl.getBoundingClientRect()
-      const lastMsgRect = lastMsgEl.getBoundingClientRect()
-
-      const lastUserMsgAbsoluteTop = viewport.scrollTop + (userMsgRect.top - viewportRect.top)
-      const lastMessageBottom = viewport.scrollTop + (lastMsgRect.bottom - viewportRect.top)
-      const effectiveViewport = viewport.clientHeight - paddingBottom
-
-      const maxScroll = Math.max(lastUserMsgAbsoluteTop, lastMessageBottom - effectiveViewport)
-
-      if (viewport.scrollTop > maxScroll) {
-        viewport.scrollTop = maxScroll
-      }
-    }
-
-    viewport.addEventListener('scroll', clampScroll)
-    return () => viewport.removeEventListener('scroll', clampScroll)
-  }, [])
+  // Smart auto-scroll + scroll clamp for the independent-mode transcript
+  useChatPanelScroll(scrollAreaRef, messages)
 
   // Reset interrupted warning suppression when a successful assistant message arrives
   // We only reset when NOT loading and we have a non-interrupted, non-error assistant response
@@ -361,7 +235,6 @@ function ChatPanelComponent({
     }
   }, [isAuthenticated, attachments, isLoading, onSendMessage, toast, openModal, clearAttachments])
 
-
   const handleEstimate = useCallback(async (text: string) => {
     if ((!text.trim() && attachments.length === 0) || !model || !onEstimateCost) return
     setLoadingEstimate(true)
@@ -376,462 +249,67 @@ function ChatPanelComponent({
     }
   }, [attachments, model, onEstimateCost, toast])
 
-  // Drag & drop handlers for attaching files/images
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    if (!isAuthenticated || isLoading || disabledChat) return
-    setIsDragOver(true)
-  }, [isAuthenticated, isLoading, disabledChat])
+  // Drag & drop / paste handlers for attaching files/images
+  const { isDragOver, handleDragOver, handleDragLeave, handleDrop, handlePaste } = useAttachmentDragAndPaste({
+    isAuthenticated,
+    isLoading,
+    disabledChat,
+    attachmentCount: attachments.length,
+    addAttachments,
+    toast,
+    openModal,
+  })
 
-  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    setIsDragOver(false)
-  }, [])
+  // Retry / edit / resend a message, rewinding local + persisted state as needed
+  const { handleRetry, handleEditMessage, handleResend } = useMessageMutations({
+    messages,
+    onUpdateMessages,
+    onSendMessage,
+    conversationId,
+    currentChatId,
+    toast,
+    setSuppressInterruptedWarning,
+  })
 
-  const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    setIsDragOver(false)
-    if (!isAuthenticated) {
-      toast({ title: 'Authentication required', description: 'Please sign in to attach files', variant: 'destructive' })
-      const variant = getAuthModalVariant()
-      openModal(variant, window.location.pathname)
-      return
-    }
-    if (isLoading || disabledChat) return
-    const files = extractFilesFromDataTransfer(e.dataTransfer)
-    if (!files.length) return
-    const { attachments: newAtts, counts } = await buildAttachmentsFromFiles(files, { currentCount: attachments.length, maxCount: 8 })
-    if (newAtts.length) addAttachments(newAtts)
-
-    // Show security warnings first
-    if (counts.securityWarnings && counts.securityWarnings.length > 0) {
-      for (const warning of counts.securityWarnings) {
-        if (warning.startsWith('BLOCKED:')) {
-          toast({
-            title: 'Security Warning',
-            description: warning.replace('BLOCKED: ', ''),
-            variant: 'destructive'
-          })
-        } else if (warning.startsWith('INVALID:')) {
-          toast({
-            title: 'Invalid File',
-            description: warning.replace('INVALID: ', ''),
-            variant: 'destructive'
-          })
-        } else if (warning.startsWith('WARNING:')) {
-          toast({
-            title: 'File Type Warning',
-            description: warning.replace('WARNING: ', ''),
-            variant: 'default'
-          })
-        }
-      }
-    }
-
-    // Show summary of successfully added files
-    const total = newAtts.length
-    if (total > 0 || counts.errors > 0 || counts.blocked > 0) {
-      const parts = [] as string[]
-      if (counts.imagesAdded) parts.push(`${counts.imagesAdded} image${counts.imagesAdded > 1 ? 's' : ''}`)
-      if (counts.pdfsAdded) parts.push(`${counts.pdfsAdded} PDF${counts.pdfsAdded > 1 ? 's' : ''}`)
-      if (counts.officeDocsAdded) parts.push(`${counts.officeDocsAdded} Office doc${counts.officeDocsAdded > 1 ? 's' : ''}`)
-      if (counts.textsAdded) parts.push(`${counts.textsAdded} file${counts.textsAdded > 1 ? 's' : ''}`)
-
-      if (parts.length > 0) {
-        const totalFailed = counts.errors + counts.blocked
-        const desc = `${parts.join(' + ')} added${totalFailed ? ` • ${totalFailed} failed` : ''}${counts.skippedOverflow ? ` • ${counts.skippedOverflow} skipped (limit)` : ''}`
-        toast({ title: 'Attachments added', description: desc })
-      }
-    }
-  }, [isAuthenticated, isLoading, disabledChat, attachments.length, addAttachments, toast, openModal])
-
-  // Paste handler for images/files from clipboard
-  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    if (!isAuthenticated || isLoading || disabledChat) return
-    const files = extractFilesFromClipboard(e)
-    if (!files.length) return
-    // Prevent inserting binary data as text
-    e.preventDefault()
-    const { attachments: newAtts, counts } = await buildAttachmentsFromFiles(files, { currentCount: attachments.length, maxCount: 8 })
-    if (newAtts.length) addAttachments(newAtts)
-
-    // Show security warnings first
-    if (counts.securityWarnings && counts.securityWarnings.length > 0) {
-      for (const warning of counts.securityWarnings) {
-        if (warning.startsWith('BLOCKED:')) {
-          toast({
-            title: 'Security Warning',
-            description: warning.replace('BLOCKED: ', ''),
-            variant: 'destructive'
-          })
-        } else if (warning.startsWith('INVALID:')) {
-          toast({
-            title: 'Invalid File',
-            description: warning.replace('INVALID: ', ''),
-            variant: 'destructive'
-          })
-        } else if (warning.startsWith('WARNING:')) {
-          toast({
-            title: 'File Type Warning',
-            description: warning.replace('WARNING: ', ''),
-            variant: 'default'
-          })
-        }
-      }
-    }
-
-    // Show summary of successfully added files
-    const parts = [] as string[]
-    if (counts.imagesAdded) parts.push(`${counts.imagesAdded} image${counts.imagesAdded > 1 ? 's' : ''}`)
-    if (counts.pdfsAdded) parts.push(`${counts.pdfsAdded} PDF${counts.pdfsAdded > 1 ? 's' : ''}`)
-    if (counts.officeDocsAdded) parts.push(`${counts.officeDocsAdded} Office doc${counts.officeDocsAdded > 1 ? 's' : ''}`)
-    if (counts.textsAdded) parts.push(`${counts.textsAdded} file${counts.textsAdded > 1 ? 's' : ''}`)
-
-    if (parts.length > 0 || (counts.errors + counts.blocked) > 0) {
-      const totalFailed = counts.errors + counts.blocked
-      toast({
-        title: 'Attachments added',
-        description: parts.length
-          ? `${parts.join(' + ')} added${totalFailed ? ` • ${totalFailed} failed` : ''}`
-          : 'No supported items found'
-      })
-    }
-  }, [isAuthenticated, isLoading, disabledChat, attachments.length, addAttachments, toast])
-
-  const handleRetry = useCallback(async (assistantMessageIndex: number) => {
-    if (!onUpdateMessages) return
-
-    // Find the closest preceding user message (skip any assistant notices)
-    let userMessageIndex = -1
-    for (let i = assistantMessageIndex - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') { userMessageIndex = i; break }
-    }
-
-    if (userMessageIndex < 0) {
-      toast({ title: 'Cannot retry', description: 'No user message found before this response', variant: 'destructive' })
-      return
-    }
-
-    const userMessage = messages[userMessageIndex]
-    const userMessageText = extractTextFromContent(userMessage.content)
-    const userAttachments = (userMessage.attachments || []) as Attachment[]
-
-    // Remove the user message, the selected assistant message, and any assistant notices between them
-    const toRemove = new Set<number>([userMessageIndex, assistantMessageIndex])
-    for (let i = userMessageIndex + 1; i < assistantMessageIndex; i++) {
-      const m = messages[i]
-      if (m.role === 'assistant' && (m as any).isUnsupported) toRemove.add(i)
-    }
-    const updatedMessages = messages.filter((_, idx) => !toRemove.has(idx))
-
-    // Delete removed messages from the database (if they have message_id)
-    if (conversationId && currentChatId) {
-      const messagesToDelete = messages.filter((_, idx) => toRemove.has(idx))
-      await Promise.all(
-        messagesToDelete
-          .filter(m => m.message_id)
-          .map(m => conversationsAPI.deleteMessage(conversationId, currentChatId, m.message_id!).catch(err => {
-            console.error('Failed to delete message from database:', err)
-          }))
-      )
-    }
-
-    // Update messages first
-    onUpdateMessages(updatedMessages)
-
-    // Wait for React to apply the state update before resending
-    // This prevents a race condition where the new message would be added to the old state
-    await new Promise(resolve => setTimeout(resolve, 0))
-
-    // Prevent transient interrupted banner while retry triggers send
-    setSuppressInterruptedWarning(true)
-
-    // Then resend the user message (text + attachments if any)
-    await onSendMessage(userMessageText, userAttachments.length ? userAttachments : undefined)
-  }, [messages, onUpdateMessages, onSendMessage, toast, conversationId, currentChatId])
-
-  const handleEditMessage = useCallback(async (messageIndex: number, content: string) => {
-    if (!onUpdateMessages) return
-
-    // Get the message being edited
-    const editedMessage = messages[messageIndex]
-    if (!editedMessage || editedMessage.role !== 'user') return
-
-    // Get attachments from the message being edited
-    const userAttachments = (editedMessage.attachments || []) as Attachment[]
-
-    // Delete ALL messages from the edited message onwards (complete rewind)
-    const messagesToDelete = messages.slice(messageIndex)
-    const updatedMessages = messages.slice(0, messageIndex)
-
-    // Delete removed messages from the database (if they have message_id)
-    if (conversationId && currentChatId) {
-      await Promise.all(
-        messagesToDelete
-          .filter(m => m.message_id)
-          .map(m => conversationsAPI.deleteMessage(conversationId, currentChatId, m.message_id!).catch(err => {
-            console.error('Failed to delete message from database:', err)
-          }))
-      )
-    }
-
-    // Update messages to remove everything from the edited message onwards
-    onUpdateMessages(updatedMessages)
-
-    // Wait for React to apply the state update
-    await new Promise(resolve => setTimeout(resolve, 0))
-
-    // Send the edited message as a new message
-    await onSendMessage(content, userAttachments.length ? userAttachments : undefined)
-  }, [messages, onUpdateMessages, onSendMessage, conversationId, currentChatId])
-
-  const copyMessageContent = useCallback((content: Message['content']) => {
-    const text = extractTextFromContent(content)
-    navigator.clipboard.writeText(text)
-    toast({
-      title: 'Copied',
-      description: 'Response copied to clipboard'
-    })
-  }, [toast])
-
-  const copyMessageMetadata = useCallback((message: Message) => {
-    const metadata = {
-      model: message.model,
-      model_id: message.model_id,
-      provider: message.provider,
-      timestamp: message.timestamp,
-      cost: message.cost,
-      prompt_cost: message.prompt_cost,
-      completion_cost: message.completion_cost,
-      latency: message.latency,
-      tokens: message.tokens
-    }
-    navigator.clipboard.writeText(JSON.stringify(metadata, null, 2))
-    toast({
-      title: 'Copied',
-      description: 'Metadata copied to clipboard'
-    })
-  }, [toast])
-
-  const exportMessageContent = useCallback((content: Message['content'], model?: string) => {
-    const text = extractTextFromContent(content)
-    const blob = new Blob([text], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const modelName = model ? model.replace(/[^a-zA-Z0-9-]/g, '_') : 'unknown'
-    a.download = generateFilename(`response-${modelName}`, 'txt')
-    a.click()
-    URL.revokeObjectURL(url)
-    toast({
-      title: 'Exported',
-      description: 'Response exported as text file'
-    })
-  }, [toast])
-
-  const exportMessageMetadata = useCallback((message: Message) => {
-    const metadata = {
-      model: message.model,
-      model_id: message.model_id,
-      provider: message.provider,
-      timestamp: message.timestamp,
-      cost: message.cost,
-      prompt_cost: message.prompt_cost,
-      completion_cost: message.completion_cost,
-      latency: message.latency,
-      tokens: message.tokens
-    }
-    const blob = new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const modelName = message.model ? message.model.replace(/[^a-zA-Z0-9-]/g, '_') : 'unknown'
-    a.download = generateFilename(`metadata-${modelName}`, 'json')
-    a.click()
-    URL.revokeObjectURL(url)
-    toast({
-      title: 'Exported',
-      description: 'Metadata exported as JSON file'
-    })
-  }, [toast])
-
-  // Chat-level functions
-  const copyChatResponses = useCallback(() => {
-    const text = buildChatResponsesText(messages)
-    navigator.clipboard.writeText(text)
-    toast({
-      title: 'Copied',
-      description: 'All responses copied to clipboard'
-    })
-  }, [messages, toast])
-
-  const copyChatMetadata = useCallback(() => {
-    const metadata = buildChatMetadata(messages)
-    navigator.clipboard.writeText(JSON.stringify(metadata, null, 2))
-    toast({
-      title: 'Copied',
-      description: 'All metadata copied to clipboard'
-    })
-  }, [messages, toast])
-
-  const exportChatResponses = useCallback(() => {
-    const text = buildChatResponsesText(messages)
-    const blob = new Blob([text], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const modelName = model?.name ? model.name.replace(/[^a-zA-Z0-9-]/g, '_') : 'unknown'
-    a.download = generateFilename(`chat-${modelName}`, 'txt')
-    a.click()
-    URL.revokeObjectURL(url)
-    toast({
-      title: 'Exported',
-      description: 'All responses exported'
-    })
-  }, [messages, model, toast])
-
-  const exportChatMetadata = useCallback(() => {
-    const assistantMessages = messages.filter(m => m.role === 'assistant')
-    const metadata = assistantMessages.map(m => ({
-      model: m.model,
-      model_id: m.model_id,
-      provider: m.provider,
-      timestamp: m.timestamp,
-      cost: m.cost,
-      prompt_cost: m.prompt_cost,
-      completion_cost: m.completion_cost,
-      latency: m.latency,
-      tokens: m.tokens
-    }))
-    const blob = new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const modelName = model?.name ? model.name.replace(/[^a-zA-Z0-9-]/g, '_') : 'unknown'
-    a.download = generateFilename(`chat-metadata-${modelName}`, 'json')
-    a.click()
-    URL.revokeObjectURL(url)
-    toast({
-      title: 'Exported',
-      description: 'All metadata exported'
-    })
-  }, [messages, model, toast])
+  // Copy/export actions for a single message and for the whole chat
+  const {
+    copyMessageContent,
+    copyMessageMetadata,
+    exportMessageContent,
+    exportMessageMetadata,
+    copyChatResponses,
+    copyChatMetadata,
+    exportChatResponses,
+    exportChatMetadata,
+  } = useMessageExportActions({ messages, model, toast })
 
   // Handler for suggested questions in independent mode
   const handleLocalSuggestionClick = useCallback((suggestion: string) => {
     setExternalInputValue(suggestion)
   }, [])
 
-  // Memoize inline handler functions to prevent ChatPanelProvider from re-rendering children
-  const handleResend = useCallback(async (message: string) => {
-    if (!onUpdateMessages) return
-
-    // Find the last user message and its index
-    let userMessageIndex = -1
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') {
-        userMessageIndex = i
-        break
-      }
-    }
-
-    if (userMessageIndex < 0) return
-
-    // Get attachments from the original user message
-    const userMessage = messages[userMessageIndex]
-    const userAttachments = (userMessage.attachments || []) as Attachment[]
-
-    // Remove the user message and any assistant messages after it (including interrupted/errored ones)
-    const messagesToDelete = messages.slice(userMessageIndex)
-    const updatedMessages = messages.slice(0, userMessageIndex)
-
-    // Delete removed messages from the database (if they have message_id)
-    if (conversationId && currentChatId) {
-      await Promise.all(
-        messagesToDelete
-          .filter(m => m.message_id)
-          .map(m => conversationsAPI.deleteMessage(conversationId, currentChatId, m.message_id!).catch(err => {
-            console.error('Failed to delete message from database:', err)
-          }))
-      )
-    }
-
-    // Update messages first to remove the failed exchange
-    onUpdateMessages(updatedMessages)
-
-    // Suppress the warning while resending
-    setSuppressInterruptedWarning(true)
-
-    // Use setTimeout to ensure React has applied the state update before resending
-    setTimeout(() => {
-      onSendMessage(message, userAttachments.length ? userAttachments : undefined)
-    }, 0)
-  }, [messages, onUpdateMessages, onSendMessage, conversationId, currentChatId])
-
-  const handleOpenImageGallery = useCallback((images: { src: string; alt: string }[], selectedIndex: number, fromAttachments: boolean) => {
-    setGalleryImages(images)
-    setSelectedImageIndex(selectedIndex)
-    setSelectedAllImage(images[selectedIndex])
-    setIsGalleryOpen(true)
-    setGalleryOpenedFromAttachments(fromAttachments)
-  }, [])
-
-  const handleOpenPdf = useCallback((src: string, name: string) => {
-    setPdfSrc(src)
-    setPdfName(name)
-    setIsPdfOpen(true)
-  }, [])
-
-  const handleOpenTextFile = useCallback(async (file: FileAttachment) => {
-    const fileName = file.file?.name || 'file'
-
-    // If we have textContent cached, show modal directly
-    if (file.textContent) {
-      setFetchedFileContent(null) // Clear any previously fetched content
-      setSelectedFile(file)
-      setIsModalOpen(true)
-      return
-    }
-
-    // If we have an assetId (after reload), fetch the content
-    const assetId = (file as any).assetId
-    if (assetId) {
-      try {
-        const blob = await assetsAPI.download(assetId)
-        if (blob) {
-          const content = await blob.text()
-          setFetchedFileContent(content)
-          setSelectedFile(file)
-          setIsModalOpen(true)
-        } else {
-          toast({
-            title: 'Failed to load file',
-            description: `Could not load content for ${fileName}`,
-            variant: 'destructive'
-          })
-        }
-      } catch (error) {
-        console.error('Failed to fetch file content:', error)
-        toast({
-          title: 'Failed to load file',
-          description: `Could not load content for ${fileName}`,
-          variant: 'destructive'
-        })
-      }
-      return
-    }
-
-    toast({
-      title: 'File content not available',
-      description: `${fileName} has no content to display`,
-      variant: 'destructive'
-    })
-  }, [toast])
-
-  const handleOpenAllAttachments = useCallback((atts: Attachment[]) => {
-    setAllAttachments(atts)
-    setIsAllAttachmentsOpen(true)
-  }, [])
+  // Attachment viewer state: image gallery, PDF preview, text file preview, all-attachments modal
+  const {
+    isGalleryOpen, setIsGalleryOpen,
+    galleryImages, setGalleryImages,
+    selectedImageIndex, setSelectedImageIndex,
+    galleryOpenedFromAttachments, setGalleryOpenedFromAttachments,
+    isPdfOpen, setIsPdfOpen,
+    pdfSrc, pdfName,
+    isAllAttachmentsOpen, setIsAllAttachmentsOpen,
+    allAttachments,
+    selectedAllImage, setSelectedAllImage,
+    selectedFile,
+    isModalOpen, setIsModalOpen,
+    fetchedFileContent,
+    handleOpenImageGallery,
+    handleOpenPdf,
+    handleOpenTextFile,
+    handleOpenAllAttachments,
+    setSelectedFile,
+    setPdfSrc,
+    setPdfName,
+  } = useAttachmentViewerState(toast)
 
   // Detect if a response is being generated (either "Thinking..." or streaming)
   // Find the last assistant message (skip tool messages) for robust streaming detection
@@ -864,113 +342,16 @@ function ChatPanelComponent({
     model?.input_modalities?.includes('file') || false
   , [model?.input_modalities])
 
-  // Image gallery dialog state
-  const [isGalleryOpen, setIsGalleryOpen] = useState(false)
-  const [galleryImages, setGalleryImages] = useState<{ src: string; alt: string }[]>([])
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
-  const [galleryOpenedFromAttachments, setGalleryOpenedFromAttachments] = useState(false)
-  const [isPdfOpen, setIsPdfOpen] = useState(false)
-  const [pdfSrc, setPdfSrc] = useState<string>("")
-  const [pdfName, setPdfName] = useState<string>("")
-  const [isAllAttachmentsOpen, setIsAllAttachmentsOpen] = useState(false)
-  const [allAttachments, setAllAttachments] = useState<Attachment[]>([])
-  const [selectedAllImage, setSelectedAllImage] = useState<{ src: string; alt: string } | null>(null)
-  const [cachedAttachments, setCachedAttachments] = useState<Record<string, CachedAttachment>>({})
-  const [isModelDetailsOpen, setIsModelDetailsOpen] = useState(false)
-  const [selectedModelDetails, setSelectedModelDetails] = useState<ModelCatalogEntry | null>(null)
+  // Model details modal: resolve a model id to its full catalog entry
+  const {
+    isModelDetailsOpen,
+    setIsModelDetailsOpen,
+    selectedModelDetails,
+    openModelDetails,
+  } = useChatPanelModelDetails(model, messages)
 
-  // Access model catalog/caches to resolve details for modal
-  const modelStore = useModelStore()
-
-  const resolveModelDetails = useCallback((modelId?: string): ModelCatalogEntry | null => {
-    if (!modelId) return null
-
-    // First, try to find in model store
-    const from = [
-      modelStore.currentModel ? [modelStore.currentModel] : [],
-      modelStore.models,
-      modelStore.allModels,
-      modelStore.recentModels.map(m => m.details).filter(Boolean) as ModelCatalogEntry[],
-      modelStore.recentChatModels.map(m => m.details).filter(Boolean) as ModelCatalogEntry[],
-      modelStore.favorites.map(f => f.details).filter(Boolean) as ModelCatalogEntry[],
-      modelStore.comparisonModels,
-    ].flat()
-    const found = from.find(m => m.model_id === modelId)
-    if (found) return found
-
-    // If not found, search in messages to get metadata
-    const messageWithModel = messages.find(msg => msg.model_id === modelId)
-    if (messageWithModel && messageWithModel.model && messageWithModel.provider) {
-      // Construct minimal entry from message metadata
-      return toModelCatalogEntry({
-        id: modelId,
-        model_id: modelId,
-        name: messageWithModel.model,
-        provider: messageWithModel.provider,
-        provider_icon_slug: messageWithModel.provider_icon_slug,
-        provider_icon_url: messageWithModel.provider_icon_url,
-        model_icon_slug: messageWithModel.model_icon_slug,
-        model_icon_url: messageWithModel.model_icon_url,
-        cost_per_1m_prompt: 0,
-        cost_per_1m_completion: 0,
-        max_tokens: 0,
-        supports_streaming: true,
-        supports_functions: false,
-        supports_structured_outputs: false,
-        supports_reasoning: false,
-        supports_prompt_caching: false,
-        supports_stream_cancellation: false,
-        input_modalities: [],
-        tags: [],
-        is_available: true,
-      })
-    }
-
-    return null
-  }, [modelStore, messages])
-
-  const openModelDetails = useCallback((modelId?: string) => {
-    const targetModelId = modelId || model?.model_id
-    const details = resolveModelDetails(targetModelId)
-    if (details) {
-      setSelectedModelDetails(details)
-      setIsModelDetailsOpen(true)
-    } else if (targetModelId && model) {
-      // Final fallback: use current model info if nothing else worked
-      const minimal: ModelCatalogEntry = {
-        id: targetModelId,
-        model_id: targetModelId,
-        name: model.name || targetModelId,
-        provider: model.provider || 'unknown',
-        provider_icon_slug: model.provider_icon_slug,
-        provider_icon_url: model.provider_icon_url,
-        model_icon_slug: model.model_icon_slug,
-        model_icon_url: model.model_icon_url,
-        cost_per_1m_prompt: 0,
-        cost_per_1m_completion: 0,
-        max_tokens: model.max_tokens || 0,
-        supports_streaming: true,
-        supports_functions: Boolean((model as any).supports_functions),
-        supports_structured_outputs: Boolean((model as any).supports_structured_outputs),
-        supports_reasoning: Boolean((model as any).supports_reasoning),
-        supports_prompt_caching: Boolean((model as any).supports_prompt_caching),
-        supports_stream_cancellation: true,
-        modality: null,
-        input_modalities: model.input_modalities || [],
-        output_modalities: (model as any).output_modalities || ['text'],
-        tokenizer: null,
-        max_completion_tokens: null,
-        is_moderated: false,
-        default_parameters: {},
-        description: undefined,
-        tags: [],
-        is_available: true,
-        fetched_at: new Date().toISOString(),
-      }
-      setSelectedModelDetails(minimal)
-      setIsModelDetailsOpen(true)
-    }
-  }, [model, resolveModelDetails])
+  // Hydrate missing file metadata/content from cache (survives refresh)
+  const cachedAttachments = useAttachmentCacheHydration(messages, attachments)
 
   // Memoize the context value to prevent unnecessary re-renders of all consuming components
   const chatPanelContextValue = useMemo(() => ({
@@ -1016,46 +397,6 @@ function ChatPanelComponent({
     handleOpenTextFile, handleOpenAllAttachments,
     speak, stopSpeaking, isSpeaking, isTTSLoading, isTTSSupported
   ])
-
-  // Hydrate missing file metadata/content from cache (survives refresh)
-  useEffect(() => {
-    const loadCache = async () => {
-      const toCheck: string[] = []
-      // attachments in compose area
-      attachments.forEach(att => {
-        if (att.type === 'file') {
-          if (!att.file || (!att.base64 && !att.textContent)) toCheck.push(att.id)
-        } else if (att.type === 'image') {
-          // After refresh, images may miss base64/preview (sanitized). Try to hydrate.
-          if (!(att as any).base64 && !(att as any).preview) toCheck.push(att.id)
-        }
-      })
-      // attachments inside messages
-      messages.forEach(m => {
-        const atts = (m.attachments || []) as Attachment[]
-        atts.forEach(att => {
-          if (att.type === 'file') {
-            if (!att.file || (!att.base64 && !att.textContent)) toCheck.push(att.id)
-          } else if (att.type === 'image') {
-            if (!(att as any).base64 && !(att as any).preview) toCheck.push(att.id)
-          }
-        })
-      })
-      if (toCheck.length === 0) return
-      const entries: Record<string, CachedAttachment> = {}
-      for (const id of toCheck) {
-        try {
-          const cached = await cacheGet(id)
-          if (cached) entries[id] = cached
-        } catch {}
-      }
-      if (Object.keys(entries).length > 0) {
-        setCachedAttachments(prev => ({ ...prev, ...entries }))
-      }
-    }
-    loadCache()
-    // Re-run when messages or attachments change
-  }, [messages, attachments])
 
   return (
     <>

@@ -27,7 +27,7 @@
       "core/conversations/views.py": 859,
       "core/frontend/src/components/mcp/AddServerDialog.tsx": 1056,
       "core/frontend/src/components/models/ArtifactsSidePanel.tsx": 1142,
-      "core/frontend/src/components/models/ChatPanel.tsx": 1275,
+      "core/frontend/src/components/models/ChatPanel.tsx": 616,
       "core/frontend/src/components/models/CodingAgentDisplay.tsx": 1287,
       "core/frontend/src/components/models/DocumentDownloader.tsx": 854,
       "core/frontend/src/components/models/FilePreviewModal.tsx": 853,
