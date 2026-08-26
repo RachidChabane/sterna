@@ -10,20 +10,7 @@ import { GoogleMap, useJsApiLoader, Polyline, Marker, InfoWindow } from '@react-
 import { Navigation } from 'lucide-react'
 import { useTheme } from '@/hooks/useTheme'
 import { darkMapStyles, lightMapStyles } from '@/utils/googleMapsTheme'
-
-interface DirectionsData {
-  summary: string
-  distance: string
-  duration: string
-  start_address: string
-  end_address: string
-  polyline: string
-  steps: Array<{
-    instruction: string
-    distance: string
-    duration: string
-  }>
-}
+import type { DirectionsData } from '@/utils/googleMapsExtractors'
 
 interface DirectionsMapProps {
   directions: DirectionsData

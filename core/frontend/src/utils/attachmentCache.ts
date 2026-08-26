@@ -101,17 +101,31 @@ export async function clearCurrentUserCache(): Promise<void> {
   })
 }
 
+/**
+ * Attachment-shaped enough for cache persistence — kept independent of
+ * `@/components/models/types` to avoid a cross-directory import; mirrors the
+ * fields every attachment variant (fresh upload or reconstructed history) may carry.
+ */
+interface CacheableAttachment {
+  id: string
+  name?: string
+  size?: number
+  file?: File | { name: string; type: string; size: number; lastModified?: number }
+  base64?: string
+  textContent?: string
+}
+
 // Helper to persist from Attachment objects (limited type duplication to avoid cross-import)
-export async function saveFromAttachment(att: any): Promise<void> {
+export async function saveFromAttachment(att: CacheableAttachment | null | undefined): Promise<void> {
   try {
     if (!att || !att.id) return
-    const file: File | undefined = att.file
+    const file = att.file
     const cached: CachedAttachment = {
       id: att.id,
       name: file?.name || att.name || 'file',
       size: file?.size || att.size || 0,
       type: file?.type,
-      lastModified: (file as any)?.lastModified,
+      lastModified: file?.lastModified,
       base64: att.base64,
       textContent: att.textContent,
     }

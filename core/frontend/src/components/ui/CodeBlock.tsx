@@ -7,7 +7,7 @@
  * Theme is configurable via global settings.
  */
 
-import { useState } from 'react'
+import { useState, type HTMLAttributes, type CSSProperties } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { Check, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -35,7 +35,7 @@ export function CodeBlock({ children, language, inline = false, className }: Cod
   }
 
   // Custom Pre component to force transparent backgrounds
-  const CustomPre = ({ children, ...props }: any) => (
+  const CustomPre = ({ children, ...props }: HTMLAttributes<HTMLPreElement>) => (
     <pre {...props} style={{ ...props.style, margin: 0, padding: 0, background: 'transparent' }}>
       {children}
     </pre>
@@ -105,8 +105,8 @@ export function CodeBlock({ children, language, inline = false, className }: Cod
         className="overflow-x-auto px-4 pb-4 bg-transparent"
         style={{
           // Force all nested elements to have transparent background
-          ['--code-bg' as any]: 'transparent',
-        }}
+          '--code-bg': 'transparent',
+        } as CSSProperties}
       >
         <style>{`
           .codeblock-content * {

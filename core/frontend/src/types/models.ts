@@ -26,7 +26,7 @@ export interface ModelCatalogEntry {
   tokenizer: string | null
   max_completion_tokens: number | null
   is_moderated: boolean
-  default_parameters: Record<string, any>
+  default_parameters: Record<string, unknown>
   description?: string
   tags: string[]
   is_available: boolean

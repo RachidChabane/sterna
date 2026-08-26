@@ -13,6 +13,7 @@
 import { useToast } from '@/hooks/use-toast'
 import type { Chat, Model, Message, ModelParameters } from '@/components/models/types'
 import { MAX_CHATS, DEFAULT_PARAMETERS } from '@/components/models/constants'
+import { toModelCatalogEntry } from '@/components/models/modelCatalog'
 import useModelStore from '@/store/modelStore'
 import { useConversationStore } from '@/store/conversationStore'
 import { fsAPI } from '@/api/fs'
@@ -115,7 +116,7 @@ export function useChatManagement({
 
       // Add the model to recent chat models if it exists
       if (modelForNewChat) {
-        addRecentChatModel(modelForNewChat.model_id, modelForNewChat as any)
+        addRecentChatModel(modelForNewChat.model_id, toModelCatalogEntry(modelForNewChat))
       }
 
       toast({
@@ -312,7 +313,7 @@ export function useChatManagement({
 
     // Add to recent chat models
     if (model) {
-      addRecentChatModel(model.model_id, model as any)
+      addRecentChatModel(model.model_id, toModelCatalogEntry(model))
     }
   }
 

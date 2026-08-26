@@ -11,6 +11,8 @@ import type {
   ConsentResponse,
   ConsentRecord,
   ConsentSaveRequest,
+  CatalogComparisonRequest,
+  CatalogComparisonResponse,
 } from './types'
 
 // Authentication endpoints
@@ -82,8 +84,15 @@ export const openRouterApi = {
     min_context_length?: number;
     supports_functions?: boolean;
     supports_streaming?: boolean;
+    supports_structured_outputs?: boolean;
+    supports_reasoning?: boolean;
+    supports_prompt_caching?: boolean;
+    supports_stream_cancellation?: boolean;
+    input_modalities?: string;
+    min_price?: number;
+    max_price?: number;
     tags?: string[];
-    sort_by?: 'none' | 'prompt_cost' | 'completion_cost' | 'overall_cost' | 'max_tokens' | 'provider';
+    sort_by?: 'none' | 'prompt_cost' | 'completion_cost' | 'overall_cost' | 'max_tokens' | 'provider' | 'latency' | 'throughput';
     order?: 'asc' | 'desc';
   }) =>
     apiClient.get('/llm/models/', { params }),
@@ -97,8 +106,8 @@ export const openRouterApi = {
   estimateCost: (data: { model: string; prompt_tokens: number; completion_tokens: number }) =>
     apiClient.post('/llm/estimate-cost/', data),
 
-  compareCatalog: (data: import('./types').CatalogComparisonRequest) =>
-    apiClient.post<import('./types').CatalogComparisonResponse>('/llm/models/compare/', data),
+  compareCatalog: (data: CatalogComparisonRequest) =>
+    apiClient.post<CatalogComparisonResponse>('/llm/models/compare/', data),
 }
 
 // Image generation model endpoints

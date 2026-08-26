@@ -6,6 +6,8 @@
  */
 
 import { api } from './client'
+import type { components } from './generated/schema'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 
 // ============================================================================
 // Types
@@ -14,7 +16,7 @@ import { api } from './client'
 /**
  * Framework types supported by Sparks
  */
-export type SparkFramework = 'react' | 'html' | 'svg' | 'markdown' | 'mermaid' | 'pdf' | 'docx' | 'ics' | 'csv' | 'xlsx'
+export type SparkFramework = components['schemas']['FrameworkEnum']
 
 /**
  * Asset referenced by a spark (image/video)
@@ -64,23 +66,12 @@ export interface SparkDefinition {
 /**
  * Request payload for creating a spark
  */
-export interface CreateSparkRequest {
-  title: string
-  framework?: SparkFramework
-  code: string
-  chat_id?: string
-  message_id?: string
-  dependencies?: string[]
-}
+export type CreateSparkRequest = components['schemas']['SparkCreate']
 
 /**
  * Request payload for updating a spark (creates new version)
  */
-export interface UpdateSparkRequest {
-  title?: string
-  code?: string
-  dependencies?: string[]
-}
+export type UpdateSparkRequest = components['schemas']['SparkUpdate']
 
 /**
  * Response from listing sparks
@@ -140,9 +131,9 @@ export const sparksAPI = {
     try {
       const response = await api.post('/sparks/', request)
       return response.data
-    } catch (error: any) {
+    } catch (error) {
       console.error('[sparksAPI] Create failed:', error)
-      throw new Error(error.response?.data?.error || error.message || 'Failed to create spark')
+      throw new Error(getApiErrorMessage(error, 'Failed to create spark'))
     }
   },
 
@@ -166,9 +157,9 @@ export const sparksAPI = {
     try {
       const response = await api.put(`/sparks/${sparkId}/`, request)
       return response.data
-    } catch (error: any) {
+    } catch (error) {
       console.error('[sparksAPI] Update failed:', error)
-      throw new Error(error.response?.data?.error || error.message || 'Failed to update spark')
+      throw new Error(getApiErrorMessage(error, 'Failed to update spark'))
     }
   },
 

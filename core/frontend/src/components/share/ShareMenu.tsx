@@ -10,6 +10,7 @@ import { Link, Check, Loader2, ExternalLink, Copy, Clock, XCircle } from 'lucide
 import { assetsAPI, type ShareLink } from '@/api/assets'
 import { useSettingsStore } from '@/store/settingsStore'
 import { cn } from '@/lib/utils'
+import { toErrorMessage } from '@/utils/errorMessages'
 import { SHARE_PLATFORMS, openSharePopup, PlatformBadge } from '@/lib/sharing'
 
 interface ShareMenuProps {
@@ -44,8 +45,8 @@ export function ShareMenu({ assetId, isOpen, onClose, className }: ShareMenuProp
         watermark_position: watermark.position,
       })
       setShareLink(link)
-    } catch (err: any) {
-      setError(err.message || 'Failed to create share link')
+    } catch (err) {
+      setError(toErrorMessage(err) || 'Failed to create share link')
     } finally {
       setIsLoading(false)
     }

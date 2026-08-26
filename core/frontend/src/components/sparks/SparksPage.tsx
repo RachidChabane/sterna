@@ -49,6 +49,7 @@ import { SparkFullscreenOverlay } from '@/components/models/SparkFullscreenDialo
 import { useNavigationStore } from '@/store/navigationStore'
 import { useToast } from '@/hooks/use-toast'
 import { PremiumMenuIcon } from '@/components/ui/premium-menu-icon'
+import { fetchStream } from '@/api/transport'
 import { IgniteButton } from '@/components/sparks/IgniteButton'
 
 const PAGE_SIZE = 12
@@ -479,10 +480,7 @@ function SparkDetailView({
 
   const handleDownload = useCallback(() => {
     if (spark.download_url) {
-      const token = localStorage.getItem('access_token')
-      fetch(spark.download_url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      fetchStream(spark.download_url)
         .then((r) => r.blob())
         .then((blob) => {
           const ext: Record<string, string> = { csv: 'csv', ics: 'ics', pdf: 'pdf', docx: 'docx', xlsx: 'xlsx' }

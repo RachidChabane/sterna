@@ -15,22 +15,23 @@ import type {
   AnalysisStep,
   AnalysisStepStatus,
   AnalysisProgressEvent,
+  ConsigliereChatGroup,
 } from '@/api/consigliere'
 import type { ChatGroup } from '@/components/models/types'
 import {
   MODEL_PARAMETERS_DEFAULTS as MPD,
   getDefaultModelParameters,
 } from '@/config/modelParameters'
-import type { ModelParameters, Message, ChatGroup as ChatGroupType, Attachment } from '@/components/models/types'
+import type { ModelParameters, Message, ChatGroup as ChatGroupType, AttachmentLike } from '@/components/models/types'
 import { extractTextFromContent } from '@/utils/chatUtils'
 
 // Build a serializable ChatGroup for Consigliere that preserves attachment context
 // without sending file contents. Adds a textual note into the user message and
 // provides lightweight attachments metadata.
-const serializeChatGroupForConsigliere = (group: ChatGroupType) => {
-  const serializeAttachmentsMeta = (atts?: Attachment[]) => {
-    if (!atts || atts.length === 0) return [] as any[]
-    return atts.map((att: any) => {
+const serializeChatGroupForConsigliere = (group: ChatGroupType): ConsigliereChatGroup => {
+  const serializeAttachmentsMeta = (atts?: AttachmentLike[]) => {
+    if (!atts || atts.length === 0) return []
+    return atts.map((att) => {
       // Try enriched metadata first (fileName, fileType, fileSize), fallback to File object
       // This handles cases where File object was lost during JSON serialization
       const fileName = att.fileName || att.file?.name || 'file'
@@ -39,14 +40,14 @@ const serializeChatGroupForConsigliere = (group: ChatGroupType) => {
 
       if (att.type === 'image') {
         return {
-          type: 'image',
+          type: 'image' as const,
           filename: fileName,
           mime: fileType,
           size: fileSize,
         }
       } else {
         return {
-          type: 'file',
+          type: 'file' as const,
           filename: fileName,
           mime: fileType,
           size: fileSize,
@@ -59,14 +60,14 @@ const serializeChatGroupForConsigliere = (group: ChatGroupType) => {
     })
   }
 
-  const withAttachmentNote = (originalContent: Message['content'], atts?: Attachment[]) => {
+  const withAttachmentNote = (originalContent: Message['content'], atts?: AttachmentLike[]) => {
     const baseText = extractTextFromContent(originalContent)
     if (!atts || atts.length === 0) return baseText
 
     const images = atts.filter((a) => a.type === 'image')
     const files = atts.filter((a) => a.type === 'file')
     // Use enriched metadata with fallback to File object
-    const pdfs = files.filter((f: any) => {
+    const pdfs = files.filter((f) => {
       const fileType = f.fileType || f.file?.type
       const fileName = f.fileName || f.file?.name || ''
       return (fileType === 'application/pdf') || (fileName.toLowerCase().endsWith('.pdf'))
@@ -108,7 +109,7 @@ const serializeChatGroupForConsigliere = (group: ChatGroupType) => {
         }
       }),
     })),
-  } as any
+  }
 }
 
 /**
@@ -296,7 +297,7 @@ export const useConsigliereStore = create<ConsigliereStore>((set, get) => ({
       })
 
       return response.session_id
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create session:', error)
       set({
         error: getUserFriendlyErrorMessage(error),
@@ -338,9 +339,9 @@ export const useConsigliereStore = create<ConsigliereStore>((set, get) => ({
         isGeneratingAnalysis: false,
         abortController: null,
       })
-    } catch (error: any) {
+    } catch (error) {
       // Don't show error if it was cancelled
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         
         set({ isGeneratingAnalysis: false, abortController: null })
         return
@@ -410,7 +411,7 @@ export const useConsigliereStore = create<ConsigliereStore>((set, get) => ({
 
       // Resend the user message content returned by backend
       await get().sendMessage(res.user_content, currentModelId, currentModelData)
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to retry last message:', error)
       set({ error: getUserFriendlyErrorMessage(error) })
     }
@@ -558,7 +559,7 @@ export const useConsigliereStore = create<ConsigliereStore>((set, get) => ({
 
             set((state) => ({
               messages: [...state.messages, errorMessage],
-              error: error,
+              error: getUserFriendlyErrorMessage(error),
               isChatting: false,
               chatAbortController: null,
             }))
@@ -566,9 +567,9 @@ export const useConsigliereStore = create<ConsigliereStore>((set, get) => ({
         },
         { signal: controller.signal }
       )
-    } catch (error: any) {
+    } catch (error) {
       // If aborted by user, stop quietly
-      if (error?.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         set({ isChatting: false, chatAbortController: null })
         return
       }
@@ -616,7 +617,7 @@ export const useConsigliereStore = create<ConsigliereStore>((set, get) => ({
         isOpen: true,
         isAnalyzing: false,
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to load session:', error)
       set({
         error: getUserFriendlyErrorMessage(error),
@@ -643,7 +644,7 @@ export const useConsigliereStore = create<ConsigliereStore>((set, get) => ({
         alternativeModels: [],
         recommendations: [], // deprecated field
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to clear messages:', error)
       set({
         error: getUserFriendlyErrorMessage(error),

@@ -24,13 +24,14 @@ import {
 } from "@/components/ui/tooltip"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { ModelDetailsPopover } from "@/components/models/ModelDetailsPopover"
+import type { Model } from "@/api/llm"
 
 export interface SimpleComboboxOption {
   value: string
   label: string
   group?: string
   description?: string
-  metadata?: any
+  metadata?: Model
   isFavorite?: boolean
   icon?: React.ReactNode
   groupIcon?: React.ReactNode
@@ -251,7 +252,8 @@ export const SimpleCombobox = React.memo(function SimpleCombobox({
           className="p-0 bg-background text-foreground border-2 shadow-xl max-w-none rounded-lg"
           sideOffset={8}
         >
-          <ModelDetailsPopover model={option.metadata} />
+          {/* hasTooltip (checked above) already guarantees metadata is set */}
+          <ModelDetailsPopover model={option.metadata!} />
         </TooltipContent>
       </Tooltip>
     )

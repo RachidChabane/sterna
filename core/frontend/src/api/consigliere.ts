@@ -3,13 +3,42 @@
  */
 
 import consigliereClient from './consigliereClient'
-import { setTokens, getRefreshToken, handleUnauthorized } from './client'
-import axios from 'axios'
-import type { ChatGroup } from '@/components/models/types'
+import { fetchStream } from './transport'
+import type { Chat, ChatGroup, Message } from '@/components/models/types'
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/** Lightweight, non-file metadata describing one attachment on a serialized message. */
+export interface SerializedAttachmentMeta {
+  type: 'image' | 'file'
+  filename: string
+  mime?: string
+  size?: number
+  is_pdf?: boolean
+}
+
+/**
+ * A message as sent to Consigliere: timestamps and content are transport
+ * strings, and attachments are replaced by lightweight metadata (no file
+ * data) — see consigliereStore's serializeChatGroupForConsigliere.
+ */
+type ConsigliereChatMessage = Omit<Message, 'timestamp' | 'content' | 'attachments'> & {
+  timestamp: string
+  content: string
+  attachments_meta: SerializedAttachmentMeta[]
+  attachments?: undefined
+}
+
+type ConsigliereChat = Omit<Chat, 'messages'> & { messages: ConsigliereChatMessage[] }
+
+/** A ChatGroup serialized for the Consigliere analyze request (transport-safe timestamps, no file data). */
+export type ConsigliereChatGroup = Omit<ChatGroup, 'createdAt' | 'updatedAt' | 'chats'> & {
+  createdAt: string
+  updatedAt: string
+  chats: ConsigliereChat[]
+}
 
 export interface ConsigliereMessage {
   id: string
@@ -105,7 +134,7 @@ export interface ConversationAnalysis {
     speed?: string
     cost_efficiency?: string
   }
-  user_preferences: Record<string, any>
+  user_preferences: Record<string, unknown>
   recommended_from_conversation?: RecommendedModelFromConversation
   alternative_models: ModelRecommendation[]
   recommendations: ModelRecommendation[] // deprecated - use alternative_models
@@ -141,7 +170,7 @@ interface ConsigliereSessionSummary {
 // ============================================================================
 
 export interface AnalyzeConversationRequest {
-  chat_group: ChatGroup
+  chat_group: ConsigliereChatGroup
   current_model: string
   user_preferences?: {
     budget_preference?: 'budget' | 'balanced' | 'premium'
@@ -302,48 +331,7 @@ export const consigliereApi = {
     },
     opts?: { signal?: AbortSignal }
   ) {
-    // Helper to fetch with token refresh on 401
-    const fetchWithAuth = async (url: string, options: RequestInit, isRetry = false): Promise<Response> => {
-      const accessToken = localStorage.getItem('access_token')
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      })
-
-      // If 401 and not already a retry, try to refresh token
-      if (response.status === 401 && !isRetry) {
-        const refreshToken = getRefreshToken()
-        if (refreshToken) {
-          try {
-            // Refresh the token
-            const refreshResponse = await axios.post('/api/auth/token/refresh/', {
-              refresh_token: refreshToken,
-            })
-            const access = refreshResponse.data.access || refreshResponse.data.access_token
-            const refresh = refreshResponse.data.refresh || refreshResponse.data.refresh_token || refreshToken
-            setTokens(access, refresh)
-
-            // Retry with new token
-            return fetchWithAuth(url, options, true)
-          } catch {
-            // Refresh failed - show session expired modal
-            handleUnauthorized()
-            throw new Error('Session expired. Please sign in again.')
-          }
-        } else {
-          // No refresh token - show session expired modal
-          handleUnauthorized()
-          throw new Error('Session expired. Please sign in again.')
-        }
-      }
-
-      return response
-    }
-
-    const response = await fetchWithAuth(
+    const response = await fetchStream(
       `${consigliereClient.defaults.baseURL}/chat_stream/`,
       {
         method: 'POST',
@@ -500,48 +488,7 @@ export const consigliereApi = {
     onProgress?: (event: AnalysisProgressEvent) => void,
     signal?: AbortSignal
   ): Promise<ConversationAnalysis> {
-    // Helper to fetch with token refresh on 401
-    const fetchWithAuth = async (url: string, options: RequestInit, isRetry = false): Promise<Response> => {
-      const accessToken = localStorage.getItem('access_token')
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      })
-
-      // If 401 and not already a retry, try to refresh token
-      if (response.status === 401 && !isRetry) {
-        const refreshToken = getRefreshToken()
-        if (refreshToken) {
-          try {
-            // Refresh the token
-            const refreshResponse = await axios.post('/api/auth/token/refresh/', {
-              refresh_token: refreshToken,
-            })
-            const access = refreshResponse.data.access || refreshResponse.data.access_token
-            const refresh = refreshResponse.data.refresh || refreshResponse.data.refresh_token || refreshToken
-            setTokens(access, refresh)
-
-            // Retry with new token
-            return fetchWithAuth(url, options, true)
-          } catch {
-            // Refresh failed - show session expired modal
-            handleUnauthorized()
-            throw new Error('Session expired. Please sign in again.')
-          }
-        } else {
-          // No refresh token - show session expired modal
-          handleUnauthorized()
-          throw new Error('Session expired. Please sign in again.')
-        }
-      }
-
-      return response
-    }
-
-    const response = await fetchWithAuth(
+    const response = await fetchStream(
       `${consigliereClient.defaults.baseURL}/${sessionId}/generate_analysis_stream/`,
       {
         method: 'POST',

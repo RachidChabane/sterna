@@ -24,9 +24,11 @@ import { cn } from '@/lib/utils'
 import { ModelIcon } from './ModelIcon'
 import { ImmersiveChatView } from './ImmersiveChatView'
 import { removeProviderPrefix } from '@/lib/model-utils'
-import type { Chat, Model, Message, ModelParameters, Attachment } from './types'
+import type { Chat, Model, Message, ModelParameters, Attachment, Filters, ToolExecutedHandler } from './types'
 import type { ModelCatalogEntry } from '@/types/models'
 import type { FeatureState } from './GlobalFeatureToggles'
+import type { NormalizedCostEstimate } from '@/api/llm'
+import type { MCPServer } from '@/api/mcp'
 
 /**
  * Props for a single ImmersiveChatView instance.
@@ -42,13 +44,13 @@ export interface ImmersiveChatViewProps {
   canCancel: boolean
   onExitImmersive?: () => void
   onParametersChange: (params: ModelParameters) => void
-  onToolExecuted?: (toolCallId: string, toolName: string, result: any) => void
+  onToolExecuted?: ToolExecutedHandler
   onAddChat?: () => void
   showFilters?: boolean
   onToggleFilters?: () => void
   hasActiveFilters?: boolean
-  filters?: any
-  onFiltersChange?: (filters: any) => void
+  filters?: Filters
+  onFiltersChange?: (filters: Filters) => void
   providers?: string[]
   recentModelIds?: string[]
   webSearchState?: FeatureState
@@ -71,11 +73,11 @@ export interface ImmersiveChatViewProps {
   knowledgeBaseState?: FeatureState
   onToggleKnowledgeBase?: () => void
   hasKnowledgeBaseSupport?: boolean
-  activeServers?: any[]
-  estimatedCosts?: any
+  activeServers?: MCPServer[]
+  estimatedCosts?: NormalizedCostEstimate | null
   onEstimateCost?: (text: string) => Promise<void>
   isEstimating?: boolean
-  setEstimatedCost?: (cost: any) => void
+  setEstimatedCost?: (cost: NormalizedCostEstimate | null) => void
   attachments: Attachment[]
   onAddAttachment: (attachment: Attachment) => void
   onRemoveAttachment: (id: string) => void

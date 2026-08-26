@@ -15,9 +15,10 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import { authApi } from '@/api/endpoints'
-import { setTokens } from '@/api/client'
+import apiClient, { setTokens } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
 import { SternaLogo } from '@/components/icons/SternaLogo'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 
 export const Route = createFileRoute('/oauth/callback')({
   component: OAuthCallback,
@@ -164,28 +165,14 @@ function OAuthCallback() {
 
     try {
       // Call Code feature's backend callback
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || ''
-      const response = await fetch(
-        `${backendUrl}/api/code-sessions/github/callback/?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          }
-        }
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to connect GitHub')
-      }
-
-      const data = await response.json()
-      
+      await apiClient.get('/code-sessions/github/callback/', {
+        params: { code, state },
+      })
 
       // Redirect to Code page
-      navigate({ to: returnUrl as any })
+      navigate({ href: returnUrl })
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('[OAuth] Code feature GitHub connection failed:', error)
       navigate({
         to: '/chats',
@@ -275,7 +262,7 @@ function OAuthCallback() {
         navigate({ to: '/chats' })
       }
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('[OAuth] Authentication callback failed!')
       console.error('[OAuth] Total time elapsed:', (performance.now() - startTime).toFixed(2), 'ms')
       console.error('[OAuth] Error details:', error)
@@ -283,7 +270,7 @@ function OAuthCallback() {
         to: '/login',
         search: {
           error: 'auth_failed',
-          message: error.response?.data?.error || 'Authentication failed. Please try again.'
+          message: getApiErrorMessage(error, 'Authentication failed. Please try again.')
         }
       })
     }

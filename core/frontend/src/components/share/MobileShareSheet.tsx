@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { assetsAPI, type ShareLink } from '@/api/assets'
 import { useSettingsStore } from '@/store/settingsStore'
 import { cn } from '@/lib/utils'
+import { toErrorMessage } from '@/utils/errorMessages'
 import {
   SHARE_PLATFORMS,
   openSharePopup,
@@ -59,8 +60,8 @@ export function MobileShareSheet({ assetId, isOpen, onClose }: MobileShareSheetP
         watermark_position: watermark.position,
       })
       setShareLink(link)
-    } catch (err: any) {
-      setError(err.message || 'Failed to create share link')
+    } catch (err) {
+      setError(toErrorMessage(err) || 'Failed to create share link')
     } finally {
       setIsLoading(false)
     }

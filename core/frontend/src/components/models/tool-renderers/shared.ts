@@ -1,0 +1,105 @@
+/**
+ * Pure parsing/formatting helpers shared by two or more tool renderers.
+ * Renderer-specific helpers stay colocated with their renderer instead.
+ */
+
+/** Narrows an `unknown` tool-result value to a plain object whose fields can be probed. */
+export const isRecord = (val: unknown): val is Record<string, unknown> =>
+  typeof val === 'object' && val !== null && !Array.isArray(val)
+
+// Loosely-typed field extractors for values pulled out of a parsed tool result
+// blob (`Record<string, unknown>`), where the field may be absent, of the
+// wrong type, or nested under one of several legacy shapes.
+export const asString = (val: unknown): string | undefined => (typeof val === 'string' ? val : undefined)
+export const asNumber = (val: unknown): number | undefined => (typeof val === 'number' ? val : undefined)
+export const asStringArray = (val: unknown): string[] | undefined =>
+  Array.isArray(val) && val.every((v) => typeof v === 'string') ? val : undefined
+
+/** Walks a chain of object keys through unknown data, short-circuiting on the
+ * first hop that isn't a plain object — the unknown-shaped equivalent of `a?.b?.c`. */
+export const getPath = (val: unknown, ...path: string[]): unknown =>
+  path.reduce<unknown>((acc, key) => (isRecord(acc) ? acc[key] : undefined), val)
+
+// Parse nested JSON/object structures
+export const deepParse = (val: unknown): unknown => {
+  if (typeof val === 'string') {
+    try { return deepParse(JSON.parse(val)) } catch { return val }
+  }
+  return val
+}
+
+// Helper to try parsing a value as JSON if it's a string
+export const tryParseJSON = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
+}
+
+// Sanitize and format output for display
+// Handles escaped characters, truncates long output, and ensures proper line breaks
+export const sanitizeOutput = (output: string | undefined | null, maxLength = 10000): string => {
+  if (!output) return ''
+
+  let sanitized = String(output)
+
+  // Unescape common escape sequences that might be double-escaped
+  sanitized = sanitized
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\r/g, '\r')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+
+  // Truncate if too long
+  if (sanitized.length > maxLength) {
+    sanitized = sanitized.slice(0, maxLength) + '\n\n... (output truncated)'
+  }
+
+  return sanitized
+}
+
+export interface DiffLine {
+  type: 'header' | 'hunk' | 'context' | 'added' | 'removed'
+  content: string
+  oldLineNum?: number
+  newLineNum?: number
+}
+
+// Parse a unified diff into structured lines with line numbers
+export const parseDiffLines = (diffText: string): DiffLine[] => {
+  const lines = diffText.split('\n')
+  const parsedLines: DiffLine[] = []
+
+  let oldLine = 0
+  let newLine = 0
+
+  for (const line of lines) {
+    if (line.startsWith('---') || line.startsWith('+++')) {
+      parsedLines.push({ type: 'header', content: line })
+    } else if (line.startsWith('@@')) {
+      // Parse hunk header like @@ -113,19 +113,4 @@
+      const match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
+      if (match) {
+        oldLine = parseInt(match[1], 10)
+        newLine = parseInt(match[2], 10)
+      }
+      parsedLines.push({ type: 'hunk', content: line })
+    } else if (line.startsWith('-')) {
+      parsedLines.push({ type: 'removed', content: line, oldLineNum: oldLine })
+      oldLine++
+    } else if (line.startsWith('+')) {
+      parsedLines.push({ type: 'added', content: line, newLineNum: newLine })
+      newLine++
+    } else {
+      // Context line (starts with space or empty)
+      parsedLines.push({ type: 'context', content: line, oldLineNum: oldLine, newLineNum: newLine })
+      oldLine++
+      newLine++
+    }
+  }
+
+  return parsedLines
+}

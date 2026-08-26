@@ -44,7 +44,8 @@ import {
   DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { getAccessToken, ORCHESTRATOR_URL } from '@/api/client'
+import axios from 'axios'
+import { getAccessToken, orchestratorClient } from '@/api/client'
 
 // Branch colors - inspired by IntelliJ/GitKraken
 const BRANCH_COLORS = [
@@ -117,40 +118,31 @@ export function CommitHistory({
   const executeGitCommand = useCallback(async (command: string): Promise<{ success: boolean; output: string; error?: string }> => {
     if (!userId) return { success: false, output: '', error: 'Not authenticated' }
 
+    const token = getAccessToken()
+    if (!token) return { success: false, output: '', error: 'Not authenticated' }
+
     try {
-      const token = await getAccessToken()
-      if (!token) return { success: false, output: '', error: 'Not authenticated' }
-
-
-      const response = await fetch(`${ORCHESTRATOR_URL}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          code: `cd repo && ${command}`,
-          language: 'bash',
-          user_id: userId,
-          conversation_id: projectId,
-          chat_id: projectId,
-          sync_mode: true,
-          project_id: projectId,
-          timeout: 30,
-        }),
+      const response = await orchestratorClient.post('/execute', {
+        code: `cd repo && ${command}`,
+        language: 'bash',
+        user_id: userId,
+        conversation_id: projectId,
+        chat_id: projectId,
+        sync_mode: true,
+        project_id: projectId,
+        timeout: 30,
       })
 
-      if (!response.ok) {
-        return { success: false, output: '', error: `Request failed: ${response.statusText}` }
-      }
-
-      const result = await response.json()
+      const result = response.data
       return {
         success: result.exit_code === 0,
         output: result.output || '',
         error: result.error || (result.exit_code !== 0 ? result.output : undefined),
       }
     } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        return { success: false, output: '', error: `Request failed: ${error.response.statusText}` }
+      }
       return { success: false, output: '', error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }, [userId, projectId])

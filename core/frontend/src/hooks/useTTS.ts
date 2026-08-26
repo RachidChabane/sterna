@@ -14,8 +14,23 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { getAccessToken } from '@/api/client'
+import { fetchStream } from '@/api/transport'
 import { useSettingsStore } from '@/store/settingsStore'
+import type { TTSModel, TTSProviderId } from '@/types/voiceRoom'
+
+/** JSON body posted to `/api/voice-rooms/tts/`, built from the current TTS settings. */
+interface TTSRequestBody {
+  text: string
+  provider: TTSProviderId
+  voice_id: string
+  model_id: TTSModel
+  speed: number
+  stability?: number
+  similarity_boost?: number
+  style?: number
+  use_speaker_boost?: boolean
+  language_code?: string
+}
 
 interface UseTTSOptions {
   /** Override voice ID from settings (optional) */
@@ -201,11 +216,8 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
     setError(null)
 
     try {
-      const token = getAccessToken()
-      
-
       // Build request body with provider and common settings
-      const requestBody: Record<string, any> = {
+      const requestBody: TTSRequestBody = {
         text: cleanText,
         provider: provider,
         voice_id: voiceId,
@@ -226,11 +238,10 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
         requestBody.language_code = language
       }
 
-      const response = await fetch('/api/voice-rooms/tts/', {
+      const response = await fetchStream('/api/voice-rooms/tts/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,

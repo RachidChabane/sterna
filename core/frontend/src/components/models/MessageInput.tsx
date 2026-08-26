@@ -56,6 +56,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useMentionAutocomplete } from '@/hooks/useMentionAutocomplete'
 import { MentionAutocomplete } from './MentionAutocomplete'
 import type { Model, Attachment } from './types'
+import { isRecord, asNumber } from './tool-renderers/shared'
 import type { MCPServer } from '@/api/mcp'
 
 interface FeatureState {
@@ -126,8 +127,13 @@ interface MessageInputProps {
   hasKnowledgeBaseSupport?: boolean
 
   // Cost estimation
-  estimatedCost?: any | null
-  setEstimatedCost?: (cost: any | null) => void
+  // Different callers feed this from different-shaped cost-estimate state
+  // (a single-model estimate vs. a multi-model batch response); the display
+  // below narrows the specific fields it reads rather than assuming one shape.
+  estimatedCost?: unknown
+  // Only ever called here to clear the estimate, so `null` (accepted by every
+  // real setter's wider state type) is all this needs to require.
+  setEstimatedCost?: (cost: null) => void
 
   // Independent mode options
   messages?: { role: string }[]
@@ -136,7 +142,7 @@ interface MessageInputProps {
   hideHeaderActions?: boolean
 
   // Synced mode specific
-  chats?: { model: Model | null }[]
+  chats?: { model: Model | null; disabled?: boolean }[]
   chatsWithModels?: number
 
   // Floating mode (removes borders/shadows - container provides them)
@@ -165,9 +171,9 @@ interface ActionButtonsProps {
   isLoading: boolean
   loadingEstimate: boolean
   disabledChat: boolean
-  estimatedCost: any | null
+  estimatedCost: unknown
   canCancel: boolean
-  chats?: { model: Model | null }[]
+  chats?: { model: Model | null; disabled?: boolean }[]
   chatsWithModels?: number
   isFullscreen?: boolean
 }
@@ -194,7 +200,7 @@ const ActionButtons = memo<ActionButtonsProps>(({
     if (mode === 'independent') {
       return !!model
     }
-    return (chatsWithModels ?? chats?.filter(c => c.model !== null && !(c as any).disabled).length ?? 0) > 0
+    return (chatsWithModels ?? chats?.filter(c => c.model !== null && !c.disabled).length ?? 0) > 0
   }, [mode, model, chats, chatsWithModels])
 
   const hasModelsSelected = useMemo(() => {
@@ -244,7 +250,7 @@ const ActionButtons = memo<ActionButtonsProps>(({
                 aria-label={estimateTooltipText}
                 className={cn(
                   "h-9 w-9 rounded-full transition-all duration-400 ease-bounce hover:scale-110 hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:border-primary/50",
-                  estimatedCost && "bg-accent-brand/10 border-accent-brand/30 hover:bg-accent-brand/20"
+                  Boolean(estimatedCost) && "bg-accent-brand/10 border-accent-brand/30 hover:bg-accent-brand/20"
                 )}
               >
                 {loadingEstimate ? (
@@ -775,7 +781,7 @@ function MessageInputComponent({
                       <Calculator className="h-3 w-3" />
                       <span>Cost:</span>
                     </div>
-                    <span className="font-mono font-semibold text-foreground">${estimatedCost.cost?.toFixed(4) || '0.0000'}</span>
+                    <span className="font-mono font-semibold text-foreground">${asNumber(isRecord(estimatedCost) ? estimatedCost.cost : undefined)?.toFixed(4) || '0.0000'}</span>
                   </div>
                   <Button
                     variant="ghost"
@@ -787,15 +793,15 @@ function MessageInputComponent({
                   </Button>
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <span>Prompt: <span className="font-mono font-semibold text-foreground">{estimatedCost.prompt_tokens || 0}</span></span>
+                  <span>Prompt: <span className="font-mono font-semibold text-foreground">{asNumber(isRecord(estimatedCost) ? estimatedCost.prompt_tokens : undefined) || 0}</span></span>
                   <span>•</span>
-                  <span>Completion: <span className="font-mono font-semibold text-foreground">{estimatedCost.completion_tokens || 0}</span></span>
+                  <span>Completion: <span className="font-mono font-semibold text-foreground">{asNumber(isRecord(estimatedCost) ? estimatedCost.completion_tokens : undefined) || 0}</span></span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-0.5">
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 h-4 border-muted-foreground/20 font-normal">
                     More accurate in English
                   </Badge>
-                  {attachments.some((att: any) =>
+                  {attachments.some((att) =>
                     att.type === 'image' || (att.type === 'file' && (
                       (att.file?.type === 'application/pdf') ||
                       ((att.file?.name || '').toLowerCase().endsWith('.pdf'))

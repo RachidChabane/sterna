@@ -281,10 +281,10 @@ export function SearchPage() {
                               modelName={model.name}
                               modelId={model.model_id}
                               provider={model.provider}
-                              modelIconSlug={(model as any).model_icon_slug}
-                              modelIconUrl={(model as any).model_icon_url}
-                              providerIconSlug={(model as any).provider_icon_slug}
-                              providerIconUrl={(model as any).provider_icon_url}
+                              modelIconSlug={model.model_icon_slug}
+                              modelIconUrl={model.model_icon_url}
+                              providerIconSlug={model.provider_icon_slug}
+                              providerIconUrl={model.provider_icon_url}
                               size={28}
                               showTooltip={false}
                             />

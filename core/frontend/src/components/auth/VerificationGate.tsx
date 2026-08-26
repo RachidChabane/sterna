@@ -7,14 +7,14 @@ export function useVerificationGuard() {
   const openGate = useVerificationGateStore((s) => s.open)
 
   const guard = useCallback(
-    <T extends (...args: any[]) => any>(fn: T, reason = 'continue'): T => {
-      return ((...args: Parameters<T>) => {
+    <Args extends unknown[], R>(fn: (...args: Args) => R, reason = 'continue') => {
+      return (...args: Args): R | undefined => {
         if (!isVerified) {
           openGate(reason)
-          return undefined as ReturnType<T>
+          return undefined
         }
         return fn(...args)
-      }) as T
+      }
     },
     [isVerified, openGate],
   )
@@ -22,7 +22,7 @@ export function useVerificationGuard() {
   return { guard, isVerified }
 }
 
-type GateChild = React.ReactElement<{ onClick?: (...args: any[]) => any }>
+type GateChild = React.ReactElement<{ onClick?: (...args: unknown[]) => unknown }>
 
 export function VerificationGate({
   children,

@@ -541,7 +541,7 @@ export const useConversationStore = create<ConversationStore>()(
           completion_tokens: data.tokens?.completion,
           cost: data.cost,
           tool_calls: data.tool_calls,
-          steps: data.steps as any,
+          steps: data.steps,
         })
 
         get().updateLocalMessage(chatId, messageId, data)

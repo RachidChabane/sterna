@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { usageQuotaApi } from '@/api/endpoints'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 import type { QuotaInfo, UsageSummary, UsageLogEntry, PaginatedResponse } from '@/api/types'
 
 interface UsageQuotaState {
@@ -62,8 +63,8 @@ export const useUsageQuotaStore = create<UsageQuotaState>()((set, get) => ({
     try {
       const response = await usageQuotaApi.getQuota()
       set({ quota: response.data, isLoadingQuota: false })
-    } catch (error: any) {
-      const message = error.response?.data?.detail || error.message || 'Failed to fetch quota'
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Failed to fetch quota')
       set({ quotaError: message, isLoadingQuota: false })
     }
   },
@@ -73,8 +74,8 @@ export const useUsageQuotaStore = create<UsageQuotaState>()((set, get) => ({
     try {
       const response = await usageQuotaApi.getSummary({ days })
       set({ summary: response.data, isLoadingSummary: false })
-    } catch (error: any) {
-      const message = error.response?.data?.detail || error.message || 'Failed to fetch summary'
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Failed to fetch summary')
       set({ summaryError: message, isLoadingSummary: false })
     }
   },
@@ -100,8 +101,8 @@ export const useUsageQuotaStore = create<UsageQuotaState>()((set, get) => ({
         },
         isLoadingHistory: false,
       })
-    } catch (error: any) {
-      const message = error.response?.data?.detail || error.message || 'Failed to fetch history'
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Failed to fetch history')
       set({ historyError: message, isLoadingHistory: false })
     }
   },
@@ -128,8 +129,8 @@ export const useUsageQuotaStore = create<UsageQuotaState>()((set, get) => ({
         },
         isLoadingHistory: false,
       }))
-    } catch (error: any) {
-      const message = error.response?.data?.detail || error.message || 'Failed to load more history'
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Failed to load more history')
       set({ historyError: message, isLoadingHistory: false })
     }
   },

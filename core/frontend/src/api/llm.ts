@@ -1,4 +1,147 @@
+/**
+ * LLM completion and model-catalog client.
+ *
+ * Model/ModelsResponse/ModelStatsResponse describe REST responses the
+ * OpenAPI schema has a component for, but the schema's operation for
+ * each is annotated with the model catalog ViewSet's default
+ * serializer rather than the response the underlying custom action
+ * actually returns, so the generated types do not describe them
+ * either; these stay hand-written against the API. The streaming
+ * completion request/response and coding-agent event types live in
+ * ./hand-written/streaming and are re-exported below.
+ */
 import apiClient, { handleUnauthorized } from './client'
+import { fetchStream } from './transport'
+import type {
+  CompletionMessage,
+  CompletionRequest,
+  CompletionUsage,
+  WebSource,
+  CodingAgentStep,
+  CodingAgentQuestion,
+  CodingAgentResult,
+  ContextCompactedData,
+  SternaRouteData,
+  CompletionResponse,
+} from './hand-written/streaming'
+export type {
+  CompletionMessage,
+  CompletionRequest,
+  CompletionUsage,
+  WebSource,
+  CodingAgentStep,
+  CodingAgentQuestion,
+  CodingAgentResult,
+  ContextCompactedData,
+  SternaRouteData,
+  CompletionResponse,
+}
+
+// A tool call requested by the model (from finish_reason=tool_calls),
+// shared by the pending-calls list, the completed-execution list, and the
+// per-step execution log in components/models/types.ts — one definition
+// for the one shape.
+export interface ToolCall {
+  id: string
+  type: 'function'
+  function: {
+    name: string
+    arguments: string
+  }
+  display_name?: string       // User-friendly tool name (added by backend _add_display_names)
+  server_icon_url?: string    // MCP server icon (added by backend for MCP tools)
+  server_icon_invert?: boolean
+}
+
+// The raw per-tool JSON payload a completed tool execution returns. Shape
+// is tool-specific and backend-controlled (success/data/coding_agent_data/
+// files_created/...); consumers narrow the fields they need at the point
+// of use rather than this type declaring every tool's schema.
+export type ToolResult = Record<string, unknown> | null
+
+export interface ToolExecution {
+  tool_call: ToolCall
+  result: ToolResult
+  success: boolean | null      // null while the tool is still executing
+  isExecuting?: boolean        // True while tool is executing
+  startTime?: number           // Timestamp when execution started (for timeout calculation)
+  // Coding Agent specific fields
+  coding_agent_steps?: CodingAgentStep[]     // Streamed execution steps
+  coding_agent_result?: CodingAgentResult    // Final execution result
+}
+
+// An MCP tool call awaiting the user's approve/reject decision.
+export interface ToolCallApproval {
+  id: string
+  tool_id: string
+  tool_name: string
+  tool_description: string
+  server_name: string
+  server_icon_url?: string
+  arguments: Record<string, unknown>
+  status: 'pending' | 'approved' | 'rejected'
+}
+
+/** A spark (interactive React component) summary as attached to a message or stream event. */
+export interface SparkSummary {
+  id: string
+  title: string
+  framework: 'react' | 'html' | 'svg' | 'markdown' | 'mermaid' | 'pdf' | 'docx' | 'ics' | 'csv' | 'xlsx'
+  code: string
+  version: number
+}
+
+/** The terminal onDone stream event's payload — final usage/cost/content metadata for the completed message. */
+export interface DoneMetadata {
+  usage: CompletionUsage
+  cost: number
+  prompt_cost: number
+  completion_cost: number
+  model: string
+  finish_reason?: string
+  reasoning_content?: string
+  images?: string[]
+  sparks?: SparkSummary[]
+  generation_id?: string
+  generation_ids?: string[]
+}
+
+/** Per-model feature toggles that shift a completion's token/cost estimate. */
+export interface ChatFeatureFlags {
+  system_prompt?: string
+  enable_mcp_tools?: boolean
+  enable_reasoning?: boolean
+  enable_file_tools?: boolean
+}
+
+export interface ModelCostEstimate {
+  model_id: string
+  model_name: string
+  cost: number | string
+  prompt_tokens: number
+  completion_tokens: number
+}
+
+export interface BatchCostEstimateResponse {
+  total_cost: number | string
+  costs: ModelCostEstimate[]
+}
+
+/** A BatchCostEstimateResponse with every Decimal-as-string field parsed to number, for display. */
+export interface NormalizedCostEstimate {
+  total_cost: number
+  costs: Array<Omit<ModelCostEstimate, 'cost'> & { cost: number }>
+}
+
+export function normalizeCostEstimate(data: BatchCostEstimateResponse): NormalizedCostEstimate {
+  return {
+    total_cost: typeof data.total_cost === 'string' ? parseFloat(data.total_cost) : data.total_cost,
+    costs: data.costs.map((c) => ({
+      ...c,
+      cost: typeof c.cost === 'string' ? parseFloat(c.cost) : c.cost,
+    })),
+  }
+}
 
 export interface Model {
   id: string                    // Backend ModelCatalog UUID (serializer includes it)
@@ -31,181 +174,6 @@ export interface ModelsResponse {
   count: number
   next: string | null
   previous: string | null
-}
-
-// Message content types for multimodal support (matches types.ts structure)
-type MessageContentPart =
-  | { type: 'text'; text: string }
-  | { type: 'image_url'; image_url: { url: string } }
-  | { type: 'file'; file: { filename: string; file_data: string } }
-
-export interface CompletionMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string | MessageContentPart[]  // Support both text-only and multimodal content
-  tool_call_id?: string  // Required for 'tool' role messages
-  tool_calls?: Array<{  // Present in 'assistant' messages that request tool calls
-    id: string
-    type: 'function'
-    function: {
-      name: string
-      arguments: string
-    }
-  }>
-}
-
-export interface CompletionRequest {
-  model: string
-  messages: CompletionMessage[]
-  temperature?: number
-  max_tokens?: number
-  top_p?: number
-  stream?: boolean
-
-  // Additional sampling parameters
-  top_k?: number
-  frequency_penalty?: number
-  presence_penalty?: number
-  repetition_penalty?: number
-  min_p?: number
-  top_a?: number
-
-  // Reasoning parameters
-  enable_reasoning?: boolean
-  reasoning_effort?: 'low' | 'medium' | 'high'
-  reasoning_max_tokens?: number  // For token-limited models (Anthropic, Gemini, Qwen) - min 1024, max 32000
-
-  // Multimodal parameters - OpenRouter plugins for file processing
-  // The file-parser plugin can handle PDFs, Office documents, and other file types
-  plugins?: Array<{
-    id: string
-    pdf?: {
-      engine: string
-    }
-    [key: string]: any  // Allow additional plugin configurations
-  }>
-
-  // MCP Tools integration
-  enable_mcp_tools?: boolean
-
-  // Brave Search integration - advanced search (images, videos, places, news)
-  enable_brave_search?: boolean
-
-  // File Tools integration - for AI assistants to manipulate files in /workspace
-  // Note: Coding Agent is automatically enabled when file tools are enabled
-  enable_file_tools?: boolean
-
-  // Image Generation - enable AI to generate images via the generate_image tool
-  enable_image_generation?: boolean
-
-  // Video Generation - enable AI to generate videos via the generate_video tool
-  enable_video_generation?: boolean
-
-  // Sparks - enable AI to generate interactive components
-  enable_sparks?: boolean
-
-  // Knowledge Base - enable AI to query the user's personal knowledge base
-  enable_knowledge_base?: boolean
-
-  // Voice conversation mode - adjusts system prompt for voice output (no markdown, etc.)
-  enable_voice_mode?: boolean
-
-  // Custom system prompt (merged into the backend's built system prompt)
-  system_prompt?: string
-
-  conversation_id?: string
-  chat_id?: string
-  message_id?: string  // Message ID for file metadata tracking
-
-  // Spark auto-fix request - triggers backend prompt injection
-  spark_fix_request?: {
-    spark_id: string
-    spark_title: string
-    error: string
-  }
-
-  // Spark ignite request - backend injects ignite (deploy) instructions into system prompt
-  spark_ignite_request?: {
-    spark_id: string
-    spark_title: string
-  }
-
-  // Sterna routing override - force higher-tier model
-  sterna_strength?: 'strong'
-
-  // Asset-backed files to copy into the sandbox workspace (page reload / pre-upload,
-  // when no File object is available). Backend resolves the asset IDs from R2.
-  workspace_assets?: Array<{ asset_id: string; filename?: string }>
-}
-
-export interface CompletionUsage {
-  prompt_tokens: number
-  completion_tokens: number
-  total_tokens: number
-  estimated_cost?: number
-}
-
-export interface WebSource {
-  url: string
-  title?: string
-}
-
-// Coding Agent autonomous agent types
-export interface CodingAgentStep {
-  job_id: string
-  step_index: number
-  type: 'thinking' | 'tool_call' | 'tool_result' | 'text'
-  tool?: string
-  content?: string
-  timestamp?: string
-}
-
-export interface CodingAgentQuestion {
-  question: string
-  options?: { label: string; description: string }[]
-}
-
-export interface CodingAgentResult {
-  job_id: string
-  success: boolean
-  summary?: string
-  files_modified?: string[]
-  files_created?: string[]
-  error?: string
-  duration_ms: number
-  total_tokens?: number
-  steps?: CodingAgentStep[]
-}
-
-// Context compaction event data
-export interface ContextCompactedData {
-  original_messages: number
-  compacted_messages: number
-  original_tokens: number
-  compacted_tokens: number
-  tokens_saved: number
-  compression_ratio: number
-  duration_ms: number
-}
-
-// Sterna intelligent routing event data
-export interface SternaRouteData {
-  resolved_model: string
-  resolved_model_name: string
-  score: number
-  tier: number
-  reason: string
-  cost_tier: string
-}
-
-export interface CompletionResponse {
-  id: string
-  model: string
-  content: string
-  finish_reason?: string
-  usage?: CompletionUsage
-  cost: number
-  prompt_cost: number
-  completion_cost: number
 }
 
 export interface ModelStatsResponse {
@@ -250,27 +218,26 @@ export const llmApi = {
     callbacks: {
       onContent: (content: string) => void
       onReasoning?: (content: string) => void
-      onToolCallRequest?: (approvals: any[], toolCalls: any[]) => void
+      onToolCallRequest?: (approvals: ToolCallApproval[], toolCalls: ToolCall[]) => void
       onWebSources?: (sources: WebSource[]) => void
       onImage?: (imageData: string) => void
-      onFileToolExecuting?: (toolCalls: any[]) => void
-      onFileToolExecuted?: (toolCalls: any[], results: any[]) => void
+      onFileToolExecuting?: (toolCalls: ToolCall[]) => void
+      onFileToolExecuted?: (toolCalls: ToolCall[], results: ToolResult[]) => void
       onCodingAgentStep?: (step: CodingAgentStep) => void
       onCodingAgentCompleted?: (result: CodingAgentResult) => void
       onCodingAgentQuestion?: (data: CodingAgentQuestion) => void
       onContextCompacted?: (data: ContextCompactedData) => void
       onPreviewStarted?: (data: { port: number; command: string; pid: number }) => void
-      onSparks?: (sparks: Array<{ id: string; title: string; framework: 'react' | 'html' | 'svg' | 'markdown' | 'mermaid' | 'pdf' | 'docx' | 'ics' | 'csv' | 'xlsx'; code: string; version: number }>) => void
+      onSparks?: (sparks: SparkSummary[]) => void
       onSternaRoute?: (data: SternaRouteData) => void
       onGenerationId?: (generationId: string) => void
       onUsageUpdate?: (data: { usage: CompletionUsage; cost: number; prompt_cost: number; completion_cost: number; generation_id?: string; generation_ids?: string[] }) => void
-      onDone: (metadata: { usage: CompletionUsage; cost: number; prompt_cost: number; completion_cost: number; model: string; finish_reason?: string; reasoning_content?: string; images?: string[]; sparks?: Array<{ id: string; title: string; framework: 'react' | 'html' | 'svg' | 'markdown' | 'mermaid' | 'pdf' | 'docx' | 'ics' | 'csv' | 'xlsx'; code: string; version: number }>; generation_id?: string; generation_ids?: string[] }) => void
+      onDone: (metadata: DoneMetadata) => void
       onError: (error: string, detail?: string, code?: string) => void
     },
     options?: { controller?: AbortController; uploadedFiles?: File[] }
   ) => {
     const baseURL = apiClient.defaults.baseURL || ''
-    const token = localStorage.getItem('access_token')
 
     // Set up timeout controller (2 minutes)
     const controller = options?.controller ?? new AbortController()
@@ -328,25 +295,37 @@ export const llmApi = {
 
         requestBody = formData
         // Don't set Content-Type - browser sets it automatically with boundary
-        requestHeaders = {
-          'Authorization': `Bearer ${token}`
-        }
+        requestHeaders = {}
       } else {
         // Use JSON for regular requests (no files)
         requestBody = JSON.stringify(data)
         requestHeaders = {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         }
       }
 
-      // Make the streaming request (V2: LangChain-based with proper tool calling loop)
-      const response = await fetch(`${baseURL}/llm/completions/stream-complete-v2/`, {
-        method: 'POST',
-        headers: requestHeaders,
-        body: requestBody,
-        signal: controller.signal
-      })
+      // Make the streaming request (V2: LangChain-based with proper tool calling loop).
+      // fetchStream attaches the bearer token and retries once via refresh
+      // on a 401; a thrown "Session expired" error means that retry itself
+      // couldn't recover (no/failed refresh), which already triggered the
+      // centralized session-expired modal — surface it through onError the
+      // same way the pre-retry 401 branch below does.
+      let response: Response
+      try {
+        response = await fetchStream(`${baseURL}/llm/completions/stream-complete-v2/`, {
+          method: 'POST',
+          headers: requestHeaders,
+          body: requestBody,
+          signal: controller.signal
+        })
+      } catch (err) {
+        clearTimeout(timeoutId)
+        if (err instanceof Error && err.message.startsWith('Session expired')) {
+          callbacks.onError('Session expired', 'Your session has expired. Please sign in again to continue.')
+          return
+        }
+        throw err
+      }
 
       // Clear timeout after successful connection
       clearTimeout(timeoutId)
@@ -578,12 +557,12 @@ export const llmApi = {
         // Always release the reader lock
         reader.releaseLock()
       }
-    } catch (error: any) {
+    } catch (error) {
       // Clear timeout on error
       clearTimeout(timeoutId)
 
       // Handle abort - don't fire onError, caller detects via controller.signal.aborted
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         return
       }
 
@@ -621,19 +600,14 @@ export const llmApi = {
     enable_mcp_tools?: boolean
     enable_reasoning?: boolean
     enable_file_tools?: boolean
-    features_by_model?: Record<string, {
-      system_prompt?: string
-      enable_mcp_tools?: boolean
-      enable_reasoning?: boolean
-      enable_file_tools?: boolean
-    }>
+    features_by_model?: Record<string, ChatFeatureFlags>
     estimated_completion_tokens?: number
     max_new_tokens?: number
     max_new_tokens_by_model?: Record<string, number>
     files?: Array<{ filename: string; mime?: string; size?: number }>
     images?: Array<{ mime?: string; size?: number; width?: number; height?: number }>
   }) =>
-    apiClient.post('/llm/completions/estimate-batch-cost/', data),
+    apiClient.post<BatchCostEstimateResponse>('/llm/completions/estimate-batch-cost/', data),
 
   // Get rate limit info
   rateLimitInfo: (modelId: string) =>

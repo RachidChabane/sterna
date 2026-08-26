@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # Enforce the code-quality ratchets recorded in baselines/ratchet.json:
 # each counter (mypy error count, eslint error/warning counts, the
-# @typescript-eslint/no-explicit-any occurrence count, dead-code
-# findings, and the tracked god-file line counts) may only stay equal
-# or fall from its baseline value — a rise fails the script. Every
+# @typescript-eslint/no-explicit-any occurrence count, the `as unknown
+# as T` occurrence count, dead-code findings, and the tracked god-file
+# line counts) may only stay equal or fall from its baseline value — a
+# rise fails the script. `as unknown as T` is tracked separately from
+# no-explicit-any because it is the same unchecked cast spelled through
+# `unknown` instead of `any`, and no eslint rule flags it on its own; a
+# rise there means an `any` was swapped for this escape hatch rather
+# than actually typed. Every
 # counter that scans a bounded set of files also has a recorded
 # denominator (files checked/linted/scanned); a denominator that falls
 # more than 2% versus baseline fails the script too, since a narrowed
@@ -121,6 +126,7 @@ fi
 set +e
 eslint_counts="$("$venv_python" - "$eslint_json" <<'PYEOF'
 import json
+import re
 import sys
 
 path = sys.argv[1]
@@ -144,7 +150,27 @@ ts_any = sum(
     for m in f.get("messages", [])
     if m.get("ruleId") == "@typescript-eslint/no-explicit-any"
 )
-print(errors, warnings, ts_any, files_linted)
+
+# `as unknown as T` re-hides a type behind the exact `unknown` escape hatch
+# no-explicit-any is meant to close off: swapping `as any` for `as unknown
+# as T` satisfies the any-count ratchet while producing the same unchecked
+# cast under a different spelling. Scanned over the same file set eslint
+# just linted (files_linted doubles as this counter denominator), on raw
+# source text rather than an AST rule, since no eslint rule flags the
+# pattern on its own.
+as_unknown_pattern = re.compile(r"as\s+unknown\s+as\s")
+as_unknown = 0
+for f in data:
+    file_path = f.get("filePath", "")
+    try:
+        with open(file_path, encoding="utf-8") as source_fh:
+            source = source_fh.read()
+    except OSError as exc:
+        print(f"failed to read {file_path} for as-unknown scan: {exc}", file=sys.stderr)
+        sys.exit(1)
+    as_unknown += len(as_unknown_pattern.findall(source))
+
+print(errors, warnings, ts_any, as_unknown, files_linted)
 PYEOF
 )"
 parse_exit=$?
@@ -155,8 +181,8 @@ if [ "$parse_exit" -ne 0 ]; then
   exit 1
 fi
 
-read -r eslint_errors eslint_warnings ts_explicit_any eslint_files_linted <<< "$eslint_counts"
-echo "  eslint_errors=${eslint_errors} eslint_warnings=${eslint_warnings} ts_explicit_any=${ts_explicit_any} eslint_files_linted=${eslint_files_linted}"
+read -r eslint_errors eslint_warnings ts_explicit_any ts_as_unknown eslint_files_linted <<< "$eslint_counts"
+echo "  eslint_errors=${eslint_errors} eslint_warnings=${eslint_warnings} ts_explicit_any=${ts_explicit_any} ts_as_unknown=${ts_as_unknown} eslint_files_linted=${eslint_files_linted}"
 
 # ---- Dead code: backend (vulture) -------------------------------------
 # The scanned-file list is built once with `find` and handed to vulture
@@ -311,6 +337,12 @@ print(json.load(open('$ratchet_baseline'))['loc_caps']['global_new_file_max_line
 # loc_caps.files; a file that exceeds the cap without one fails here.
 # This pass scans every candidate file once, repo-wide, and counts the
 # scan itself as the loc_files_scanned denominator.
+#
+# `*/generated/*` is excluded on the same basis as `*/migrations/*` and
+# `*/dist/*` above: content mechanically produced from another
+# checked-in source (an OpenAPI schema, a migration graph, a build)
+# rather than authored, so a line-count cap meant to catch hand-written
+# god-files does not apply to it.
 echo "==> Global ${global_cap}-line cap (files without an explicit entry)"
 new_file_violations="$work_dir/new_file_violations.txt"
 : >"$new_file_violations"
@@ -341,6 +373,7 @@ done < <(find "$repo_root" \( -type f -o -type l \) \( -iname '*.py' -o -iname '
   -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.venv/*' \
   -not -path '*/migrations/*' -not -path '*/__pycache__/*' \
   -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/baselines/*' \
+  -not -path '*/generated/*' \
   -print0)
 
 if [ "$loc_files_scanned" -eq 0 ]; then
@@ -364,7 +397,7 @@ done
 current_json="$work_dir/current.json"
 "$venv_python" - \
   "$mypy_errors" "$mypy_checked_files" \
-  "$eslint_errors" "$eslint_warnings" "$ts_explicit_any" "$eslint_files_linted" \
+  "$eslint_errors" "$eslint_warnings" "$ts_explicit_any" "$ts_as_unknown" "$eslint_files_linted" \
   "$backend_dead_code" "$backend_files_scanned" \
   "$frontend_dead_code" "$frontend_files_scanned" \
   "$global_cap" "$loc_files_scanned" \
@@ -374,12 +407,12 @@ import sys
 
 (
     mypy_errors, mypy_checked_files,
-    eslint_errors, eslint_warnings, ts_explicit_any, eslint_files_linted,
+    eslint_errors, eslint_warnings, ts_explicit_any, ts_as_unknown, eslint_files_linted,
     backend_vulture, backend_files_scanned,
     frontend_knip, frontend_files_scanned,
     global_cap, loc_files_scanned,
     loc_current_tsv, current_json_path,
-) = sys.argv[1:15]
+) = sys.argv[1:16]
 
 loc_files = {}
 with open(loc_current_tsv) as fh:
@@ -396,6 +429,7 @@ current = {
     "eslint_errors": int(eslint_errors),
     "eslint_warnings": int(eslint_warnings),
     "ts_explicit_any": int(ts_explicit_any),
+    "ts_as_unknown": int(ts_as_unknown),
     "eslint_files_linted": int(eslint_files_linted),
     "dead_code": {
         "backend_vulture": int(backend_vulture),
@@ -455,6 +489,7 @@ check_denominator(
 check_counter("eslint_errors", baseline["eslint_errors"], current["eslint_errors"])
 check_counter("eslint_warnings", baseline["eslint_warnings"], current["eslint_warnings"])
 check_counter("ts_explicit_any", baseline["ts_explicit_any"], current["ts_explicit_any"])
+check_counter("ts_as_unknown", baseline["ts_as_unknown"], current["ts_as_unknown"])
 check_denominator(
     "eslint_files_linted", baseline["eslint_files_linted"], current["eslint_files_linted"]
 )

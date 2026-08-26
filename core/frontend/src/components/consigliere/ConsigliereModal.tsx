@@ -107,7 +107,7 @@ export function ConsigliereModal() {
         title: 'Conversation cleared',
         description: 'All messages have been deleted successfully',
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to clear messages:', error)
       toast({
         title: 'Failed to clear conversation',
@@ -378,7 +378,7 @@ export function ConsigliereModal() {
             analysisStepMessage={analysisStepMessage}
             currentModel={currentModel}
             favorites={favorites}
-            chatGroup={currentSession?.chat_group_data as any}
+            chatGroup={currentSession?.chat_group_data}
             onGenerateAnalysis={handleGenerateAnalysis}
             onRegenerateAnalysis={handleRegenerateAnalysis}
             onCancelAnalysis={cancelAnalysis}

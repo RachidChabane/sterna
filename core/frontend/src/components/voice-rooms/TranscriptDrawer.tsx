@@ -28,6 +28,7 @@ import { ModelIcon } from '@/components/models/ModelIcon'
 import { useToast } from '@/hooks/use-toast'
 import useModelStore from '@/store/modelStore'
 import { useAuthStore } from '@/store/authStore'
+import type { User } from '@/api/hand-written/rest'
 import type { VoiceRoomMessage, VoiceAgent } from '@/types/voiceRoom'
 import type { Model } from '@/components/models/types'
 
@@ -187,7 +188,7 @@ function TranscriptMessage({
   onViewModelDetails,
 }: {
   message: TranscriptMessageData
-  user: any
+  user: User | null
   onCopy: () => void
   onViewModelDetails?: (modelId: string) => void
 }) {

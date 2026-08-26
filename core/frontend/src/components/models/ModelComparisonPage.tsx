@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useSearch, useNavigate } from '@tanstack/react-router'
 import { generateUUID } from '@/lib/utils'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import { useModelFilters } from '@/hooks/useModelFilters'
 import { ImmersiveChatView } from './ImmersiveChatView'
 import { ChatTabContainer } from './ChatTabContainer'
 import type { ImmersiveChatViewProps } from './ChatTabContainer'
 import { ChatGrid } from './ChatGrid'
+import { ModelComparisonSkeleton } from './ModelComparisonSkeleton'
+import { NewConversationView } from './NewConversationView'
 import type { ChatGridCardProps } from './ChatGrid'
 import { ChatInstructionsSheet } from './ChatInstructionsSheet'
 import { ArtifactsSidePanel } from './ArtifactsSidePanel'
@@ -17,9 +18,9 @@ import { ConfirmDeleteModal } from '@/components/shared'
 import { ConsigliereModal } from '@/components/consigliere/ConsigliereModal'
 import { SuggestedQuestionsCarousel } from './SuggestedQuestionsCarousel'
 import { CostEstimationDisplay } from './CostEstimationDisplay'
-import { llmApi } from '@/api/llm'
+import { llmApi, type ChatFeatureFlags } from '@/api/llm'
 import { revokeImagePreview } from '@/utils/imageUtils'
-import { buildConversationResponsesText, buildConversationMetadata, buildChatResponsesText, buildChatMetadata, generateFilename, extractTextFromContent } from '@/utils/chatUtils'
+import { extractTextFromContent } from '@/utils/chatUtils'
 import { buildTextFromTextAttachments } from '@/utils/tokenEstimate'
 import useModelStore from '@/store/modelStore'
 import { useAuthStore } from '@/store/authStore'
@@ -39,14 +40,16 @@ import { useMultiChatTabState } from '@/hooks/useMultiChatTabState'
 import { preferencesSync } from '@/lib/preferencesSync'
 import { PREFERENCE_KEYS } from '@/hooks/usePreferencesLoader'
 import { useActiveConversationStore } from '@/store/activeConversationStore'
-import { assetsAPI, assetToReference, getAssetTypeFromMime } from '@/api/assets'
-import { conversationsAPI } from '@/api/conversations'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 import { sparksAPI } from '@/api/sparks'
-import type { Model, Message, ModelParameters, Chat, ChatGroup, Attachment } from './types'
+import type { Model, Chat, Attachment, AttachmentLike, FileAttachment, ImageAttachment } from './types'
 import type { ModelCatalogEntry } from '@/types/models'
 import { toModelCatalogEntry } from './modelCatalog'
 
 import { MAX_CHATS, DEFAULT_PARAMETERS } from './constants'
+import { useImmersiveModePreference } from './hooks/useImmersiveModePreference'
+import { useChatHandlerMaps } from './hooks/useChatHandlerMaps'
+import { useConversationActions } from './hooks/useConversationActions'
 
 const MAX_GROUPS = 50
 const HIGH_TOKEN_COUNT_THRESHOLD = 200000 // Performance warning threshold for total tokens in a conversation
@@ -81,7 +84,7 @@ export default function ModelComparisonPage() {
 
   // Carry pending first-message data through SPA navigation (no page reload needed).
   // handleFirstMessage writes this; the URL effect reads it after loadConversation resolves.
-  const pendingFirstMessageRef = useRef<{ content: string; attachments: any[]; chatId: string } | null>(null)
+  const pendingFirstMessageRef = useRef<{ content: string; attachments: AttachmentLike[]; chatId: string } | null>(null)
 
   const [activeGroupId, setActiveGroupId] = useState<string>('')
 
@@ -119,34 +122,8 @@ export default function ModelComparisonPage() {
   const helpers = useComparisonHelpers({ chats })
   const { generateFullGroupName, generateGroupName, hasMessages, hasVisionSupport, hasPDFSupport, getTotalTokens } = helpers
 
-  // Helper functions to persist immersive mode per conversation
-  // Uses localStorage as primary source to avoid 404 API calls for new preferences
-  const getImmersiveModeKey = (conversationId: string) => `models.immersive_mode.${conversationId}`
-
-  const saveImmersiveMode = useCallback((conversationId: string, isImmersive: boolean) => {
-    // Save to localStorage only (no backend API call needed for UI state)
-    try {
-      localStorage.setItem(getImmersiveModeKey(conversationId), JSON.stringify(isImmersive))
-    } catch (e) {
-      // localStorage might be full or disabled
-    }
-  }, [])
-
-  const loadImmersiveMode = useCallback((conversationId: string, defaultValue: boolean): boolean => {
-    const key = getImmersiveModeKey(conversationId)
-
-    // Use localStorage only (no backend API call needed for UI state)
-    try {
-      const saved = localStorage.getItem(key)
-      if (saved !== null) {
-        return JSON.parse(saved)
-      }
-    } catch (e) {
-      // Parse error or localStorage disabled
-    }
-
-    return defaultValue
-  }, [])
+  // Persist immersive mode per conversation (localStorage only, no backend call)
+  const { saveImmersiveMode, loadImmersiveMode } = useImmersiveModePreference()
 
   // Initialize default group if needed after loading
   // IMPORTANT: Skip this when in "new conversation" mode - we want to wait for the first message
@@ -185,7 +162,7 @@ export default function ModelComparisonPage() {
           const persistedGroupId = await preferencesSync.get(PREFERENCE_KEYS.MODELS_ACTIVE_CHAT_GROUP)
 
           // Check if the persisted group still exists
-          if (persistedGroupId && chatGroups.some(g => g.id === persistedGroupId)) {
+          if (typeof persistedGroupId === 'string' && chatGroups.some(g => g.id === persistedGroupId)) {
             setActiveGroupId(persistedGroupId)
             // Load full conversation data (chatGroups only has summaries with empty chats)
             const fullGroup = await loadConversation(persistedGroupId)
@@ -481,7 +458,7 @@ export default function ModelComparisonPage() {
   // Input management hook
   // Only check active chats (non-disabled and with a model) for capabilities (memoized)
   const activeChats = useMemo(() => {
-    return chats.filter(c => c.model !== null && !(c as any).disabled)
+    return chats.filter(c => c.model !== null && !c.disabled)
   }, [chats])
 
   // Find first model with each capability (even if disabled) (memoized)
@@ -498,8 +475,8 @@ export default function ModelComparisonPage() {
   const hasActivePDFSupport = useMemo(() => hasPDFSupport(activeChats), [hasPDFSupport, activeChats])
   const firstVisionModelName = useMemo(() => firstVisionChat?.model?.name, [firstVisionChat])
   const firstPDFModelName = useMemo(() => firstPDFChat?.model?.name, [firstPDFChat])
-  const isFirstVisionModelDisabled = useMemo(() => firstVisionChat ? !!(firstVisionChat as any).disabled : false, [firstVisionChat])
-  const isFirstPDFModelDisabled = useMemo(() => firstPDFChat ? !!(firstPDFChat as any).disabled : false, [firstPDFChat])
+  const isFirstVisionModelDisabled = useMemo(() => firstVisionChat ? !!firstVisionChat.disabled : false, [firstVisionChat])
+  const isFirstPDFModelDisabled = useMemo(() => firstPDFChat ? !!firstPDFChat.disabled : false, [firstPDFChat])
 
   const comparisonInput = useComparisonInput({
     userMessageHistory,
@@ -558,12 +535,12 @@ export default function ModelComparisonPage() {
 
   // Listen for pending message event from new conversation creation
   useEffect(() => {
-    const handlePendingMessage = (event: CustomEvent<{ content: string; attachments: Attachment[]; chatId: string }>) => {
+    const handlePendingMessage = (event: CustomEvent<{ content: string; attachments: AttachmentLike[]; chatId: string }>) => {
       const { content, attachments: pendingAttachments, chatId } = event.detail
 
       // Reconstruct file-like objects from serialized attachments
       // The UI expects file.name, file.type, file.size but serialized attachments have fileName, fileType, fileSize
-      const reconstructedAttachments = pendingAttachments.map((att: any) => ({
+      const reconstructedAttachments = pendingAttachments.map((att) => ({
         ...att,
         // Reconstruct file object for UI display (not a real File, but has the properties UI needs)
         file: att.file || {
@@ -1057,10 +1034,9 @@ export default function ModelComparisonPage() {
     }
   }
 
-
   // Shared input entry point (synced): just call composeAndSend for all enabled chats (memoized)
   const sendMessage = useCallback((content: string) => {
-    const enabledIds = chats.filter(c => c.model !== null && !(c as any).disabled).map(c => c.id)
+    const enabledIds = chats.filter(c => c.model !== null && !c.disabled).map(c => c.id)
     if (enabledIds.length === 0) {
       const hasModelsSelected = chats.some(c => c.model !== null)
       const allDisabled = hasModelsSelected && enabledIds.length === 0
@@ -1082,7 +1058,7 @@ export default function ModelComparisonPage() {
       fileName: att.file.name,
       fileType: att.file.type,
       fileSize: att.file.size,
-    } as any))
+    }))
 
     // Fire-and-forget the compose/send so UI clears immediately
     void composeAndSend(enabledIds, content, currentAttachments)
@@ -1126,7 +1102,7 @@ export default function ModelComparisonPage() {
                 if (step.type === 'tool_executions' && step.executions) {
                   return {
                     ...step,
-                    executions: step.executions.map((e: any) =>
+                    executions: step.executions.map((e) =>
                       e.isExecuting
                         ? { ...e, isExecuting: false, success: false, result: { success: false, error: 'Cancelled by user' } }
                         : e
@@ -1158,242 +1134,44 @@ export default function ModelComparisonPage() {
     }
   }, [activeGroupId, setChatGroups])
 
-  // Create stable handler Maps to prevent ALL chats from re-rendering when typing in one
-  // Maps ensure each chatId gets the SAME function reference across renders
-  const sendMessageHandlers = useRef(new Map<string, (content: string, localAttachments?: Attachment[]) => Promise<void>>())
-  const modelSelectHandlers = useRef(new Map<string, (model: Model) => void>())
-  const updateMessagesHandlers = useRef(new Map<string, (messages: Message[]) => void>())
-  const removeHandlers = useRef(new Map<string, () => void>())
-  const estimateCostHandlers = useRef(new Map<string, (text: string, atts?: Attachment[]) => Promise<any>>())
-
-  // Track previous function references to detect changes synchronously
-  // IMPORTANT: This must clear the cache DURING render, not in an effect
-  // Otherwise, get*Handler returns stale handlers before the effect runs
-  // This fixes issues like voice mode not being passed when the overlay opens
-  const prevComposeAndSendRef = useRef(composeAndSend)
-  if (prevComposeAndSendRef.current !== composeAndSend) {
-    sendMessageHandlers.current.clear()
-    prevComposeAndSendRef.current = composeAndSend
-  }
-
-  // Clear model select handlers synchronously when updateChatModel changes
-  // This is CRITICAL: without this, changing one chat's model would affect other chats
-  // because the old handlers capture stale closure values
-  const prevUpdateChatModelRef = useRef(updateChatModel)
-  if (prevUpdateChatModelRef.current !== updateChatModel) {
-    modelSelectHandlers.current.clear()
-    prevUpdateChatModelRef.current = updateChatModel
-  }
-
-  // Clear update messages handlers synchronously when updateChatMessages changes
-  const prevUpdateChatMessagesRef = useRef(updateChatMessages)
-  if (prevUpdateChatMessagesRef.current !== updateChatMessages) {
-    updateMessagesHandlers.current.clear()
-    prevUpdateChatMessagesRef.current = updateChatMessages
-  }
-
-  // Get or create stable handler for each chat (sends to single chat only)
-  const getSendMessageHandler = useCallback((chatId: string) => {
-    if (!sendMessageHandlers.current.has(chatId)) {
-      sendMessageHandlers.current.set(chatId, async (content: string, localAttachments?: Attachment[]) => {
-        await composeAndSend([chatId], content, localAttachments || [])
-      })
-    }
-    return sendMessageHandlers.current.get(chatId)!
-  }, [composeAndSend])
-
-  // Broadcast handler for multi-chat mode: sends to ALL enabled chats
-  const sendToAllChatsHandler = useCallback(async (content: string, localAttachments?: Attachment[]) => {
-    const enabledIds = chats.filter(c => c.model !== null && !(c as any).disabled).map(c => c.id)
-    if (enabledIds.length === 0) {
-      toast({
-        title: 'No model selected',
-        description: 'Please select at least one model to send a message.',
-        variant: 'destructive'
-      })
-      return
-    }
-    await composeAndSend(enabledIds, content, localAttachments || [])
-  }, [chats, composeAndSend, toast])
-
-  const getModelSelectHandler = useCallback((chatId: string) => {
-    if (!modelSelectHandlers.current.has(chatId)) {
-      modelSelectHandlers.current.set(chatId, (model: Model) => {
-        // Only update the chat's model, don't affect global model selection
-        updateChatModel(chatId, model)
-      })
-    }
-    return modelSelectHandlers.current.get(chatId)!
-  }, [updateChatModel])
-
-  const getUpdateMessagesHandler = useCallback((chatId: string) => {
-    if (!updateMessagesHandlers.current.has(chatId)) {
-      updateMessagesHandlers.current.set(chatId, (messages: Message[]) => {
-        updateChatMessages(chatId, messages)
-      })
-    }
-    return updateMessagesHandlers.current.get(chatId)!
-  }, [updateChatMessages])
-
-  const getRemoveHandler = useCallback((chatId: string) => {
-    if (!removeHandlers.current.has(chatId)) {
-      removeHandlers.current.set(chatId, () => {
-        setClosingChatId(chatId)
-        setShowCloseDialog(true)
-      })
-    }
-    return removeHandlers.current.get(chatId)!
+  // Per-chat handler-map factories (stable function identity per chatId, so
+  // typing in one chat's input doesn't re-render every other chat)
+  const requestRemoveChat = useCallback((chatId: string) => {
+    setClosingChatId(chatId)
+    setShowCloseDialog(true)
   }, [])
 
-  // Handle cost estimation for individual chat in independent mode (memoized)
-  const handleEstimateCostForChat = useCallback(async (chatId: string, text: string, localAttachments: Attachment[] = []) => {
-    const chat = chats.find(c => c.id === chatId)
-    if (!chat?.model) return null
-    try {
-      const filesText = buildTextFromTextAttachments(localAttachments)
-      const filesMeta = (localAttachments || [])
-        .filter(a => a.type === 'file')
-        .map((f: any) => ({ filename: f.file?.name || 'file', mime: f.file?.type || undefined, size: f.file?.size || undefined }))
-      const imagesMeta = (localAttachments || [])
-        .filter(a => a.type === 'image')
-        .map((img: any) => ({ mime: img.file?.type || undefined, size: img.file?.size || undefined }))
-      const response = await llmApi.estimateBatchCost({
-        model_ids: [chat.model.model_id],
-        prompt_text: text + filesText,
-        typed_text: text,
-        files_text: filesText,
-        features_by_model: {
-          [chat.model.model_id]: {
-            system_prompt: chat.parameters?.system_prompt || '',
-            enable_mcp_tools: chat.parameters?.enable_mcp_tools || false,
-            enable_reasoning: chat.parameters?.enable_reasoning || false,
-            enable_file_tools: chat.parameters?.enable_file_tools || false,
-          }
-        },
-        files: filesMeta,
-        images: imagesMeta,
-        max_new_tokens_by_model: chat.parameters?.max_tokens
-          ? { [chat.model.model_id]: chat.parameters.max_tokens }
-          : undefined,
-      })
-      const data = {
-        ...response.data,
-        total_cost: typeof response.data.total_cost === 'string' ? parseFloat(response.data.total_cost) : response.data.total_cost,
-        costs: response.data.costs.map((c: any) => ({ ...c, cost: typeof c.cost === 'string' ? parseFloat(c.cost) : c.cost })),
-      }
-      if (data.costs && data.costs.length > 0) {
-        return {
-          cost: data.costs[0].cost,
-          prompt_tokens: data.costs[0].prompt_tokens,
-          completion_tokens: data.costs[0].completion_tokens,
-          model_name: data.costs[0].model_name,
-        }
-      }
-      return null
-    } catch (error) {
-      throw error
-    }
-  }, [chats])
-
-  const getEstimateCostHandler = useCallback((chatId: string) => {
-    if (!estimateCostHandlers.current.has(chatId)) {
-      estimateCostHandlers.current.set(chatId, (text: string, atts?: Attachment[]) => {
-        return handleEstimateCostForChat(chatId, text, atts)
-      })
-    }
-    return estimateCostHandlers.current.get(chatId)!
-  }, [handleEstimateCostForChat])
-
-  const moveLeftHandlers = useRef(new Map<string, () => void>())
-  const moveRightHandlers = useRef(new Map<string, () => void>())
-  const parametersChangeHandlers = useRef(new Map<string, (params: ModelParameters) => void>())
-  const toggleDisabledHandlers = useRef(new Map<string, (value: boolean) => void>())
-  const toggleHiddenHandlers = useRef(new Map<string, (value: boolean) => void>())
-  const clearChatHandlers = useRef(new Map<string, (deleteWorkspace?: boolean) => void>())
-  const cancelChatHandlers = useRef(new Map<string, () => void>())
-
-  const getMoveLeftHandler = useCallback((chatId: string) => {
-    if (!moveLeftHandlers.current.has(chatId)) {
-      moveLeftHandlers.current.set(chatId, () => moveLeft(chatId))
-    }
-    return moveLeftHandlers.current.get(chatId)!
-  }, [moveLeft])
-
-  const getMoveRightHandler = useCallback((chatId: string) => {
-    if (!moveRightHandlers.current.has(chatId)) {
-      moveRightHandlers.current.set(chatId, () => moveRight(chatId))
-    }
-    return moveRightHandlers.current.get(chatId)!
-  }, [moveRight])
-
-  const getParametersChangeHandler = useCallback((chatId: string) => {
-    if (!parametersChangeHandlers.current.has(chatId)) {
-      parametersChangeHandlers.current.set(chatId, (params: ModelParameters) => updateChatParameters(chatId, params))
-    }
-    return parametersChangeHandlers.current.get(chatId)!
-  }, [updateChatParameters])
-
-  const getToggleDisabledHandler = useCallback((chatId: string) => {
-    if (!toggleDisabledHandlers.current.has(chatId)) {
-      toggleDisabledHandlers.current.set(chatId, (value: boolean) => updateChatDisabled(chatId, value))
-    }
-    return toggleDisabledHandlers.current.get(chatId)!
-  }, [updateChatDisabled])
-
-  const getToggleHiddenHandler = useCallback((chatId: string) => {
-    if (!toggleHiddenHandlers.current.has(chatId)) {
-      toggleHiddenHandlers.current.set(chatId, (value: boolean) => updateChatHidden(chatId, value))
-    }
-    return toggleHiddenHandlers.current.get(chatId)!
-  }, [updateChatHidden])
-
-  const getClearChatHandler = useCallback((chatId: string) => {
-    if (!clearChatHandlers.current.has(chatId)) {
-      clearChatHandlers.current.set(chatId, (deleteWorkspace?: boolean) => clearChat(chatId, deleteWorkspace))
-    }
-    return clearChatHandlers.current.get(chatId)!
-  }, [clearChat])
-
-  const getCancelChatHandler = useCallback((chatId: string) => {
-    if (!cancelChatHandlers.current.has(chatId)) {
-      cancelChatHandlers.current.set(chatId, () => cancelChat(chatId))
-    }
-    return cancelChatHandlers.current.get(chatId)!
-  }, [cancelChat])
-
-  const toolExecutedHandlers = useRef(new Map<string, (toolCallId: string, toolName: string, result: any) => void>())
-
-  const getToolExecutedHandler = useCallback((chatId: string) => {
-    if (!toolExecutedHandlers.current.has(chatId)) {
-      toolExecutedHandlers.current.set(chatId, (toolCallId: string, toolName: string, result: any) => {
-        // Get current chat using ref to avoid stale closure issues in multi-chat parallel scenarios
-        const currentChat = chatsRef.current.find(c => c.id === chatId)
-        if (!currentChat) return
-
-        // Add a "tool" message with the execution result (OpenAI format)
-        // This message will be sent to the model but NOT displayed in the UI
-        const toolMessage: Message = {
-          role: 'tool',
-          tool_call_id: toolCallId,
-          content: JSON.stringify(result.content),  // Send the raw tool result to the model
-          timestamp: new Date(),
-        }
-
-        // Update messages to include the tool result
-        const updatedMessages = [...currentChat.messages, toolMessage]
-
-        // Update state with the tool message
-        updateChatMessages(chatId, updatedMessages)
-
-        // Continue the conversation immediately by sending the updated messages directly
-        // We pass the messages explicitly to avoid async state issues
-        if (currentChat.model) {
-          sendToModel(chatId, currentChat.model, updatedMessages)
-        }
-      })
-    }
-    return toolExecutedHandlers.current.get(chatId)!
-  }, [updateChatMessages, sendToModel])
+  const {
+    getSendMessageHandler,
+    sendToAllChatsHandler,
+    getModelSelectHandler,
+    getUpdateMessagesHandler,
+    getEstimateCostHandler,
+    getMoveLeftHandler,
+    getMoveRightHandler,
+    getParametersChangeHandler,
+    getToggleDisabledHandler,
+    getToggleHiddenHandler,
+    getClearChatHandler,
+    getCancelChatHandler,
+    getToolExecutedHandler,
+  } = useChatHandlerMaps({
+    chats,
+    chatsRef,
+    composeAndSend,
+    sendToModel,
+    updateChatModel,
+    updateChatMessages,
+    updateChatParameters,
+    updateChatDisabled,
+    updateChatHidden,
+    moveLeft,
+    moveRight,
+    clearChat,
+    cancelChat,
+    toast,
+    onRequestRemoveChat: requestRemoveChat,
+  })
 
   const cancelAll = useCallback(() => {
     abortControllersRef.current.forEach(ctrl => ctrl.abort())
@@ -1421,7 +1199,7 @@ export default function ModelComparisonPage() {
               if (step.type === 'tool_executions' && step.executions) {
                 return {
                   ...step,
-                  executions: step.executions.map((e: any) =>
+                  executions: step.executions.map((e) =>
                     e.isExecuting
                       ? { ...e, isExecuting: false, success: false, result: { success: false, error: 'Cancelled by user' } }
                       : e
@@ -1454,204 +1232,44 @@ export default function ModelComparisonPage() {
     } : g))
   }, [activeGroupId, setChatGroups])
 
-
-  const copyConversationResponses = () => {
-    const text = buildConversationResponsesText(chats)
-    navigator.clipboard.writeText(text)
-    toast({ title: 'Copied', description: 'All responses copied to clipboard' })
-  }
-
-  const copyConversationMetadata = () => {
-    const data = buildConversationMetadata(chats, false)
-    navigator.clipboard.writeText(JSON.stringify(data, null, 2))
-    toast({ title: 'Copied', description: 'All metadata copied to clipboard' })
-  }
-
-  const exportConversationResponses = () => {
-    const text = buildConversationResponsesText(chats)
-    const blob = new Blob([text], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = generateFilename('conversation', 'txt')
-    a.click()
-    URL.revokeObjectURL(url)
-    toast({ title: 'Exported', description: 'All responses exported' })
-  }
-
-  const exportConversationMetadata = () => {
-    const data = buildConversationMetadata(chats, false)
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = generateFilename('conversation-metadata', 'json')
-    a.click()
-    URL.revokeObjectURL(url)
-    toast({ title: 'Exported', description: 'All metadata exported' })
-  }
-
-  // Save conversation to knowledge base (for all views)
-  const handleSaveToKnowledgeBase = useCallback(async () => {
-    if (isSavingToKnowledgeBase || !activeGroupId) return
-
-    setIsSavingToKnowledgeBase(true)
-    try {
-      const result = await conversationsAPI.saveToKnowledgeBase(activeGroupId)
-      toast({ title: 'Saved', description: `Saved to knowledge base: ${result.filename}` })
-    } catch (error: any) {
-      const errorData = error.response?.data
-      if (errorData?.existing_document_id) {
-        toast({ title: 'Already saved', description: errorData.error || 'This conversation is already in your knowledge base', variant: 'destructive' })
-      } else if (errorData?.error) {
-        toast({ title: 'Failed to save', description: errorData.error, variant: 'destructive' })
-      } else {
-        toast({ title: 'Error', description: 'Failed to save to knowledge base', variant: 'destructive' })
-      }
-    } finally {
-      setIsSavingToKnowledgeBase(false)
-    }
-  }, [activeGroupId, isSavingToKnowledgeBase, toast])
-
-  // Save single chat to knowledge base
-  const handleSaveChatToKnowledgeBase = useCallback(async (chatId: string) => {
-    if (savingChatId || !activeGroupId) return
-
-    const chat = chats.find(c => c.id === chatId)
-    if (!chat) return
-
-    setSavingChatId(chatId)
-    try {
-      // Currently saves entire conversation - in future could be chat-specific
-      const result = await conversationsAPI.saveToKnowledgeBase(activeGroupId)
-      const modelName = chat.model?.name || 'Chat'
-      toast({ title: 'Saved', description: `${modelName} saved to knowledge base: ${result.filename}` })
-    } catch (error: any) {
-      const errorData = error.response?.data
-      if (errorData?.existing_document_id) {
-        toast({ title: 'Already saved', description: errorData.error || 'This conversation is already in your knowledge base', variant: 'destructive' })
-      } else if (errorData?.error) {
-        toast({ title: 'Failed to save', description: errorData.error, variant: 'destructive' })
-      } else {
-        toast({ title: 'Error', description: 'Failed to save to knowledge base', variant: 'destructive' })
-      }
-    } finally {
-      setSavingChatId(null)
-    }
-  }, [activeGroupId, chats, savingChatId, toast])
-
-  // Per-chat copy/export functions (for immersive mode options menu)
-  const copyChatResponses = (chatId: string) => {
-    const chat = chats.find(c => c.id === chatId)
-    if (!chat) return
-    const text = buildChatResponsesText(chat.messages)
-    navigator.clipboard.writeText(text)
-    toast({ title: 'Copied', description: 'Responses copied to clipboard' })
-  }
-
-  const copyChatMetadata = (chatId: string) => {
-    const chat = chats.find(c => c.id === chatId)
-    if (!chat) return
-    const data = buildChatMetadata(chat.messages)
-    navigator.clipboard.writeText(JSON.stringify(data, null, 2))
-    toast({ title: 'Copied', description: 'Metadata copied to clipboard' })
-  }
-
-  const exportChatResponses = (chatId: string) => {
-    const chat = chats.find(c => c.id === chatId)
-    if (!chat) return
-    const text = buildChatResponsesText(chat.messages)
-    const modelName = chat.model?.name?.replace(/[^a-z0-9]/gi, '-') || 'chat'
-    const blob = new Blob([text], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = generateFilename(modelName, 'txt')
-    a.click()
-    URL.revokeObjectURL(url)
-    toast({ title: 'Exported', description: 'Responses exported' })
-  }
-
-  const exportChatMetadata = (chatId: string) => {
-    const chat = chats.find(c => c.id === chatId)
-    if (!chat) return
-    const data = buildChatMetadata(chat.messages)
-    const modelName = chat.model?.name?.replace(/[^a-z0-9]/gi, '-') || 'chat'
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = generateFilename(`${modelName}-metadata`, 'json')
-    a.click()
-    URL.revokeObjectURL(url)
-    toast({ title: 'Exported', description: 'Metadata exported' })
-  }
-
-  const handleOpenConsigliere = async () => {
-    if (activeGroup && currentModel) {
-      const sessionId = await openConsigliere(activeGroup, currentModel.model_id)
-      if (sessionId && sessionId !== activeGroup.consigliereSessionId) {
-        setChatGroups(prevGroups =>
-          prevGroups.map(group =>
-            group.id === activeGroupId
-              ? { ...group, consigliereSessionId: sessionId }
-              : group
-          )
-        )
-      }
-    } else {
-      toast({
-        title: "Cannot open Consigliere",
-        description: "Please select a model first",
-        variant: "destructive"
-      })
-    }
-  }
-
-  const clearConversations = () => {
-    // Clear messages and Consigliere session in a single state update to avoid race conditions
-    setChatGroups(prevGroups =>
-      prevGroups.map(group => {
-        if (group.id !== activeGroupId) return group
-
-        // Clear messages from all chats
-        const clearedChats = group.chats.map(chat => ({
-          ...chat,
-          messages: []
-        }))
-
-        return {
-          ...group,
-          chats: clearedChats,
-          consigliereSessionId: undefined,
-          updatedAt: new Date(),
-          name: 'New Conversation',
-          isCustomName: false  // Allow LLM to generate name after next message
-        }
-      })
-    )
-
-    setSharedInput('')
-    setEstimatedCosts(null)
-    toast({
-      title: 'Cleared',
-      description: 'All conversations have been cleared'
-    })
-  }
-
+  const {
+    copyConversationResponses,
+    copyConversationMetadata,
+    exportConversationResponses,
+    exportConversationMetadata,
+    handleSaveChatToKnowledgeBase,
+    copyChatResponses,
+    copyChatMetadata,
+    exportChatResponses,
+    exportChatMetadata,
+  } = useConversationActions({
+    chats,
+    activeGroup,
+    activeGroupId,
+    currentModel,
+    openConsigliere,
+    setChatGroups,
+    toast,
+    setSharedInput,
+    setEstimatedCosts,
+    isSavingToKnowledgeBase,
+    setIsSavingToKnowledgeBase,
+    savingChatId,
+    setSavingChatId,
+  })
 
   // Ask backend to estimate costs (uses hook state management)
   const estimateCostsLocal = async (modelIds: string[], typedText: string, atts: Attachment[]) => {
     const filesText = buildTextFromTextAttachments(atts)
     const filesMeta = atts
-      .filter(a => a.type === 'file')
-      .map((f: any) => ({ filename: f.file?.name || 'file', mime: f.file?.type || undefined, size: f.file?.size || undefined }))
+      .filter((a): a is FileAttachment => a.type === 'file')
+      .map((f) => ({ filename: f.file?.name || 'file', mime: f.file?.type || undefined, size: f.file?.size || undefined }))
     const imagesMeta = atts
-      .filter(a => a.type === 'image')
-      .map((img: any) => ({ mime: img.file?.type || undefined, size: img.file?.size || undefined }))
+      .filter((a): a is ImageAttachment => a.type === 'image')
+      .map((img) => ({ mime: img.file?.type || undefined, size: img.file?.size || undefined }))
     // Per-model max_new_tokens and features from chats' parameters
     const maxNewByModel: Record<string, number> = {}
-    const featuresByModel: Record<string, any> = {}
+    const featuresByModel: Record<string, ChatFeatureFlags> = {}
 
     chats.forEach(c => {
       if (!c.model) return
@@ -1684,7 +1302,7 @@ export default function ModelComparisonPage() {
         if (c.parameters?.enable_file_tools) featuresByModel[modelId].enable_file_tools = true
         // Use longest system prompt for this model
         const sp = c.parameters?.system_prompt || ''
-        if (sp.length > featuresByModel[modelId].system_prompt.length) {
+        if (sp.length > (featuresByModel[modelId].system_prompt?.length ?? 0)) {
           featuresByModel[modelId].system_prompt = sp
         }
       }
@@ -1704,7 +1322,7 @@ export default function ModelComparisonPage() {
       const data = {
         ...response.data,
         total_cost: typeof response.data.total_cost === 'string' ? parseFloat(response.data.total_cost) : response.data.total_cost,
-        costs: response.data.costs.map((c: any) => ({ ...c, cost: typeof c.cost === 'string' ? parseFloat(c.cost) : c.cost })),
+        costs: response.data.costs.map((c) => ({ ...c, cost: typeof c.cost === 'string' ? parseFloat(c.cost) : c.cost })),
       }
       setEstimatedCosts(data)
       if (data.costs.length === 0) {
@@ -1714,10 +1332,8 @@ export default function ModelComparisonPage() {
           variant: 'destructive'
         })
       }
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error
-        || error.response?.data?.detail
-        || 'Failed to estimate costs. Please try again.'
+    } catch (error) {
+      const errorMessage = getApiErrorMessage(error, 'Failed to estimate costs. Please try again.')
       toast({
         title: 'Estimation failed',
         description: errorMessage,
@@ -2131,353 +1747,47 @@ export default function ModelComparisonPage() {
 
   // Handle new conversation mode - render with a temporary unsaved chat
   if (isNewConversation) {
-    // Handler to create the real conversation when first message is sent
-    const handleFirstMessage = async (content: string, localAttachments?: Attachment[]) => {
-      try {
-        // Create the real conversation with the configured parameters
-        const newGroup = await createConversation([
-          { id: generateUUID(), model: newConvoChat.model, messages: [], isLoading: false, parameters: { ...newConvoChat.parameters }, instructions: newConvoChat.instructions }
-        ])
-
-        // Get the chat ID from the created group
-        const chatId = newGroup.chats[0]?.id || generateUUID()
-
-        
-
-        setActiveGroupId(newGroup.id)
-        setIsImmersiveMode(true)
-        preferencesSync.update(PREFERENCE_KEYS.MODELS_ACTIVE_CHAT_GROUP, newGroup.id, 'models')
-
-        // Upload attachments as assets BEFORE storing in sessionStorage
-        // This is necessary because File objects don't survive JSON serialization
-        const attachmentsToProcess = localAttachments || newConvoAttachments || []
-        const serializableAttachments: any[] = []
-
-        if (attachmentsToProcess.length > 0) {
-          
-
-          // Upload each attachment in parallel
-          const uploadPromises = attachmentsToProcess.map(async (att) => {
-            try {
-              // Only upload if we have a File object
-              if (att.file instanceof File) {
-                const result = await assetsAPI.uploadFile(chatId, att.file, {
-                  assetType: att.type === 'image' ? 'image' : getAssetTypeFromMime(att.file.type),
-                })
-
-                if (result.success && result.asset) {
-                  // Create serializable attachment with asset reference
-                  const assetRef = assetToReference(result.asset)
-                  return {
-                    id: att.id,
-                    type: att.type,
-                    assetId: result.asset.id,
-                    assetUrl: result.asset.download_url,
-                    assetRef, // Store the full asset reference for message persistence
-                    // Store file metadata for display (serializable)
-                    fileName: att.file.name,
-                    fileType: att.file.type,
-                    fileSize: att.file.size,
-                    // For images, store the preview URL (will need to be replaced with assetUrl after load)
-                    preview: att.type === 'image' ? result.asset.download_url : undefined,
-                    // For text files, preserve textContent if available
-                    textContent: (att as any).textContent,
-                    // Preserve base64 for immediate display/sending
-                    base64: (att as any).base64,
-                  }
-                } else {
-                  console.warn('[handleFirstMessage] Failed to upload attachment:', att.file.name, result.error)
-                  // Return a serializable version without assetId (will be skipped in persistence)
-                  return {
-                    id: att.id,
-                    type: att.type,
-                    fileName: att.file.name,
-                    fileType: att.file.type,
-                    fileSize: att.file.size,
-                    textContent: (att as any).textContent,
-                    base64: (att as any).base64,
-                    uploadFailed: true,
-                  }
-                }
-              } else {
-                // File object not available - store what we can
-                return {
-                  id: att.id,
-                  type: att.type,
-                  fileName: (att as any).fileName || (att as any).file?.name,
-                  fileType: (att as any).fileType || (att as any).file?.type,
-                  fileSize: (att as any).fileSize || (att as any).file?.size,
-                  textContent: (att as any).textContent,
-                  base64: (att as any).base64,
-                  assetId: (att as any).assetId,
-                  assetUrl: (att as any).assetUrl,
-                }
-              }
-            } catch (error) {
-              console.error('[handleFirstMessage] Error uploading attachment:', att.file?.name, error)
-              return {
-                id: att.id,
-                type: att.type,
-                fileName: att.file?.name,
-                fileType: att.file?.type,
-                fileSize: att.file?.size,
-                uploadFailed: true,
-              }
-            }
-          })
-
-          const results = await Promise.all(uploadPromises)
-          serializableAttachments.push(...results.filter(Boolean))
-          
-        }
-
-        // Store the pending message in a ref so the URL effect can dispatch it
-        // after loadConversation resolves (no page reload needed).
-        const pendingMsg = { content, attachments: serializableAttachments, chatId }
-        pendingFirstMessageRef.current = pendingMsg
-
-        // Also store in sessionStorage as fallback (e.g. auth redirect / page reload)
-        sessionStorage.setItem('pending-message', JSON.stringify(pendingMsg))
-
-        // Block the pending-message useEffect from firing — the URL effect will
-        // handle dispatch after loadConversation resolves instead.
-        pendingMessageProcessedRef.current = true
-
-        // SPA navigate — the URL effect will pick up the conversation, load it,
-        // then dispatch the pending message once chats are ready.
-        navigate({ to: '/chats', search: { conversation: newGroup.id }, replace: true })
-      } catch (err) {
-        console.error('[ModelComparisonPage] Failed to create conversation from first message:', err)
-        toast({
-          title: 'Failed to create conversation',
-          description: 'Please try again',
-          variant: 'destructive'
-        })
-      }
-    }
-
-    // Compute feature states based on temp chat parameters
-    const tempParams = newConvoChat.parameters || {}
-    const tempHasReasoning = newConvoChat.model?.supports_reasoning || false
-    const tempHasFunction = newConvoChat.model?.supports_functions || false
-    // Convert to FeatureState objects for GlobalFeatureToggles compatibility
-    const tempWebSearchState = { enabled: tempParams.enable_brave_search ? 1 : 0, total: 1, supported: tempHasFunction ? 1 : 0 }
-    const tempReasoningState = { enabled: tempParams.enable_reasoning ? 1 : 0, total: 1, supported: tempHasReasoning ? 1 : 0 }
-    const tempMcpToolsState = { enabled: tempParams.enable_mcp_tools ? 1 : 0, total: 1, supported: tempHasFunction ? 1 : 0 }
-    const tempFileToolsState = { enabled: tempParams.enable_file_tools ? 1 : 0, total: 1, supported: tempHasFunction ? 1 : 0 }
-    const tempImageGenerationState = { enabled: tempParams.enable_image_generation ? 1 : 0, total: 1, supported: tempHasFunction ? 1 : 0 }
-    const tempVideoGenerationState = { enabled: tempParams.enable_video_generation ? 1 : 0, total: 1, supported: tempHasFunction ? 1 : 0 }
-    const tempSparksState = { enabled: tempParams.enable_sparks ? 1 : 0, total: 1, supported: tempHasFunction ? 1 : 0 }
-    const tempKnowledgeBaseState = { enabled: tempParams.enable_knowledge_base ? 1 : 0, total: 1, supported: tempHasFunction ? 1 : 0 }
-
-    // Ensure the selected model is included in the models list even if filtered out
-    const newConvoModels = (() => {
-      if (!newConvoChat.model) return filteredModels
-      const isSelectedModelInList = filteredModels.some(m => m.model_id === newConvoChat.model?.model_id)
-      if (!isSelectedModelInList) {
-        // Try to find in full models list, fall back to the model object itself
-        const selectedModelEntry = models.find(m => m.model_id === newConvoChat.model?.model_id)
-        return [selectedModelEntry ?? toModelCatalogEntry(newConvoChat.model), ...filteredModels]
-      }
-      return filteredModels
-    })()
-
     return (
-      <ImmersiveChatView
-        chat={newConvoChat}
-        models={newConvoModels}
-        onModelSelect={(model) => {
-          // Only update the local new conversation state, don't affect global model selection
-          setNewConvoChat(prev => ({ ...prev, model }))
-        }}
-        onSendMessage={handleFirstMessage}
-        onUpdateMessages={() => {}}
-        onCancel={() => {}}
-        canCancel={false}
-        onExitImmersive={undefined}
-        onParametersChange={(params) => {
-          setNewConvoChat(prev => ({ ...prev, parameters: params }))
-        }}
-        onToolExecuted={() => {}}
-        onAddChat={async () => {
-          try {
-            // Create a real conversation with two chats
-            const newGroup = await createConversation([
-              { id: generateUUID(), model: newConvoChat.model, messages: [], isLoading: false, parameters: { ...newConvoChat.parameters }, instructions: newConvoChat.instructions },
-              { id: generateUUID(), model: null, messages: [], isLoading: false, parameters: { ...DEFAULT_PARAMETERS } }
-            ])
-            setActiveGroupId(newGroup.id)
-            setIsImmersiveMode(true) // Stay in immersive mode
-            saveImmersiveMode(newGroup.id, true)
-            navigate({ to: '/chats', search: { conversation: newGroup.id }, replace: true })
-          } catch (err) {
-            console.error('[ModelComparisonPage] Failed to create conversation:', err)
-            toast({
-              title: 'Failed to create conversation',
-              description: 'Please try again',
-              variant: 'destructive'
-            })
-          }
-        }}
+      <NewConversationView
+        newConvoChat={newConvoChat}
+        setNewConvoChat={setNewConvoChat}
+        newConvoAttachments={newConvoAttachments}
+        setNewConvoAttachments={setNewConvoAttachments}
+        createConversation={createConversation}
+        setActiveGroupId={setActiveGroupId}
+        setIsImmersiveMode={setIsImmersiveMode}
+        saveImmersiveMode={saveImmersiveMode}
+        pendingFirstMessageRef={pendingFirstMessageRef}
+        pendingMessageProcessedRef={pendingMessageProcessedRef}
+        models={models}
+        filteredModels={filteredModels}
         showFilters={showFilters}
         onToggleFilters={handleToggleFilters}
-        hasActiveFilters={hasActiveFilters()}
+        hasActiveFilters={hasActiveFilters}
         filters={filters}
-        onFiltersChange={setFilters}
+        setFilters={setFilters}
         providers={providers}
         recentModelIds={recentModelIds}
-        webSearchState={tempWebSearchState}
-        onToggleWebSearch={() => {
-          setNewConvoChat(prev => ({
-            ...prev,
-            parameters: {
-              ...prev.parameters,
-              enable_brave_search: !prev.parameters?.enable_brave_search
-            }
-          }))
-        }}
-        hasWebSearchSupport={tempHasFunction}
-        reasoningState={tempReasoningState}
-        onToggleReasoning={() => {
-          setNewConvoChat(prev => ({
-            ...prev,
-            parameters: { ...prev.parameters, enable_reasoning: !prev.parameters?.enable_reasoning }
-          }))
-        }}
-        hasReasoningSupport={tempHasReasoning}
-        mcpToolsState={tempMcpToolsState}
-        onToggleMCPTools={() => {
-          setNewConvoChat(prev => ({
-            ...prev,
-            parameters: { ...prev.parameters, enable_mcp_tools: !prev.parameters?.enable_mcp_tools }
-          }))
-        }}
-        hasFunctionSupport={tempHasFunction}
-        fileToolsState={tempFileToolsState}
-        onToggleFileTools={() => {
-          setNewConvoChat(prev => ({
-            ...prev,
-            parameters: { ...prev.parameters, enable_file_tools: !prev.parameters?.enable_file_tools }
-          }))
-        }}
-        imageGenerationState={tempImageGenerationState}
-        onToggleImageGeneration={() => {
-          setNewConvoChat(prev => ({
-            ...prev,
-            parameters: { ...prev.parameters, enable_image_generation: !prev.parameters?.enable_image_generation }
-          }))
-        }}
-        videoGenerationState={tempVideoGenerationState}
-        onToggleVideoGeneration={() => {
-          setNewConvoChat(prev => ({
-            ...prev,
-            parameters: { ...prev.parameters, enable_video_generation: !prev.parameters?.enable_video_generation }
-          }))
-        }}
-        sparksState={tempSparksState}
-        onToggleSparks={() => {
-          setNewConvoChat(prev => ({
-            ...prev,
-            parameters: { ...prev.parameters, enable_sparks: !prev.parameters?.enable_sparks }
-          }))
-        }}
-        knowledgeBaseState={tempKnowledgeBaseState}
-        onToggleKnowledgeBase={() => {
-          setNewConvoChat(prev => ({
-            ...prev,
-            parameters: { ...prev.parameters, enable_knowledge_base: !prev.parameters?.enable_knowledge_base }
-          }))
-        }}
-        hasKnowledgeBaseSupport={tempHasFunction}
         activeServers={activeServersValue}
         estimatedCosts={estimatedCosts}
         onEstimateCost={handleEstimateCost}
-        isEstimating={loadingEstimate}
-        setEstimatedCost={setEstimatedCosts}
-        attachments={newConvoAttachments}
-        onAddAttachment={(att) => setNewConvoAttachments(prev => [...prev, att])}
-        onRemoveAttachment={(id) => setNewConvoAttachments(prev => prev.filter(a => a.id !== id))}
-        hasVisionSupport={newConvoChat.model?.input_modalities?.includes('image') || false}
-        hasPDFSupport={newConvoChat.model?.input_modalities?.includes('file') || false}
+        loadingEstimate={loadingEstimate}
+        setEstimatedCosts={setEstimatedCosts}
         onFilterByCapability={handleFilterByCapability}
-        activeFilters={filters.input_modalities}
-        isDropOver={isDropOverInput}
+        onSuggestionClick={handleSuggestionClick}
+        isDropOverInput={isDropOverInput}
         onDragOver={handleSharedDragOver}
         onDragLeave={handleSharedDragLeave}
         onDrop={handleSharedDrop}
         onPaste={handleSharedPaste}
-        conversationId=""
-        onSuggestionClick={handleSuggestionClick}
-        onClearChat={() => {}}
-        onCopyResponses={() => {}}
-        onCopyMetadata={() => {}}
-        onExportResponses={() => {}}
-        onExportMetadata={() => {}}
-        onUpdateChat={(data) => setNewConvoChat(prev => ({ ...prev, ...data }))}
       />
     )
   }
 
   // Show loading skeleton when activeGroupId is set but chats haven't loaded yet
   // This prevents briefly showing the comparison view during state transitions
-  // Matches ImmersiveChatView structure with max-w-[52rem] centered content
   if (activeGroupId && chats.length === 0) {
-    return (
-      <div className="h-full flex flex-col bg-background relative">
-        {/* Header skeleton - matches ImmersiveChatView header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-3 py-2 border-b bg-background/95 backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-8 rounded-lg" />
-            <Skeleton className="hidden md:block h-5 w-32" />
-          </div>
-          <div className="flex items-center gap-1">
-            <Skeleton className="h-8 w-8 rounded-md" />
-            <Skeleton className="h-8 w-8 rounded-md" />
-          </div>
-        </div>
-
-        {/* Messages area skeleton - centered with max-w-[52rem] like ImmersiveChatView */}
-        <div className="flex-1 overflow-y-auto pb-44">
-          <div className="max-w-[52rem] mx-auto px-6 py-8 space-y-6">
-            {/* User message skeleton */}
-            <div className="flex justify-end">
-              <div className="max-w-[85%] md:max-w-[75%]">
-                <div className="bg-primary/10 rounded-2xl rounded-tr-sm px-4 py-3 space-y-2">
-                  <Skeleton className="h-4 w-48" />
-                  <Skeleton className="h-4 w-32" />
-                </div>
-              </div>
-            </div>
-
-            {/* Assistant message skeleton */}
-            <div className="flex justify-start gap-3">
-              <Skeleton className="h-8 w-8 rounded-full flex-shrink-0 mt-1" />
-              <div className="max-w-[85%] md:max-w-[75%]">
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-64" />
-                  <Skeleton className="h-4 w-56" />
-                  <Skeleton className="h-4 w-40" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Input area skeleton - floating at bottom like ImmersiveChatView */}
-        <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
-          <div className="bg-background pb-3 md:pb-5 px-4 md:px-6 pointer-events-auto">
-            <div className="max-w-[52rem] mx-auto">
-              <div className="rounded-2xl bg-card/98 backdrop-blur-md border border-border/40 shadow-lg p-3">
-                <div className="flex items-center gap-2">
-                  <Skeleton className="h-10 flex-1 rounded-xl" />
-                  <Skeleton className="h-10 w-10 rounded-xl" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
+    return <ModelComparisonSkeleton />
   }
 
   // Render immersive mode when single chat and immersive is enabled (always on mobile)

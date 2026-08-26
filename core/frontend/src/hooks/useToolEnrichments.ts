@@ -11,13 +11,16 @@ import { useMemo } from 'react'
 import {
   extractEnrichedResults,
   extractBraveSearchMedia,
-  extractLocalSearchLocations
+  extractLocalSearchLocations,
+  type EnrichedResults as BraveEnrichedResults
 } from '@/utils/braveSearchExtractors'
 import {
   extractGeocodeLocations,
   extractNearbyPlaces,
-  extractDirections
+  extractDirections,
+  type DirectionsData
 } from '@/utils/googleMapsExtractors'
+import type { MediaItem } from '@/components/models/BraveSearchMediaCarousel'
 
 interface ToolExecution {
   tool_call: {
@@ -28,7 +31,7 @@ interface ToolExecution {
       arguments: string
     }
   }
-  result: any
+  result: unknown
   success: boolean | null
   isExecuting?: boolean
 }
@@ -40,23 +43,27 @@ interface Step {
   executions?: ToolExecution[]
 }
 
-interface EnrichedResults {
-  infobox?: any
-  faq?: any
-  discussions: any[]
-  locations: any[]
-  news_results: any[]
-  videos_results?: any[]
-  web_results: any[]
-  directions?: any
+/**
+ * Enrichments extracted from a step's tool executions: the Brave Search shape
+ * (infobox/faq/discussions/locations/news/web results) plus the Google Maps
+ * directions field only this hook's `get_directions` handling populates.
+ */
+export interface EnrichedResults extends BraveEnrichedResults {
+  directions?: DirectionsData
+}
+
+/** One Brave Search media carousel (images or videos) extracted from a step's tool executions. */
+export interface BraveMediaGroup {
+  items: MediaItem[]
+  title: string
 }
 
 /**
  * Extract Brave Search media (images/videos) from tool executions
  */
-export const useBraveSearchMedia = (steps: Step[]) => {
+export const useBraveSearchMedia = (steps: Step[]): BraveMediaGroup[] => {
   return useMemo(() => {
-    const allMedia: { items: any[]; title: string }[] = []
+    const allMedia: BraveMediaGroup[] = []
 
     steps.forEach((step) => {
       if (step.type === 'tool_executions' && step.executions) {
@@ -82,6 +89,18 @@ export const useBraveSearchMedia = (steps: Step[]) => {
 
     return allMedia
   }, [steps])
+}
+
+/**
+ * Google Maps extractors report a missing rating as `null`; the map UI's
+ * location shape only accepts `number | undefined`. Normalize at the boundary
+ * rather than widening the shared `EnrichedLocation` type to `null` (which
+ * the renderer doesn't accept either).
+ */
+function normalizeLocationRating<T extends { rating?: number | null }>(
+  location: T
+): Omit<T, 'rating'> & { rating?: number } {
+  return { ...location, rating: location.rating ?? undefined }
 }
 
 /**
@@ -143,7 +162,7 @@ export const useEnrichedResults = (steps: Step[]): EnrichedResults | null => {
             const locations = extractGeocodeLocations(execution)
             if (locations) {
               if (!enrichments) enrichments = { discussions: [], locations: [], news_results: [], web_results: [] }
-              enrichments.locations = [...(enrichments.locations || []), ...locations]
+              enrichments.locations = [...(enrichments.locations || []), ...locations.map(normalizeLocationRating)]
             }
           }
 
@@ -157,7 +176,7 @@ export const useEnrichedResults = (steps: Step[]): EnrichedResults | null => {
             const locations = extractNearbyPlaces(execution)
             if (locations) {
               if (!enrichments) enrichments = { discussions: [], locations: [], news_results: [], web_results: [] }
-              enrichments.locations = [...(enrichments.locations || []), ...locations]
+              enrichments.locations = [...(enrichments.locations || []), ...locations.map(normalizeLocationRating)]
             }
           }
 

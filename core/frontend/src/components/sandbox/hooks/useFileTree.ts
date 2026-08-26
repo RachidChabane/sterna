@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast'
 import { fsAPI } from '@/api/fs'
 import { codeSessionApi } from '@/api/codeSession'
 import type { FileNode } from '../types'
+import { toErrorMessage } from '@/utils/errorMessages'
 
 // Files and directories to hide from the file tree
 const HIDDEN_FILES = new Set([
@@ -185,11 +186,11 @@ export function useFileTree({
       if (result.success && result.files) {
         return filterHiddenFiles(result.files, showHiddenFiles)
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to load directory contents:', error)
       toast({
         title: 'Error',
-        description: `Failed to load directory: ${error.message}`,
+        description: `Failed to load directory: ${toErrorMessage(error)}`,
         variant: 'destructive',
       })
     }
@@ -266,7 +267,7 @@ export function useFileTree({
       }
 
       return result
-    } catch (error: any) {
+    } catch (error) {
       console.error('[useFileTree] Failed to restore workspace:', error)
       // Don't show error toast - workspace might not exist yet, which is fine
       setHasRestoredWorkspace(true)
@@ -314,11 +315,11 @@ export function useFileTree({
           variant: 'destructive',
         })
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to load file tree:', error)
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load files',
+        description: toErrorMessage(error) || 'Failed to load files',
         variant: 'destructive',
       })
     } finally {
@@ -430,7 +431,7 @@ export function useFileTree({
       }
 
       return result
-    } catch (error: any) {
+    } catch (error) {
       console.error('[useFileTree] Failed to save workspace:', error)
       return null
     }

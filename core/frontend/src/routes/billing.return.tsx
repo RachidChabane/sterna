@@ -5,6 +5,7 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { billingApi } from '@/api/billing'
 import type { SyncFromSessionResponse } from '@/api/types'
+import { getApiErrorData } from '@/utils/errorMessages'
 
 type Search = { session_id?: string }
 
@@ -37,11 +38,9 @@ function BillingReturn() {
     billingApi
       .syncFromSession(session_id)
       .then((data) => setState({ status: 'success', data }))
-      .catch((err: any) => {
-        const message =
-          err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          'Could not confirm subscription.'
+      .catch((err: unknown) => {
+        const data = getApiErrorData(err)
+        const message = data?.message || data?.error || 'Could not confirm subscription.'
         setState({ status: 'error', message })
       })
   }, [session_id])

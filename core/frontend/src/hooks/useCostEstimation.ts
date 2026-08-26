@@ -8,20 +8,20 @@
  */
 
 import { useState, useCallback } from 'react'
-import { llmApi } from '@/api/llm'
+import { llmApi, normalizeCostEstimate, type NormalizedCostEstimate } from '@/api/llm'
 import { buildTextFromTextAttachments } from '@/utils/tokenEstimate'
 import type { Attachment } from '@/components/models/types'
 
 interface UseCostEstimationReturn {
-  estimatedCosts: any | null
-  setEstimatedCosts: (costs: any | null) => void
+  estimatedCosts: NormalizedCostEstimate | null
+  setEstimatedCosts: (costs: NormalizedCostEstimate | null) => void
   loadingEstimate: boolean
   estimateCosts: (modelIds: string[], typedText: string, attachments: Attachment[]) => Promise<void>
   clearEstimate: () => void
 }
 
 export function useCostEstimation(): UseCostEstimationReturn {
-  const [estimatedCosts, setEstimatedCosts] = useState<any | null>(null)
+  const [estimatedCosts, setEstimatedCosts] = useState<NormalizedCostEstimate | null>(null)
   const [loadingEstimate, setLoadingEstimate] = useState(false)
 
   const estimateCosts = useCallback(async (
@@ -49,8 +49,8 @@ export function useCostEstimation(): UseCostEstimationReturn {
         files_text: attachmentText || undefined,
       })
 
-      setEstimatedCosts(response.data)
-    } catch (error: any) {
+      setEstimatedCosts(normalizeCostEstimate(response.data))
+    } catch (error) {
       console.error('Failed to estimate costs:', error)
       setEstimatedCosts(null)
     } finally {

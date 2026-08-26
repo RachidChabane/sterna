@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { mcpApi, type MCPDiscoveredServer, type MCPDiscoveryHistoryEntry } from '@/api/mcp'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 import { cn } from '@/lib/utils'
 
 interface AIDiscoveryDialogProps {
@@ -91,9 +92,9 @@ export function AIDiscoveryDialog({
 
       // Refresh history (new search was saved by backend)
       fetchHistory()
-    } catch (error: any) {
+    } catch (error) {
       console.error('AI discovery failed:', error)
-      const errorMsg = error.response?.data?.error || error.message || 'Discovery failed'
+      const errorMsg = getApiErrorMessage(error, 'Discovery failed')
       toast.error(errorMsg)
       setPreconfiguredResults([])
       setExternalResults([])

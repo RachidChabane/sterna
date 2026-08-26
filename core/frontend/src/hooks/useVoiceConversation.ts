@@ -22,7 +22,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useTTS } from './useTTS'
 import { useSpeechToText, type AudioLevelEntry } from './useSpeechToText'
-import type { Message } from '@/components/models/types'
+import type { Message, MessageContentPart } from '@/components/models/types'
 
 /**
  * Voice conversation system prompt that guides the AI to respond naturally
@@ -93,8 +93,8 @@ function extractTextFromMessage(message: Message): string {
   // Handle array content (multimodal)
   if (Array.isArray(message.content)) {
     return message.content
-      .filter((part: any) => part.type === 'text')
-      .map((part: any) => part.text)
+      .filter((part): part is Extract<MessageContentPart, { type: 'text' }> => part.type === 'text')
+      .map((part) => part.text)
       .join('\n')
   }
   return ''

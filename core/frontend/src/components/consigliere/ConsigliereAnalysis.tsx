@@ -28,9 +28,10 @@ import type {
   ModelRecommendation,
   AnalysisStep,
   AnalysisStepStatus,
+  SerializedAttachmentMeta,
 } from '@/api/consigliere'
 import type { ModelCatalogEntry, ModelFavorite } from '@/types/models'
-import type { ChatGroup } from '@/components/models/types'
+import type { ChatGroup, Message } from '@/components/models/types'
 import useModelStore from '@/store/modelStore'
 import { Image as ImageIcon, FileText } from 'lucide-react'
 import { ModelIcon } from '@/components/models/ModelIcon'
@@ -192,7 +193,9 @@ export function ConsigliereAnalysis({
     if (!chatGroup) return summary
     for (const chat of chatGroup.chats || []) {
       for (const msg of chat.messages || []) {
-        const atts = (msg as any).attachments_meta || []
+        // Persisted history messages carry this backend-added field; the
+        // `Message` type (shared with live, in-flight messages) doesn't model it.
+        const atts = (msg as Message & { attachments_meta?: SerializedAttachmentMeta[] }).attachments_meta || []
         for (const a of atts) {
           if (a.type === 'image') summary.images += 1
           else if (a.type === 'file') {

@@ -40,6 +40,7 @@ import { SparkRenderer, type SparkAsset } from './SparkRenderer'
 import { sparksAPI } from '@/api/sparks'
 import { useUIStore } from '@/store/uiStore'
 import { useToast } from '@/hooks/use-toast'
+import { fetchStream } from '@/api/transport'
 import { useIgniteDeploy, IgniteMenuItems, IgniteDialogs } from '@/components/sparks/IgniteButton'
 
 interface SparkData {
@@ -182,10 +183,7 @@ export function SparkFullscreenOverlay({
   const handleDownload = useCallback(() => {
     if (!activeSpark) return
     if (activeSpark.download_url) {
-      const token = localStorage.getItem('access_token')
-      fetch(activeSpark.download_url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      fetchStream(activeSpark.download_url)
         .then((r) => r.blob())
         .then((blob) => {
           const ext: Record<string, string> = { csv: 'csv', ics: 'ics', pdf: 'pdf', docx: 'docx', xlsx: 'xlsx' }

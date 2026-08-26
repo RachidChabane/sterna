@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Export the backend's per-tool plugin registry (llm.agent_core.registry.
+# discover_tools(), sourced from every module in llm.agent_core.tools)
+# deterministically to
+# core/frontend/src/api/generated/agent-core-tool-ids.json — the list the
+# frontend's tool-renderer coverage test checks against.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+output_path="$repo_root/core/frontend/src/api/generated/agent-core-tool-ids.json"
+mkdir -p "$(dirname "$output_path")"
+
+generator_log="$(mktemp)"
+trap 'rm -f "$generator_log"' EXIT
+
+if ! (
+  cd "$repo_root/core"
+  DJANGO_SETTINGS_MODULE=sterna.settings.test "$repo_root/.venv/bin/python" - "$output_path" <<'PYEOF'
+import json
+import sys
+
+import django
+
+django.setup()
+
+from llm.agent_core.registry import discover_tools
+
+output_path = sys.argv[1]
+tool_ids = sorted(discover_tools().keys())
+
+with open(output_path, "w") as fh:
+    json.dump(tool_ids, fh, indent=2)
+    fh.write("\n")
+PYEOF
+) >"$generator_log" 2>&1; then
+  cat "$generator_log" >&2
+  exit 1
+fi
+
+echo "==> Wrote agent_core tool ids to ${output_path#"$repo_root"/}"

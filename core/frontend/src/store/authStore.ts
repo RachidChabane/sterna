@@ -7,16 +7,17 @@ import { useDevAuth, devLogin, devRegister } from '@/api/dev-auth'
 import { clearUserStorage, migrateToUserScopedStorage, cleanupLegacyStorage, clearUserIdCache } from '@/lib/userScopedStorage'
 import { preferencesSync } from '@/lib/preferencesSync'
 import { clearCurrentUserCache } from '@/utils/attachmentCache'
+import { toErrorMessage, hasErrorResponse } from '@/utils/errorMessages'
 
 /**
  * Extract a user-friendly error message from an API error response
  */
-function extractErrorMessage(error: any, fallback: string): string {
-  const data = error.response?.data
+function extractErrorMessage(error: unknown, fallback: string): string {
+  const data: unknown = hasErrorResponse(error) ? error.response?.data : undefined
 
   if (!data) {
     // Network error or no response
-    if (error.message?.includes('Network Error')) {
+    if (toErrorMessage(error).includes('Network Error')) {
       return 'Unable to connect to the server. Please check your internet connection.'
     }
     return fallback
@@ -27,29 +28,31 @@ function extractErrorMessage(error: any, fallback: string): string {
     return data
   }
 
+  const fields = data as Record<string, unknown>
+
   // Common DRF error formats
-  if (data.detail) {
-    return data.detail
+  if (typeof fields.detail === 'string') {
+    return fields.detail
   }
 
-  if (data.message) {
-    return data.message
+  if (typeof fields.message === 'string') {
+    return fields.message
   }
 
-  if (data.error) {
-    return data.error
+  if (typeof fields.error === 'string') {
+    return fields.error
   }
 
   // Non-field errors (e.g., invalid credentials)
-  if (data.non_field_errors) {
-    return Array.isArray(data.non_field_errors)
-      ? data.non_field_errors.join(' ')
-      : data.non_field_errors
+  if (fields.non_field_errors) {
+    return Array.isArray(fields.non_field_errors)
+      ? fields.non_field_errors.join(' ')
+      : String(fields.non_field_errors)
   }
 
   // Field-specific errors - combine them
   const fieldErrors: string[] = []
-  for (const [field, errors] of Object.entries(data)) {
+  for (const [field, errors] of Object.entries(fields)) {
     if (Array.isArray(errors)) {
       const fieldName = field.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())
       fieldErrors.push(`${fieldName}: ${errors.join(', ')}`)
@@ -165,7 +168,7 @@ export const useAuthStore = create<AuthState>()(
                 })
             })
           })
-        } catch (error: any) {
+        } catch (error) {
           const errorMessage = extractErrorMessage(error, 'Unable to sign in. Please check your email and password.')
           set({
             error: errorMessage,
@@ -191,7 +194,7 @@ export const useAuthStore = create<AuthState>()(
             })
           }
           set({ isLoading: false })
-        } catch (error: any) {
+        } catch (error) {
           const errorMessage = extractErrorMessage(error, 'Unable to create account. Please try again.')
           set({
             error: errorMessage,
@@ -280,16 +283,16 @@ export const useAuthStore = create<AuthState>()(
             user: response.data,
             isAuthenticated: true,
           })
-        } catch (error: any) {
+        } catch (error) {
           console.error('[AuthStore] Failed to fetch profile:', error)
           console.error('[AuthStore] Error details:', {
-            status: error.response?.status,
-            data: error.response?.data,
-            message: error.message,
+            status: hasErrorResponse(error) ? error.response?.status : undefined,
+            data: hasErrorResponse(error) ? error.response?.data : undefined,
+            message: toErrorMessage(error),
           })
 
           // Log specific warning for 401 errors
-          if (error.response?.status === 401) {
+          if (hasErrorResponse(error) && error.response?.status === 401) {
             console.warn('[AuthStore] Received 401 when fetching profile - token may be invalid')
             console.warn('[AuthStore] Axios interceptor will handle token refresh and redirect')
           }

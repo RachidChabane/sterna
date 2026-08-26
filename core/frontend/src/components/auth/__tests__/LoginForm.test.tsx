@@ -26,7 +26,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 vi.mock('@/hooks/use-toast', () => ({
-  toast: (...args: any[]) => mockToast(...args),
+  toast: (...args: unknown[]) => mockToast(...args),
   useToast: () => ({ toast: mockToast }),
 }))
 

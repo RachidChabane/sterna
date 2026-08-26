@@ -32,7 +32,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 vi.mock('@/hooks/use-toast', () => ({
-  toast: (...args: any[]) => mockToast(...args),
+  toast: (...args: unknown[]) => mockToast(...args),
   useToast: () => ({ toast: mockToast }),
 }))
 
@@ -57,7 +57,7 @@ vi.mock('@/api/endpoints', () => ({
   authApi: {
     googleAuth: vi.fn(),
     // Backend-issued OAuth state nonce (task-19, 1b8ec2a)
-    requestOAuthState: (...args: any[]) => mockRequestOAuthState(...args),
+    requestOAuthState: (...args: unknown[]) => mockRequestOAuthState(...args),
   },
 }))
 
@@ -199,7 +199,7 @@ describe('SignupForm', () => {
     await user.click(screen.getByLabelText(/terms of service/i))
     await user.click(screen.getByRole('button', { name: /create account/i }))
     await waitFor(() => expect(mockRegister).toHaveBeenCalled())
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/pricing' })
+    expect(mockNavigate).toHaveBeenCalledWith({ href: '/pricing' })
   })
 
   it('ignores a protocol-relative return_to and falls back to /verify-email', async () => {

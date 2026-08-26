@@ -1,4 +1,5 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
+import { hasErrorResponse } from '@/utils/errorMessages'
 import { useState, useEffect } from 'react'
 import { Turnstile } from '@marsidev/react-turnstile'
 import { useAuthStore } from '@/store/authStore'
@@ -175,16 +176,16 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
         return_to.startsWith('/') &&
         !return_to.startsWith('//')
       ) {
-        navigate({ to: return_to as any })
+        navigate({ href: return_to })
       } else {
         navigate({
           to: '/verify-email',
           search: { pending: 1 as const, email: sanitizedEmail, token: undefined },
         })
       }
-    } catch (err: any) {
+    } catch (err) {
       // Map field errors from backend response
-      const data = err.response?.data
+      const data = hasErrorResponse(err) ? (err.response?.data as Record<string, unknown> | undefined) : undefined
       if (data && typeof data === 'object') {
         const next: Record<string, string> = {}
         if (Array.isArray(data.email)) next.email = data.email[0]
@@ -196,9 +197,9 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
         }
       }
       const message =
-        err.response?.data?.detail ||
-        err.response?.data?.email?.[0] ||
-        err.response?.data?.message ||
+        (typeof data?.detail === 'string' && data.detail) ||
+        (Array.isArray(data?.email) && data.email[0]) ||
+        (typeof data?.message === 'string' && data.message) ||
         'An error occurred while creating your account. Please try again.'
       toast({
         title: 'Sign up failed',
@@ -258,7 +259,7 @@ export function SignupForm({ onSuccess }: SignupFormProps) {
     }
   }, [toast])
 
-  const handleGoogleCallback = async (response: any) => {
+  const handleGoogleCallback = async (response: { credential?: string }) => {
     if (!response.credential) {
       toast({
         title: 'Authentication failed',

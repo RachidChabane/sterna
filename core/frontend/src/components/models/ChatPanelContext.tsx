@@ -6,7 +6,7 @@
  */
 
 import { createContext, useContext, type ReactNode } from 'react'
-import type { Model, Message, Attachment, FileAttachment } from './types'
+import type { Model, Message, Attachment, FileAttachment, ToolExecutedHandler } from './types'
 import type { CachedAttachment } from '@/utils/attachmentCache'
 import type { User } from '@/api/types'
 
@@ -33,7 +33,7 @@ interface ChatPanelContextValue {
 
   // Message actions
   onUpdateMessages?: (messages: Message[]) => void
-  onToolExecuted?: (toolCallId: string, toolName: string, result: any) => void
+  onToolExecuted?: ToolExecutedHandler
   onRetry: (assistantMessageIndex: number) => void
   onEditMessage: (messageIndex: number, newContent: string) => void
 

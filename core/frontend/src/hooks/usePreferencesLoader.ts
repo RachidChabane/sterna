@@ -14,7 +14,33 @@ import { useNavigationStore } from '../store/navigationStore'
 import { useOnboardingStore } from '../store/onboardingStore'
 import { useUIStore } from '../store/uiStore'
 import { useSettingsStore, SETTINGS_PREFERENCE_KEYS } from '../store/settingsStore'
+import type {
+  TTSSettings,
+  ChatSettings,
+  AccessibilitySettings,
+  PrivacySettings,
+  InstructionsSettings,
+  STTSettings,
+  WatermarkSettings,
+  WatermarkPosition,
+} from '../store/settingsStore'
+import type { CodeThemeId } from '../constants/codeThemes'
+import { CODE_THEMES } from '../constants/codeThemes'
+import type { ModelCatalogEntry, ModelFavorite, RecentModel } from '../types/models'
+import type { TTSModel } from '../types/voiceRoom'
 import { useThemeStore } from '../store/themeStore'
+
+/** The subset of settings-store state a single backend-preferences load can patch in one `setState()` call. */
+interface SettingsPatch {
+  tts?: TTSSettings
+  chat?: ChatSettings
+  accessibility?: AccessibilitySettings
+  privacy?: PrivacySettings
+  instructions?: InstructionsSettings
+  stt?: STTSettings
+  watermark?: WatermarkSettings
+  codeTheme?: CodeThemeId
+}
 
 /**
  * Preference key mapping
@@ -46,14 +72,59 @@ export const PREFERENCE_KEYS = {
   ONBOARDING_SAMPLE_EVALUATION_RUN: 'onboarding.sample_evaluation_run',
 }
 
+// --- Narrowing for backend preference values ---------------------------------
+// The backend stores preference values opaquely; each reader below accepts a
+// value only when it matches the type the store expects, so a corrupt or
+// stale payload is skipped instead of poisoning store state.
+
+const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean'
+const isNumber = (value: unknown): value is number => typeof value === 'number'
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string')
+
+const FONT_SIZES: readonly AccessibilitySettings['fontSize'][] = ['small', 'medium', 'large']
+const isFontSize = (value: unknown): value is AccessibilitySettings['fontSize'] =>
+  (FONT_SIZES as readonly unknown[]).includes(value)
+
+const WATERMARK_POSITIONS: readonly WatermarkPosition[] = [
+  'bottom-right',
+  'bottom-left',
+  'top-right',
+  'top-left',
+]
+const isWatermarkPosition = (value: unknown): value is WatermarkPosition =>
+  (WATERMARK_POSITIONS as readonly unknown[]).includes(value)
+
+const TTS_MODELS: readonly TTSModel[] = [
+  'tts-1',
+  'tts-1-hd',
+  'eleven_v3',
+  'eleven_turbo_v2_5',
+  'eleven_flash_v2_5',
+  'eleven_multilingual_v2',
+]
+const isTTSModel = (value: unknown): value is TTSModel =>
+  (TTS_MODELS as readonly unknown[]).includes(value)
+
+const isCodeThemeId = (value: unknown): value is CodeThemeId =>
+  CODE_THEMES.some((theme) => theme.id === value)
+
+// A models preference is written by this same client from its own store state
+// and round-trips through the backend unchanged, so a well-formed container is
+// read back as the store's element type.
+const isStoredModelList = <T>(value: unknown): value is T[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'object' && item !== null)
+const isStoredModelEntry = (value: unknown): value is ModelCatalogEntry =>
+  typeof value === 'object' && value !== null
+
 /**
  * Standalone function to load preferences from backend
  * (can be called from non-React contexts like stores)
  */
 export const loadPreferencesFromBackend = async (): Promise<void> => {
   try {
-    
-
     // Load all preferences from backend
     const backendPrefs = await preferencesSync.loadAll()
 
@@ -63,12 +134,10 @@ export const loadPreferencesFromBackend = async (): Promise<void> => {
     if (!hasBackendData) {
       // Backend empty - no need to populate stores
       // Migration will happen in usePreferencesLoader if needed
-      
       return
     }
 
     // Backend has data - populate stores from backend
-    
 
     // Import stores dynamically to avoid circular dependencies
     const { default: useModelStore } = await import('../store/modelStore')
@@ -79,43 +148,37 @@ export const loadPreferencesFromBackend = async (): Promise<void> => {
 
     // Models - Load from backend WITHOUT triggering sync
     // Use setState() directly to avoid calling actions which would trigger another sync
-    if (backendPrefs[PREFERENCE_KEYS.MODELS_FAVORITES]) {
-      useModelStore.setState({
-        favorites: backendPrefs[PREFERENCE_KEYS.MODELS_FAVORITES]
-      })
-      
+    const favorites = backendPrefs[PREFERENCE_KEYS.MODELS_FAVORITES]
+    if (isStoredModelList<ModelFavorite>(favorites)) {
+      useModelStore.setState({ favorites })
     }
 
-    if (backendPrefs[PREFERENCE_KEYS.MODELS_RECENT]) {
-      useModelStore.setState({
-        recentModels: backendPrefs[PREFERENCE_KEYS.MODELS_RECENT]
-      })
-      
+    const recentModels = backendPrefs[PREFERENCE_KEYS.MODELS_RECENT]
+    if (isStoredModelList<RecentModel>(recentModels)) {
+      useModelStore.setState({ recentModels })
     }
 
-    if (backendPrefs[PREFERENCE_KEYS.MODELS_RECENT_CHAT]) {
-      useModelStore.setState({
-        recentChatModels: backendPrefs[PREFERENCE_KEYS.MODELS_RECENT_CHAT]
-      })
-      
+    const recentChatModels = backendPrefs[PREFERENCE_KEYS.MODELS_RECENT_CHAT]
+    if (isStoredModelList<RecentModel>(recentChatModels)) {
+      useModelStore.setState({ recentChatModels })
     }
 
-    if (backendPrefs[PREFERENCE_KEYS.MODELS_CURRENT]) {
-      useModelStore.setState({
-        currentModel: backendPrefs[PREFERENCE_KEYS.MODELS_CURRENT]
-      })
-      
+    const currentModel = backendPrefs[PREFERENCE_KEYS.MODELS_CURRENT]
+    if (isStoredModelEntry(currentModel)) {
+      useModelStore.setState({ currentModel })
     }
 
     // UI
-    if (backendPrefs[PREFERENCE_KEYS.UI_SIDEBAR_OPEN] !== undefined) {
-      useUIStore.getState().setSidebarOpen(backendPrefs[PREFERENCE_KEYS.UI_SIDEBAR_OPEN])
+    const sidebarOpen = backendPrefs[PREFERENCE_KEYS.UI_SIDEBAR_OPEN]
+    if (isBoolean(sidebarOpen)) {
+      useUIStore.getState().setSidebarOpen(sidebarOpen)
     }
 
     // Note: UI_SIDEBAR_COLLAPSED is only stored in localStorage, not synced to backend
 
-    if (backendPrefs[PREFERENCE_KEYS.UI_NAVIGATION_ORDER]) {
-      useNavigationStore.getState().setNavigationOrder(backendPrefs[PREFERENCE_KEYS.UI_NAVIGATION_ORDER])
+    const navigationOrder = backendPrefs[PREFERENCE_KEYS.UI_NAVIGATION_ORDER]
+    if (isStringArray(navigationOrder)) {
+      useNavigationStore.getState().setNavigationOrder(navigationOrder)
     }
 
     // Theme - Load from backend and apply (skipSync=true to avoid re-syncing)
@@ -124,180 +187,202 @@ export const loadPreferencesFromBackend = async (): Promise<void> => {
       const theme = backendPrefs[PREFERENCE_KEYS.UI_THEME]
       if (theme === 'light' || theme === 'dark' || theme === 'system') {
         useThemeStore.getState().setTheme(theme, true) // skipSync=true
-        
       }
     }
 
     // Onboarding
-    if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_CURRENT_STEP] !== undefined) {
-      useOnboardingStore.getState().setCurrentStep(backendPrefs[PREFERENCE_KEYS.ONBOARDING_CURRENT_STEP])
+    const currentStep = backendPrefs[PREFERENCE_KEYS.ONBOARDING_CURRENT_STEP]
+    if (isNumber(currentStep)) {
+      useOnboardingStore.getState().setCurrentStep(currentStep)
     }
 
-    if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_COMPLETED] !== undefined) {
-      if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_COMPLETED]) {
-        useOnboardingStore.getState().completeOnboarding()
-      }
+    if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_COMPLETED]) {
+      useOnboardingStore.getState().completeOnboarding()
     }
 
     if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_SKIPPED_AT]) {
       useOnboardingStore.getState().skipOnboarding()
     }
 
-    if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_API_KEY_CONFIGURED] !== undefined) {
-      useOnboardingStore.getState().setApiKeyConfigured(
-        backendPrefs[PREFERENCE_KEYS.ONBOARDING_API_KEY_CONFIGURED]
-      )
+    const apiKeyConfigured = backendPrefs[PREFERENCE_KEYS.ONBOARDING_API_KEY_CONFIGURED]
+    if (isBoolean(apiKeyConfigured)) {
+      useOnboardingStore.getState().setApiKeyConfigured(apiKeyConfigured)
     }
 
-    if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_SAMPLE_EVALUATION_RUN] !== undefined) {
-      useOnboardingStore.getState().setSampleEvaluationRun(
-        backendPrefs[PREFERENCE_KEYS.ONBOARDING_SAMPLE_EVALUATION_RUN]
-      )
+    const sampleEvaluationRun = backendPrefs[PREFERENCE_KEYS.ONBOARDING_SAMPLE_EVALUATION_RUN]
+    if (isBoolean(sampleEvaluationRun)) {
+      useOnboardingStore.getState().setSampleEvaluationRun(sampleEvaluationRun)
     }
 
     // Settings - Load from backend using setState() to avoid triggering sync
-    const settingsState: Record<string, any> = {}
+    const settingsState: SettingsPatch = {}
 
     // TTS Settings
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_ENABLED] !== undefined) {
+    const ttsEnabled = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_ENABLED]
+    if (isBoolean(ttsEnabled)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.enabled = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_ENABLED]
+      settingsState.tts.enabled = ttsEnabled
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_AUTO_READ] !== undefined) {
+    const ttsAutoRead = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_AUTO_READ]
+    if (isBoolean(ttsAutoRead)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.autoRead = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_AUTO_READ]
+      settingsState.tts.autoRead = ttsAutoRead
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_VOICE_ID]) {
+    const ttsVoiceId = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_VOICE_ID]
+    if (isNonEmptyString(ttsVoiceId)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.voiceId = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_VOICE_ID]
+      settingsState.tts.voiceId = ttsVoiceId
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_VOICE_NAME]) {
+    const ttsVoiceName = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_VOICE_NAME]
+    if (isNonEmptyString(ttsVoiceName)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.voiceName = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_VOICE_NAME]
+      settingsState.tts.voiceName = ttsVoiceName
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_LANGUAGE]) {
+    const ttsLanguage = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_LANGUAGE]
+    if (isNonEmptyString(ttsLanguage)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.language = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_LANGUAGE]
+      settingsState.tts.language = ttsLanguage
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_MODEL]) {
+    const ttsModel = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_MODEL]
+    if (isTTSModel(ttsModel)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.ttsModel = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_MODEL]
+      settingsState.tts.ttsModel = ttsModel
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_STABILITY] !== undefined) {
+    const ttsStability = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_STABILITY]
+    if (isNumber(ttsStability)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.stability = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_STABILITY]
+      settingsState.tts.stability = ttsStability
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_SIMILARITY_BOOST] !== undefined) {
+    const ttsSimilarityBoost = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_SIMILARITY_BOOST]
+    if (isNumber(ttsSimilarityBoost)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.similarityBoost = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_SIMILARITY_BOOST]
+      settingsState.tts.similarityBoost = ttsSimilarityBoost
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_STYLE] !== undefined) {
+    const ttsStyle = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_STYLE]
+    if (isNumber(ttsStyle)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.style = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_STYLE]
+      settingsState.tts.style = ttsStyle
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_SPEED] !== undefined) {
+    const ttsSpeed = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_SPEED]
+    if (isNumber(ttsSpeed)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.speed = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_SPEED]
+      settingsState.tts.speed = ttsSpeed
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_USE_SPEAKER_BOOST] !== undefined) {
+    const ttsUseSpeakerBoost = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_USE_SPEAKER_BOOST]
+    if (isBoolean(ttsUseSpeakerBoost)) {
       settingsState.tts = settingsState.tts || { ...useSettingsStore.getState().tts }
-      settingsState.tts.useSpeakerBoost = backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_USE_SPEAKER_BOOST]
+      settingsState.tts.useSpeakerBoost = ttsUseSpeakerBoost
     }
 
     // Chat Settings
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_COMPACT_MODE] !== undefined) {
+    const chatCompactMode = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_COMPACT_MODE]
+    if (isBoolean(chatCompactMode)) {
       settingsState.chat = settingsState.chat || { ...useSettingsStore.getState().chat }
-      settingsState.chat.compactMode = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_COMPACT_MODE]
+      settingsState.chat.compactMode = chatCompactMode
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_TIMESTAMPS] !== undefined) {
+    const chatShowTimestamps = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_TIMESTAMPS]
+    if (isBoolean(chatShowTimestamps)) {
       settingsState.chat = settingsState.chat || { ...useSettingsStore.getState().chat }
-      settingsState.chat.showTimestamps = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_TIMESTAMPS]
+      settingsState.chat.showTimestamps = chatShowTimestamps
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_MODEL_NAME] !== undefined) {
+    const chatShowModelName = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_MODEL_NAME]
+    if (isBoolean(chatShowModelName)) {
       settingsState.chat = settingsState.chat || { ...useSettingsStore.getState().chat }
-      settingsState.chat.showModelName = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_MODEL_NAME]
+      settingsState.chat.showModelName = chatShowModelName
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_ENTER_TO_SEND] !== undefined) {
+    const chatEnterToSend = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_ENTER_TO_SEND]
+    if (isBoolean(chatEnterToSend)) {
       settingsState.chat = settingsState.chat || { ...useSettingsStore.getState().chat }
-      settingsState.chat.enterToSend = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_ENTER_TO_SEND]
+      settingsState.chat.enterToSend = chatEnterToSend
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_STREAM_RESPONSES] !== undefined) {
+    const chatStreamResponses = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_STREAM_RESPONSES]
+    if (isBoolean(chatStreamResponses)) {
       settingsState.chat = settingsState.chat || { ...useSettingsStore.getState().chat }
-      settingsState.chat.streamResponses = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_STREAM_RESPONSES]
+      settingsState.chat.streamResponses = chatStreamResponses
     }
 
     // Accessibility Settings
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.ACCESSIBILITY_FONT_SIZE]) {
+    const accessibilityFontSize = backendPrefs[SETTINGS_PREFERENCE_KEYS.ACCESSIBILITY_FONT_SIZE]
+    if (isFontSize(accessibilityFontSize)) {
       settingsState.accessibility = settingsState.accessibility || { ...useSettingsStore.getState().accessibility }
-      settingsState.accessibility.fontSize = backendPrefs[SETTINGS_PREFERENCE_KEYS.ACCESSIBILITY_FONT_SIZE]
+      settingsState.accessibility.fontSize = accessibilityFontSize
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.ACCESSIBILITY_REDUCE_MOTION] !== undefined) {
+    const accessibilityReduceMotion = backendPrefs[SETTINGS_PREFERENCE_KEYS.ACCESSIBILITY_REDUCE_MOTION]
+    if (isBoolean(accessibilityReduceMotion)) {
       settingsState.accessibility = settingsState.accessibility || { ...useSettingsStore.getState().accessibility }
-      settingsState.accessibility.reduceMotion = backendPrefs[SETTINGS_PREFERENCE_KEYS.ACCESSIBILITY_REDUCE_MOTION]
+      settingsState.accessibility.reduceMotion = accessibilityReduceMotion
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.ACCESSIBILITY_HIGH_CONTRAST] !== undefined) {
+    const accessibilityHighContrast = backendPrefs[SETTINGS_PREFERENCE_KEYS.ACCESSIBILITY_HIGH_CONTRAST]
+    if (isBoolean(accessibilityHighContrast)) {
       settingsState.accessibility = settingsState.accessibility || { ...useSettingsStore.getState().accessibility }
-      settingsState.accessibility.highContrast = backendPrefs[SETTINGS_PREFERENCE_KEYS.ACCESSIBILITY_HIGH_CONTRAST]
+      settingsState.accessibility.highContrast = accessibilityHighContrast
     }
 
     // Privacy Settings
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.PRIVACY_SAVE_HISTORY] !== undefined) {
+    const privacySaveHistory = backendPrefs[SETTINGS_PREFERENCE_KEYS.PRIVACY_SAVE_HISTORY]
+    if (isBoolean(privacySaveHistory)) {
       settingsState.privacy = settingsState.privacy || { ...useSettingsStore.getState().privacy }
-      settingsState.privacy.saveConversationHistory = backendPrefs[SETTINGS_PREFERENCE_KEYS.PRIVACY_SAVE_HISTORY]
+      settingsState.privacy.saveConversationHistory = privacySaveHistory
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.PRIVACY_ANALYTICS] !== undefined) {
+    const privacyAnalytics = backendPrefs[SETTINGS_PREFERENCE_KEYS.PRIVACY_ANALYTICS]
+    if (isBoolean(privacyAnalytics)) {
       settingsState.privacy = settingsState.privacy || { ...useSettingsStore.getState().privacy }
-      settingsState.privacy.analyticsEnabled = backendPrefs[SETTINGS_PREFERENCE_KEYS.PRIVACY_ANALYTICS]
+      settingsState.privacy.analyticsEnabled = privacyAnalytics
     }
 
     // Instructions Settings
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.INSTRUCTIONS_ENABLED] !== undefined) {
+    const instructionsEnabled = backendPrefs[SETTINGS_PREFERENCE_KEYS.INSTRUCTIONS_ENABLED]
+    if (isBoolean(instructionsEnabled)) {
       settingsState.instructions = settingsState.instructions || { ...useSettingsStore.getState().instructions }
-      settingsState.instructions.enabled = backendPrefs[SETTINGS_PREFERENCE_KEYS.INSTRUCTIONS_ENABLED]
+      settingsState.instructions.enabled = instructionsEnabled
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.INSTRUCTIONS_CONTENT]) {
+    const instructionsContent = backendPrefs[SETTINGS_PREFERENCE_KEYS.INSTRUCTIONS_CONTENT]
+    if (isNonEmptyString(instructionsContent)) {
       settingsState.instructions = settingsState.instructions || { ...useSettingsStore.getState().instructions }
-      settingsState.instructions.content = backendPrefs[SETTINGS_PREFERENCE_KEYS.INSTRUCTIONS_CONTENT]
+      settingsState.instructions.content = instructionsContent
     }
 
     // STT Settings
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.STT_LANGUAGE]) {
+    const sttLanguage = backendPrefs[SETTINGS_PREFERENCE_KEYS.STT_LANGUAGE]
+    if (isNonEmptyString(sttLanguage)) {
       settingsState.stt = settingsState.stt || { ...useSettingsStore.getState().stt }
-      settingsState.stt.language = backendPrefs[SETTINGS_PREFERENCE_KEYS.STT_LANGUAGE]
+      settingsState.stt.language = sttLanguage
     }
 
     // Watermark Settings
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.WATERMARK_ENABLED] !== undefined) {
+    const watermarkEnabled = backendPrefs[SETTINGS_PREFERENCE_KEYS.WATERMARK_ENABLED]
+    if (isBoolean(watermarkEnabled)) {
       settingsState.watermark = settingsState.watermark || { ...useSettingsStore.getState().watermark }
-      settingsState.watermark.enabled = backendPrefs[SETTINGS_PREFERENCE_KEYS.WATERMARK_ENABLED]
+      settingsState.watermark.enabled = watermarkEnabled
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.WATERMARK_POSITION]) {
+    const watermarkPosition = backendPrefs[SETTINGS_PREFERENCE_KEYS.WATERMARK_POSITION]
+    if (isWatermarkPosition(watermarkPosition)) {
       settingsState.watermark = settingsState.watermark || { ...useSettingsStore.getState().watermark }
-      settingsState.watermark.position = backendPrefs[SETTINGS_PREFERENCE_KEYS.WATERMARK_POSITION]
+      settingsState.watermark.position = watermarkPosition
     }
 
     // Code Theme
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.CODE_THEME]) {
-      settingsState.codeTheme = backendPrefs[SETTINGS_PREFERENCE_KEYS.CODE_THEME]
+    const codeTheme = backendPrefs[SETTINGS_PREFERENCE_KEYS.CODE_THEME]
+    if (isCodeThemeId(codeTheme)) {
+      settingsState.codeTheme = codeTheme
     }
 
     // Chat Settings - additional fields
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_MODEL_ICON] !== undefined) {
+    const chatShowModelIcon = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_MODEL_ICON]
+    if (isBoolean(chatShowModelIcon)) {
       settingsState.chat = settingsState.chat || { ...useSettingsStore.getState().chat }
-      settingsState.chat.showModelIcon = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_MODEL_ICON]
+      settingsState.chat.showModelIcon = chatShowModelIcon
     }
-    if (backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_USER_AVATAR] !== undefined) {
+    const chatShowUserAvatar = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_USER_AVATAR]
+    if (isBoolean(chatShowUserAvatar)) {
       settingsState.chat = settingsState.chat || { ...useSettingsStore.getState().chat }
-      settingsState.chat.showUserAvatar = backendPrefs[SETTINGS_PREFERENCE_KEYS.CHAT_SHOW_USER_AVATAR]
+      settingsState.chat.showUserAvatar = chatShowUserAvatar
     }
 
     // Apply settings state if any settings were loaded
     if (Object.keys(settingsState).length > 0) {
       useSettingsStore.setState(settingsState)
-      
     }
-
-    
   } catch (err) {
     console.error('[PreferencesLoader] Error loading preferences:', err)
     // Don't throw - loading failure shouldn't block login
@@ -323,8 +408,6 @@ export const usePreferencesLoader = () => {
     setError(null)
 
     try {
-      
-
       // Load all preferences from backend
       const backendPrefs = await preferencesSync.loadAll()
 
@@ -333,15 +416,11 @@ export const usePreferencesLoader = () => {
 
       if (hasBackendData) {
         // Backend has data - populate stores from backend
-        
         await populateStoresFromBackend(backendPrefs)
       } else {
         // Backend empty - check if localStorage has data to migrate
-        
         await migrateLocalDataToBackend()
       }
-
-      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load preferences'
       console.error('[PreferencesLoader] Error loading preferences:', err)
@@ -355,40 +434,22 @@ export const usePreferencesLoader = () => {
    * Populate all stores from backend preferences
    */
   const populateStoresFromBackend = async (
-    backendPrefs: Record<string, any>
+    backendPrefs: Record<string, unknown>
   ): Promise<void> => {
-    // Models
-    if (backendPrefs[PREFERENCE_KEYS.MODELS_FAVORITES]) {
-      // Note: Zustand persist middleware will handle this automatically
-      // We just need to ensure the data is in the right format
-      const favorites = backendPrefs[PREFERENCE_KEYS.MODELS_FAVORITES]
-      
-    }
-
-    if (backendPrefs[PREFERENCE_KEYS.MODELS_RECENT]) {
-      const recent = backendPrefs[PREFERENCE_KEYS.MODELS_RECENT]
-      
-    }
-
-    if (backendPrefs[PREFERENCE_KEYS.MODELS_RECENT_CHAT]) {
-      const recentChat = backendPrefs[PREFERENCE_KEYS.MODELS_RECENT_CHAT]
-      
-    }
-
-    if (backendPrefs[PREFERENCE_KEYS.MODELS_CURRENT]) {
-      const currentModel = backendPrefs[PREFERENCE_KEYS.MODELS_CURRENT]
-      
-    }
+    // Models are handled by loadPreferencesFromBackend's setState path;
+    // this hook-level pass covers the stores whose actions it holds.
 
     // UI
-    if (backendPrefs[PREFERENCE_KEYS.UI_SIDEBAR_OPEN] !== undefined) {
-      uiStore.setSidebarOpen(backendPrefs[PREFERENCE_KEYS.UI_SIDEBAR_OPEN])
+    const sidebarOpen = backendPrefs[PREFERENCE_KEYS.UI_SIDEBAR_OPEN]
+    if (isBoolean(sidebarOpen)) {
+      uiStore.setSidebarOpen(sidebarOpen)
     }
 
     // Note: UI_SIDEBAR_COLLAPSED is only stored in localStorage, not synced to backend
 
-    if (backendPrefs[PREFERENCE_KEYS.UI_NAVIGATION_ORDER]) {
-      navigationStore.setNavigationOrder(backendPrefs[PREFERENCE_KEYS.UI_NAVIGATION_ORDER])
+    const navigationOrder = backendPrefs[PREFERENCE_KEYS.UI_NAVIGATION_ORDER]
+    if (isStringArray(navigationOrder)) {
+      navigationStore.setNavigationOrder(navigationOrder)
     }
 
     // Theme - Load from backend and apply (skipSync=true to avoid re-syncing)
@@ -400,31 +461,27 @@ export const usePreferencesLoader = () => {
     }
 
     // Onboarding
-    if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_CURRENT_STEP] !== undefined) {
-      onboardingStore.setCurrentStep(backendPrefs[PREFERENCE_KEYS.ONBOARDING_CURRENT_STEP])
+    const currentStep = backendPrefs[PREFERENCE_KEYS.ONBOARDING_CURRENT_STEP]
+    if (isNumber(currentStep)) {
+      onboardingStore.setCurrentStep(currentStep)
     }
 
-    if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_COMPLETED] !== undefined) {
-      // Only update if completed
-      if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_COMPLETED]) {
-        onboardingStore.completeOnboarding()
-      }
+    if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_COMPLETED]) {
+      onboardingStore.completeOnboarding()
     }
 
     if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_SKIPPED_AT]) {
       onboardingStore.skipOnboarding()
     }
 
-    if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_API_KEY_CONFIGURED] !== undefined) {
-      onboardingStore.setApiKeyConfigured(
-        backendPrefs[PREFERENCE_KEYS.ONBOARDING_API_KEY_CONFIGURED]
-      )
+    const apiKeyConfigured = backendPrefs[PREFERENCE_KEYS.ONBOARDING_API_KEY_CONFIGURED]
+    if (isBoolean(apiKeyConfigured)) {
+      onboardingStore.setApiKeyConfigured(apiKeyConfigured)
     }
 
-    if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_SAMPLE_EVALUATION_RUN] !== undefined) {
-      onboardingStore.setSampleEvaluationRun(
-        backendPrefs[PREFERENCE_KEYS.ONBOARDING_SAMPLE_EVALUATION_RUN]
-      )
+    const sampleEvaluationRun = backendPrefs[PREFERENCE_KEYS.ONBOARDING_SAMPLE_EVALUATION_RUN]
+    if (isBoolean(sampleEvaluationRun)) {
+      onboardingStore.setSampleEvaluationRun(sampleEvaluationRun)
     }
   }
 
@@ -434,7 +491,7 @@ export const usePreferencesLoader = () => {
   const migrateLocalDataToBackend = async (): Promise<void> => {
     try {
       // Get current store states (which are from localStorage)
-      const localData: Record<string, any> = {}
+      const localData: Record<string, unknown> = {}
 
       // Check models store
       if (modelStore.favorites.length > 0) {
@@ -535,10 +592,7 @@ export const usePreferencesLoader = () => {
 
       // If we have local data, migrate it to backend
       if (Object.keys(localData).length > 0) {
-        
         await preferencesSync.syncLocalToBackend(localData, 'general')
-      } else {
-        
       }
     } catch (err) {
       console.error('[PreferencesLoader] Migration failed:', err)

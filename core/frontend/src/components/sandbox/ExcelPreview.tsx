@@ -15,6 +15,10 @@ import { Input } from '@/components/ui/input'
 import { GripVertical } from 'lucide-react'
 import { readExcel, updateCell, batchUpdateCells, type CellUpdate } from '@/api/excel'
 import { useToast } from '@/hooks/use-toast'
+import { toErrorMessage } from '@/utils/errorMessages'
+
+/** A single spreadsheet cell's value, as the backend's JSON-serialized `readExcel` response carries it. */
+type ExcelCellValue = string | number | boolean | null
 
 interface ExcelPreviewProps {
   fileName: string
@@ -26,8 +30,8 @@ interface ExcelPreviewProps {
 
 export function ExcelPreview({ fileName, filePath, content, userId, projectId }: ExcelPreviewProps) {
   const { toast } = useToast()
-  const [sheetData, setSheetData] = useState<any[][]>([])
-  const [sheetFormulas, setSheetFormulas] = useState<any[][]>([])
+  const [sheetData, setSheetData] = useState<ExcelCellValue[][]>([])
+  const [sheetFormulas, setSheetFormulas] = useState<(string | null)[][]>([])
   const [sheetNames, setSheetNames] = useState<string[]>([])
   const [activeSheet, setActiveSheet] = useState(0)
   const [columnWidths, setColumnWidths] = useState<Record<number, number>>({})
@@ -70,11 +74,11 @@ export function ExcelPreview({ fileName, filePath, content, userId, projectId }:
         setSheetData(result.data)
         setSheetFormulas(result.formulas)
         setColumnWidths(result.column_widths || {})
-      } catch (error: any) {
+      } catch (error) {
         console.error('Failed to load Excel file:', error)
         toast({
           title: 'Error',
-          description: error.message || 'Failed to load Excel file',
+          description: toErrorMessage(error) || 'Failed to load Excel file',
           variant: 'destructive',
         })
       }
@@ -415,11 +419,11 @@ export function ExcelPreview({ fileName, filePath, content, userId, projectId }:
         title: `${updates.length} Cell${updates.length > 1 ? 's' : ''} Filled`,
         description: 'Auto-fill completed successfully',
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to fill:', error)
       toast({
         title: 'Error',
-        description: error.message || 'Failed to fill cells',
+        description: toErrorMessage(error) || 'Failed to fill cells',
         variant: 'destructive',
       })
     }
@@ -475,7 +479,7 @@ export function ExcelPreview({ fileName, filePath, content, userId, projectId }:
       e.preventDefault()
       setInlineEditCell(null)
       // Trigger the formula bar key handler to save the value
-      await handleFormulaBarKeyDown(e as any)
+      await handleFormulaBarKeyDown(e)
     }
   }
 
@@ -618,11 +622,11 @@ export function ExcelPreview({ fileName, filePath, content, userId, projectId }:
         title: `${pastedCells} Cell${pastedCells > 1 ? 's' : ''} Pasted`,
         description: pasteMode === 'formula' ? 'Formulas pasted' : 'Values pasted',
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to paste:', error)
       toast({
         title: 'Error',
-        description: error.message || 'Failed to paste',
+        description: toErrorMessage(error) || 'Failed to paste',
         variant: 'destructive',
       })
     }
@@ -734,11 +738,11 @@ export function ExcelPreview({ fileName, filePath, content, userId, projectId }:
           const newValue = sheetData[row]?.[newCol] ?? ''
           setFormulaBarValue(newFormula ? `=${newFormula}` : String(newValue))
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error('Failed to update cell:', error)
         toast({
           title: 'Error',
-          description: error.message || 'Failed to update cell',
+          description: toErrorMessage(error) || 'Failed to update cell',
           variant: 'destructive',
         })
       }
@@ -864,7 +868,6 @@ export function ExcelPreview({ fileName, filePath, content, userId, projectId }:
       document.removeEventListener('mouseup', handleMouseUp)
     }
   }, [resizingRow, resizeStartY, resizeStartHeight])
-
 
   if (!sheetData.length) {
     return (

@@ -8,78 +8,14 @@
  * - Clean, distraction-free design
  */
 
-import { memo, useCallback, useMemo, useRef, useEffect, useLayoutEffect, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useEffect, useState } from 'react'
 import { useVoiceConversation } from '@/hooks/useVoiceConversation'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { ImagePreviewModal } from './ImagePreviewModal'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-} from '@/components/ui/dropdown-menu'
-import {
-  Minimize2,
-  Plus,
-  MoreVertical,
-  Copy,
-  Download,
-  MessageSquarePlus,
-  RefreshCw,
-  ImagePlus,
-  FileCode,
-  FileType,
-  Loader2,
-  GalleryVerticalEnd,
-  ScrollText,
-  BookOpen,
-  FileText,
-  Braces,
-  X,
-  FolderGit2,
-  Globe,
-  PanelRight,
-  Video,
-  Music,
-  Play,
-  Code2,
-} from 'lucide-react'
-import { PremiumMenuIcon } from '@/components/ui/premium-menu-icon'
 import { cn } from '@/lib/utils'
-import { formatLatencyFromSeconds } from '@/utils/latency'
-import { useNavigate } from '@tanstack/react-router'
-import { ModelComboBox } from './ModelComboBox'
-import { ModelIcon } from './ModelIcon'
+import { ModelDetailsModal } from './ModelDetailsModal'
+import { FilePreviewModal } from './FilePreviewModal'
+import { PdfPreviewModal } from './PdfPreviewModal'
 import { MessageList } from './MessageList'
 import { MessageInput } from './MessageInput'
 import type { FeatureState } from './GlobalFeatureToggles'
@@ -88,37 +24,41 @@ import { SuggestedQuestionsCarousel } from './SuggestedQuestionsCarousel'
 import { CostEstimationDisplay } from './CostEstimationDisplay'
 import { ProviderGreeting } from './ProviderGreeting'
 import { CodeEditorModal } from '@/components/sandbox'
-import { ModelDetailsModal } from './ModelDetailsModal'
-import { FilePreviewModal } from './FilePreviewModal'
-import { PdfPreviewModal } from './PdfPreviewModal'
 import { ChatInstructionsSheet } from './ChatInstructionsSheet'
 import { ChatPanelProvider } from './ChatPanelContext'
 import { SparkAutoFixProvider, type SparkFixRequest } from './SparkAutoFixContext'
 import { VoiceConversationOverlay } from './VoiceConversationOverlay'
 import { useAuthStore } from '@/store/authStore'
 import { extractTextFromContent } from '@/utils/chatUtils'
-import useModelStore from '@/store/modelStore'
-import { useNavigationStore } from '@/store/navigationStore'
-import { useArtifactsPanelStore } from '@/store/artifactsPanelStore'
 import { useProjectPanelStore } from '@/store/projectPanelStore'
-import { usePreviewPanelStore } from '@/store/previewPanelStore'
 import { ArtifactsSidePanel } from './ArtifactsSidePanel'
 import { ProjectStatusSidePanel } from './ProjectStatusSidePanel'
 import { PreviewSidePanel } from '@/components/preview/PreviewSidePanel'
 import { useUIStore } from '@/store/uiStore'
-import { toast } from 'sonner'
 import { removeProviderPrefix } from '@/lib/model-utils'
-import { pricingUtils } from '@/lib/pricing-utils'
-import type { Chat, Model, Message, ModelParameters, Attachment, FileAttachment, ImageAttachment, VideoAttachment, AudioAttachment } from './types'
-import { getFileExtension } from '@/utils/fileUtils'
-import { TypeBadge } from '@/lib/type-badges'
-import { formatFileSize } from '@/utils/imageUtils'
+import type { Chat, Model, Message, ModelParameters, Attachment, Filters, ToolExecutedHandler } from './types'
+import type { NormalizedCostEstimate } from '@/api/llm'
+import type { MCPServer } from '@/api/mcp'
 import type { ModelCatalogEntry } from '@/types/models'
 import type { CachedAttachment } from '@/utils/attachmentCache'
-import { assetsAPI } from '@/api/assets'
-import { conversationsAPI } from '@/api/conversations'
-import { fsAPI } from '@/api/fs'
 import { useVerificationGuard } from '@/components/auth/VerificationGate'
+import { ImmersiveChatHeader } from './ImmersiveChatHeader'
+import { MobileModelSheet } from './MobileModelSheet'
+import { AllAttachmentsModal } from './AllAttachmentsModal'
+import { SaveToKnowledgeBaseDialog } from './SaveToKnowledgeBaseDialog'
+import { useChatAutoScroll } from './hooks/useChatAutoScroll'
+import { useAttachmentPreviews } from './hooks/useAttachmentPreviews'
+import { useWorkspaceDetection } from './hooks/useWorkspaceDetection'
+import { useModelDetailsPanel } from './hooks/useModelDetailsPanel'
+import { useSaveToKnowledgeBase } from './hooks/useSaveToKnowledgeBase'
+import {
+  formatCost,
+  formatLatency,
+  copyMessageContent,
+  copyMessageMetadata,
+  exportMessageContent,
+  exportMessageMetadata,
+} from './chatMessageActions'
 
 interface ImmersiveChatViewProps {
   // Chat data
@@ -133,15 +73,14 @@ interface ImmersiveChatViewProps {
   canCancel: boolean
   onExitImmersive?: () => void
   onParametersChange: (params: ModelParameters) => void
-  onToolExecuted?: (toolCallId: string, toolName: string, result: any) => void
+  onToolExecuted?: ToolExecutedHandler
   onAddChat?: () => void
-
   // Model selection
   showFilters?: boolean
   onToggleFilters?: () => void
   hasActiveFilters?: boolean
-  filters?: any
-  onFiltersChange?: (filters: any) => void
+  filters?: Filters
+  onFiltersChange?: (filters: Filters) => void
   providers?: string[]
   recentModelIds?: string[]
 
@@ -166,13 +105,12 @@ interface ImmersiveChatViewProps {
   knowledgeBaseState?: FeatureState
   onToggleKnowledgeBase?: () => void
   hasKnowledgeBaseSupport?: boolean
-  activeServers?: any[]
-
+  activeServers?: MCPServer[]
   // Cost estimation
-  estimatedCosts?: any
+  estimatedCosts?: NormalizedCostEstimate | null
   onEstimateCost?: (text: string) => Promise<void>
   isEstimating?: boolean
-  setEstimatedCost?: (cost: any) => void
+  setEstimatedCost?: (cost: NormalizedCostEstimate | null) => void
 
   // Attachments
   attachments: Attachment[]
@@ -301,13 +239,8 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
   
 
   const { user } = useAuthStore()
-  const modelStore = useModelStore()
-  const { openMobileSidebar } = useNavigationStore()
-  const { isPanelOpen: isArtifactsPanelOpen, imageCount, videoCount } = useArtifactsPanelStore()
-  const { isPanelOpen: isProjectPanelOpen, openPanel: openProjectPanel, closePanel: closeProjectPanel, clonedRepo } = useProjectPanelStore()
-  const { isPanelOpen: isPreviewPanelOpen, openPanel: openPreviewPanel, closePanel: closePreviewPanel } = usePreviewPanelStore()
+  const { clonedRepo } = useProjectPanelStore()
   const isMobile = useUIStore((state) => state.isMobile)
-  const navigate = useNavigate()
 
   // Aggregate sparks from all messages and chat-level sparks
   const currentChatSparks = useMemo(() => {
@@ -333,32 +266,15 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
     return latestSparks
   }, [chat.messages, chat.sparks])
   const [codeEditorOpen, setCodeEditorOpen] = useState(false)
-  const [hasWorkspace, setHasWorkspace] = useState(false)
   const [inputValue, setInputValue] = useState('')
 
   // Detect whether this chat has workspace files (for "Open IDE" button)
-  const toolMessageCount = useMemo(
-    () => chat.messages.filter(m => m.role === 'tool').length,
-    [chat.messages]
-  )
-
-  useEffect(() => {
-    setHasWorkspace(false)
-
-    if (clonedRepo) {
-      setHasWorkspace(true)
-      return
-    }
-
-    if (!user?.id || !chat?.id) return
-    let cancelled = false
-    fsAPI.getWorkspaceInfo({ user_id: user.id.toString(), chat_id: chat.id })
-      .then(info => {
-        if (!cancelled) setHasWorkspace(info.exists && (info.file_count ?? 0) > 0)
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [clonedRepo, user?.id, chat?.id, toolMessageCount])
+  const hasWorkspace = useWorkspaceDetection({
+    messages: chat.messages,
+    clonedRepo,
+    userId: user?.id,
+    chatId: chat?.id,
+  })
 
   // Listen for setInputMessage events from the Project panel (e.g., "Implement" button)
   useEffect(() => {
@@ -374,26 +290,23 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
     }
   }, [])
 
-  const [isModelDetailsOpen, setIsModelDetailsOpen] = useState(false)
-  const [selectedModelDetails, setSelectedModelDetails] = useState<ModelCatalogEntry | null>(null)
+  const {
+    isModelDetailsOpen,
+    setIsModelDetailsOpen,
+    selectedModelDetails,
+    handleOpenModelDetails,
+  } = useModelDetailsPanel(chat.model)
   const [mobileModelSheetOpen, setMobileModelSheetOpen] = useState(false)
   const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false)
   const [instructionsSheetOpen, setInstructionsSheetOpen] = useState(false)
-  const [isSavingToKnowledgeBase, setIsSavingToKnowledgeBase] = useState(false)
-  const [showSaveToKBDialog, setShowSaveToKBDialog] = useState(false)
+  const {
+    isSavingToKnowledgeBase,
+    showSaveToKBDialog,
+    setShowSaveToKBDialog,
+    handleSaveToKnowledgeBase,
+    confirmSaveToKnowledgeBase,
+  } = useSaveToKnowledgeBase(conversationId)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const contentEndRef = useRef<HTMLDivElement>(null)
-  const prevLastMsgKeyRef = useRef<string | null>(null)
-  // 'pin' = user message pinned at top, 'follow' = auto-scroll to bottom
-  const scrollModeRef = useRef<'pin' | 'follow'>('follow')
-  const spacerActiveRef = useRef(false)
-  const spacerRef = useRef<HTMLDivElement>(null)
-  const pinnedScrollTopRef = useRef<number>(0)
-  const pinAnimatingRef = useRef(false)
-  const pinAnimFrameRef = useRef<number>(0)
-  // User scroll detection — stops auto-scroll when user scrolls manually
-  const userHasScrolledRef = useRef(false)
   const hasMessages = chat.messages.length > 0
 
   // Detect streaming: last assistant message exists with no cost/tokens yet
@@ -473,249 +386,19 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
     onSuggestionClick?.(suggestion)
   }, [onSuggestionClick])
 
-  // Detect user scroll via wheel/touch — these are always user-initiated (no race conditions)
-  useEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container) return
-
-    const onUserScroll = () => { userHasScrolledRef.current = true }
-
-    container.addEventListener('wheel', onUserScroll, { passive: true })
-    container.addEventListener('touchmove', onUserScroll, { passive: true })
-    return () => {
-      container.removeEventListener('wheel', onUserScroll)
-      container.removeEventListener('touchmove', onUserScroll)
-    }
-  }, [])
-
-  // Scroll clamp: never allow scrolling past the last user message at top of visible area,
-  // but allow normal scrolling when the assistant response overflows the viewport.
-  useEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container) return
-
-    const paddingBottom = parseFloat(getComputedStyle(container).paddingBottom) || 0
-
-    const clampScroll = () => {
-      const userMsgs = container.querySelectorAll('[data-message-role="user"]')
-      const lastUserEl = userMsgs[userMsgs.length - 1] as HTMLElement | null
-      if (!lastUserEl) return
-
-      const allMsgs = container.querySelectorAll('[data-message-role]')
-      const lastMsgEl = allMsgs[allMsgs.length - 1] as HTMLElement | null
-      if (!lastMsgEl) return
-
-      const containerRect = container.getBoundingClientRect()
-      const userMsgRect = lastUserEl.getBoundingClientRect()
-      const lastMsgRect = lastMsgEl.getBoundingClientRect()
-
-      const lastUserMsgAbsoluteTop = container.scrollTop + (userMsgRect.top - containerRect.top)
-      const lastMessageBottom = container.scrollTop + (lastMsgRect.bottom - containerRect.top)
-      const effectiveViewport = container.clientHeight - paddingBottom
-
-      const maxScroll = Math.max(lastUserMsgAbsoluteTop, lastMessageBottom - effectiveViewport)
-
-      if (container.scrollTop > maxScroll) {
-        container.scrollTop = maxScroll
-      }
-    }
-
-    container.addEventListener('scroll', clampScroll)
-    return () => container.removeEventListener('scroll', clampScroll)
-  }, [])
-
-  // Reset spacer when switching conversations
-  useEffect(() => {
-    spacerActiveRef.current = false
-    if (spacerRef.current) spacerRef.current.style.height = '0px'
-  }, [conversationId])
-
-  // Size the spacer so the user can scroll the last user message to the top
-  // but never into empty space. As the response grows, spacer shrinks by
-  // the same amount — keeping scrollHeight constant (no jumps).
-  //
-  // Formula: spacerH = max(0, visibleH - (contentBottom - lastUserMsgTop))
-  //   visibleH = clientHeight - 176  (176 = pb-44, input zone overlap)
-  //   When response overflows visibleH → spacer = 0 → normal scrolling
-  const updateSpacerHeight = useCallback(() => {
-    const container = scrollContainerRef.current
-    const spacer = spacerRef.current
-    if (!container || !spacer) return
-
-    if (!spacerActiveRef.current) {
-      spacer.style.height = '0px'
-      return
-    }
-
-    const contentEndEl = contentEndRef.current
-    if (!contentEndEl) return
-
-    const containerRect = container.getBoundingClientRect()
-
-    // Content bottom offset (where real content ends, before spacer)
-    const endRect = contentEndEl.getBoundingClientRect()
-    const contentBottomOffset = endRect.top - containerRect.top + container.scrollTop
-
-    // Last user message top offset
-    const userMsgs = container.querySelectorAll('[data-message-role="user"]')
-    const lastUserEl = userMsgs[userMsgs.length - 1] as HTMLElement | null
-    if (!lastUserEl) { spacer.style.height = '0px'; return }
-
-    const userRect = lastUserEl.getBoundingClientRect()
-    const lastUserOffset = userRect.top - containerRect.top + container.scrollTop
-
-    // Height of content from user message top to content end
-    const contentBelowUser = contentBottomOffset - lastUserOffset
-
-    // Measure total bottom padding below the spacer:
-    // scrollHeight = contentBottomOffset + currentSpacerH + totalBottomPadding
-    const currentSpacerH = spacer.offsetHeight
-    const totalBottomPadding = container.scrollHeight - contentBottomOffset - currentSpacerH
-    const visibleHeight = container.clientHeight - totalBottomPadding
-
-    const needed = visibleHeight - contentBelowUser
-    spacer.style.height = `${Math.max(0, needed)}px`
-  }, [])
-
-  // Ctrl+L scroll behaviour:
-  // 1. User sends a message → reset view: user message at the top, empty space below
-  // 2. Response streams in → view stays pinned (user msg at top) until content fills viewport
-  // 3. Once content overflows viewport → switch to follow-bottom (tracking real content)
-  // 4. Generation ends → normal follow-bottom for subsequent interactions
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container || chat.messages.length === 0) return
-
-    const lastMsg = chat.messages[chat.messages.length - 1]
-    const lastMsgKey = `${lastMsg.role}-${lastMsg.timestamp?.getTime()}`
-    const isNewMessage = lastMsgKey !== prevLastMsgKeyRef.current
-    prevLastMsgKeyRef.current = lastMsgKey
-
-    // Detect new user message → enter pin mode with smooth animation
-    if (isNewMessage && lastMsg.role === 'user') {
-      spacerActiveRef.current = true
-      updateSpacerHeight()
-      scrollModeRef.current = 'pin'
-      userHasScrolledRef.current = false
-
-      // Cancel any existing animation
-      if (pinAnimFrameRef.current) {
-        cancelAnimationFrame(pinAnimFrameRef.current)
-        pinAnimFrameRef.current = 0
-      }
-
-      // Start smooth rAF animation to scroll user message to top
-      const userMsgs = container.querySelectorAll('[data-message-role="user"]')
-      const lastUserEl = userMsgs[userMsgs.length - 1] as HTMLElement | null
-      if (lastUserEl) {
-        const cRect = container.getBoundingClientRect()
-        const mRect = lastUserEl.getBoundingClientRect()
-        const startScroll = container.scrollTop
-        const targetScroll = startScroll + (mRect.top - cRect.top) - 16
-        const duration = 350
-
-        pinAnimatingRef.current = true
-        const startTime = performance.now()
-
-        const animate = (now: number) => {
-          // If user scrolled during animation, cancel it
-          if (userHasScrolledRef.current) {
-            pinAnimatingRef.current = false
-            pinAnimFrameRef.current = 0
-            scrollModeRef.current = 'follow'
-            return
-          }
-          const elapsed = now - startTime
-          const progress = Math.min(1, elapsed / duration)
-          const eased = 1 - Math.pow(1 - progress, 3)
-          container.scrollTop = startScroll + (targetScroll - startScroll) * eased
-
-          if (progress < 1) {
-            pinAnimFrameRef.current = requestAnimationFrame(animate)
-          } else {
-            pinAnimatingRef.current = false
-            pinnedScrollTopRef.current = targetScroll
-            pinAnimFrameRef.current = 0
-          }
-        }
-
-        pinAnimFrameRef.current = requestAnimationFrame(animate)
-      }
-      return
-    }
-
-    updateSpacerHeight()
-
-    // --- PIN MODE: keep user message at top ---
-    if (scrollModeRef.current === 'pin') {
-      if (pinAnimatingRef.current) return
-      // User scrolled manually → release pin
-      if (userHasScrolledRef.current) {
-        scrollModeRef.current = 'follow'
-        return
-      }
-
-      const userMsgs = container.querySelectorAll('[data-message-role="user"]')
-      const lastUserEl = userMsgs[userMsgs.length - 1] as HTMLElement | null
-      if (lastUserEl) {
-        const cRect = container.getBoundingClientRect()
-        const mRect = lastUserEl.getBoundingClientRect()
-        const distFromTop = mRect.top - cRect.top
-
-        // Correct any drift (tight 1px threshold)
-        if (Math.abs(distFromTop - 16) > 1) {
-          const target = container.scrollTop + distFromTop - 16
-          pinnedScrollTopRef.current = target
-          container.scrollTop = target
-          return
-        }
-      }
-
-      // Check if real content has overflowed past the viewport → switch to follow
-      const contentEnd = contentEndRef.current
-      if (contentEnd) {
-        const cRect = container.getBoundingClientRect()
-        const endRect = contentEnd.getBoundingClientRect()
-        if (endRect.top > cRect.bottom - 40) {
-          scrollModeRef.current = 'follow'
-          // Fall through to follow logic below
-        } else {
-          if (!isGenerating) scrollModeRef.current = 'follow'
-          return
-        }
-      } else {
-        if (!isGenerating) scrollModeRef.current = 'follow'
-        return
-      }
-    }
-
-    // --- FOLLOW MODE: keep content bottom visible ---
-    // Skip if user has scrolled — let them read freely
-    if (userHasScrolledRef.current) {
-      // Re-enable if user scrolled back near bottom
-      const distFromBottom = container.scrollHeight - container.clientHeight - container.scrollTop
-      if (distFromBottom >= 50) return
-      userHasScrolledRef.current = false
-    }
-
-    const contentEnd = contentEndRef.current
-    if (isGenerating && contentEnd) {
-      const cRect = container.getBoundingClientRect()
-      const endRect = contentEnd.getBoundingClientRect()
-      if (endRect.bottom > cRect.bottom) {
-        container.scrollTop += (endRect.bottom - cRect.bottom) + 16
-      }
-    } else if (!isGenerating) {
-      container.scrollTop = container.scrollHeight - container.clientHeight
-    }
-  }, [chat.messages, isGenerating])
+  // Ctrl+L scroll behaviour (pin the last user message to the top while its
+  // response streams in, then follow the bottom) — see useChatAutoScroll.
+  const { scrollContainerRef, contentEndRef, spacerRef } = useChatAutoScroll({
+    messages: chat.messages,
+    isGenerating,
+    conversationId,
+  })
 
   // Verification guard intercepts send for unverified users
   const { guard } = useVerificationGuard()
 
   // Handle send
   const handleSend = useCallback(async (content: string) => {
-
 
     try {
       await onSendMessage(content, attachments)
@@ -744,15 +427,6 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
   // Show stop button during API streaming OR typewriter reveal
   const showCancel = canCancel || isTextRevealing
 
-  // Memoize model name display
-  const modelDisplayName = useMemo(() => {
-    if (!chat.model) return 'Select a model'
-    // Remove provider prefix if present
-    const name = chat.model.name
-    const colonIndex = name.indexOf(':')
-    return colonIndex > -1 ? name.slice(colonIndex + 1).trim() : name
-  }, [chat.model])
-
   // Message container ref for context
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
@@ -773,7 +447,7 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
       const toRemove = new Set<number>([userMessageIndex, assistantMessageIndex])
       for (let i = userMessageIndex + 1; i < assistantMessageIndex; i++) {
         const m = messages[i]
-        if (m.role === 'assistant' && (m as any).isUnsupported) toRemove.add(i)
+        if (m.role === 'assistant' && m.isUnsupported) toRemove.add(i)
       }
       const updatedMessages = messages.filter((_, idx) => !toRemove.has(idx))
 
@@ -809,242 +483,31 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
     await onSendMessage(newContent, userAttachments)
   }, [chat.messages, onUpdateMessages, onSendMessage])
 
-  const copyMessageContent = useCallback((content: Message['content']) => {
-    navigator.clipboard.writeText(extractTextFromContent(content))
-    toast.success('Copied to clipboard')
-  }, [])
-
-  const copyMessageMetadata = useCallback((message: Message) => {
-    navigator.clipboard.writeText(JSON.stringify(message, null, 2))
-    toast.success('Metadata copied to clipboard')
-  }, [])
-
-  const exportMessageContent = useCallback((content: Message['content'], model?: string) => {
-    const blob = new Blob([extractTextFromContent(content)], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `message-${Date.now()}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [])
-
-  const exportMessageMetadata = useCallback((message: Message) => {
-    const blob = new Blob([JSON.stringify(message, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `message-metadata-${Date.now()}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [])
-
-  const formatCost = useCallback((cost?: number) => {
-    if (!cost || cost === 0) return '$0.00'
-    if (cost < 0.01) return '<$0.01'
-    return `$${cost.toFixed(4)}`
-  }, [])
-
-  const formatLatency = useCallback((latency?: number) => formatLatencyFromSeconds(latency), [])
-
-  // Image gallery state
-  const [imageGalleryOpen, setImageGalleryOpen] = useState(false)
-  const [galleryImages, setGalleryImages] = useState<{ src: string; alt: string }[]>([])
-  const [gallerySelectedIndex, setGallerySelectedIndex] = useState(0)
-
-  // All attachments modal state
-  const [isAllAttachmentsOpen, setIsAllAttachmentsOpen] = useState(false)
-  const [allAttachments, setAllAttachments] = useState<Attachment[]>([])
-
-  // File preview modal state
-  const [isFilePreviewOpen, setIsFilePreviewOpen] = useState(false)
-  const [previewFile, setPreviewFile] = useState<{ name: string; size: number; content: string } | null>(null)
-  const [loadingFileId, setLoadingFileId] = useState<string | null>(null)
-  // PDF preview modal state
-  const [isPdfOpen, setIsPdfOpen] = useState(false)
-  const [pdfSrc, setPdfSrc] = useState('')
-  const [pdfName, setPdfName] = useState('')
-  // Blob URL loading for images/PDFs from asset storage (auth required)
-  const [loadedBlobUrls, setLoadedBlobUrls] = useState<Record<string, string>>({})
-  const [loadingAssetIds, setLoadingAssetIds] = useState<Set<string>>(new Set())
-
-  // Load asset from storage via API (includes auth headers) and return blob URL
-  const loadAssetAsBlobUrl = useCallback(async (assetId: string): Promise<string | null> => {
-    if (loadedBlobUrls[assetId]) return loadedBlobUrls[assetId]
-    if (loadingAssetIds.has(assetId)) return null
-
-    setLoadingAssetIds(prev => new Set(prev).add(assetId))
-    try {
-      const blob = await assetsAPI.download(assetId)
-      if (blob) {
-        const blobUrl = URL.createObjectURL(blob)
-        setLoadedBlobUrls(prev => ({ ...prev, [assetId]: blobUrl }))
-        return blobUrl
-      }
-      return null
-    } catch (error) {
-      console.error('[ImmersiveChatView] Failed to load asset:', assetId, error)
-      return null
-    } finally {
-      setLoadingAssetIds(prev => {
-        const next = new Set(prev)
-        next.delete(assetId)
-        return next
-      })
-    }
-  }, [loadedBlobUrls, loadingAssetIds])
-
-  // Cleanup blob URLs on unmount
-  useEffect(() => {
-    return () => {
-      Object.values(loadedBlobUrls).forEach(url => URL.revokeObjectURL(url))
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleOpenImageGallery = useCallback((images: { src: string; alt: string }[], selectedIndex: number) => {
-    setGalleryImages(images)
-    setGallerySelectedIndex(selectedIndex)
-    setImageGalleryOpen(true)
-  }, [])
-
-  // PDF preview handler
-  const handleOpenPdf = useCallback((src: string, name: string) => {
-    setPdfSrc(src)
-    setPdfName(name)
-    setIsPdfOpen(true)
-  }, [])
-
-  const handleOpenTextFile = useCallback(async (file: FileAttachment) => {
-    const fileName = file.file?.name || 'file'
-    const fileSize = file.file?.size || 0
-
-    // If we have textContent cached, show modal directly
-    if (file.textContent) {
-      setPreviewFile({ name: fileName, size: fileSize, content: file.textContent })
-      setIsFilePreviewOpen(true)
-      return
-    }
-
-    // If we have an assetId (after reload), fetch the content
-    if (file.assetId) {
-      setLoadingFileId(file.id)
-      try {
-        const blob = await assetsAPI.download(file.assetId)
-        if (blob) {
-          const content = await blob.text()
-          setPreviewFile({ name: fileName, size: fileSize, content })
-          setIsFilePreviewOpen(true)
-        } else {
-          toast.error('Failed to load file content')
-        }
-      } catch (error) {
-        console.error('Failed to fetch file content:', error)
-        toast.error('Failed to load file content')
-      } finally {
-        setLoadingFileId(null)
-      }
-      return
-    }
-
-    toast.error('File content not available')
-  }, [])
-
-  const handleOpenAllAttachments = useCallback((attachments: Attachment[]) => {
-    // Open the all attachments modal to show all attachment types
-    setAllAttachments(attachments)
-    setIsAllAttachmentsOpen(true)
-  }, [])
-
-  const handleOpenModelDetails = useCallback((modelId?: string) => {
-    const targetModelId = modelId || chat.model?.model_id
-    if (!targetModelId) return
-
-    // Try to find model details from model store
-    const from = [
-      modelStore.currentModel ? [modelStore.currentModel] : [],
-      modelStore.models,
-      modelStore.allModels,
-      modelStore.recentModels.map(m => m.details).filter(Boolean) as ModelCatalogEntry[],
-      modelStore.recentChatModels.map(m => m.details).filter(Boolean) as ModelCatalogEntry[],
-      modelStore.favorites.map(f => f.details).filter(Boolean) as ModelCatalogEntry[],
-      modelStore.comparisonModels,
-    ].flat()
-    const found = from.find(m => m.model_id === targetModelId)
-
-    if (found) {
-      setSelectedModelDetails(found)
-      setIsModelDetailsOpen(true)
-    } else if (chat.model) {
-      // Fallback: create minimal details from current model
-      const minimal: ModelCatalogEntry = {
-        id: targetModelId,
-        model_id: targetModelId,
-        name: chat.model.name || targetModelId,
-        provider: chat.model.provider || 'unknown',
-        provider_icon_slug: chat.model.provider_icon_slug,
-        provider_icon_url: chat.model.provider_icon_url,
-        model_icon_slug: chat.model.model_icon_slug,
-        model_icon_url: chat.model.model_icon_url,
-        cost_per_1m_prompt: 0,
-        cost_per_1m_completion: 0,
-        max_tokens: chat.model.max_tokens || 0,
-        supports_streaming: true,
-        supports_functions: Boolean((chat.model as any).supports_functions),
-        supports_structured_outputs: Boolean((chat.model as any).supports_structured_outputs),
-        supports_reasoning: Boolean((chat.model as any).supports_reasoning),
-        supports_prompt_caching: Boolean((chat.model as any).supports_prompt_caching),
-        supports_stream_cancellation: true,
-        modality: null,
-        input_modalities: chat.model.input_modalities || [],
-        output_modalities: (chat.model as any).output_modalities || ['text'],
-        tokenizer: null,
-        max_completion_tokens: null,
-        is_moderated: false,
-        default_parameters: {},
-        description: undefined,
-        tags: [],
-        is_available: true,
-        fetched_at: new Date().toISOString(),
-      }
-      setSelectedModelDetails(minimal)
-      setIsModelDetailsOpen(true)
-    }
-  }, [chat.model, modelStore])
-
-  // Open save to knowledge base confirmation dialog
-  const handleSaveToKnowledgeBase = useCallback(() => {
-    if (!conversationId) return
-    setShowSaveToKBDialog(true)
-  }, [conversationId])
-
-  // Actually save conversation to knowledge base
-  const confirmSaveToKnowledgeBase = useCallback(async () => {
-    if (isSavingToKnowledgeBase || !conversationId) return
-
-    setIsSavingToKnowledgeBase(true)
-    try {
-      const result = await conversationsAPI.saveToKnowledgeBase(conversationId)
-      toast.success('Saved to knowledge base', {
-        description: result.filename,
-      })
-      setShowSaveToKBDialog(false)
-    } catch (error: any) {
-      const errorData = error.response?.data
-      if (errorData?.existing_document_id) {
-        toast.error('Already saved', {
-          description: errorData.error || 'This conversation is already in your knowledge base',
-        })
-      } else if (errorData?.error) {
-        toast.error('Failed to save', {
-          description: errorData.error,
-        })
-      } else {
-        toast.error('Failed to save to knowledge base')
-      }
-    } finally {
-      setIsSavingToKnowledgeBase(false)
-    }
-  }, [conversationId, isSavingToKnowledgeBase])
+  const {
+    imageGalleryOpen,
+    setImageGalleryOpen,
+    galleryImages,
+    gallerySelectedIndex,
+    setGallerySelectedIndex,
+    isAllAttachmentsOpen,
+    setIsAllAttachmentsOpen,
+    allAttachments,
+    isFilePreviewOpen,
+    setIsFilePreviewOpen,
+    previewFile,
+    loadingFileId,
+    isPdfOpen,
+    setIsPdfOpen,
+    pdfSrc,
+    pdfName,
+    loadedBlobUrls,
+    loadingAssetIds,
+    loadAssetAsBlobUrl,
+    handleOpenImageGallery,
+    handleOpenPdf,
+    handleOpenTextFile,
+    handleOpenAllAttachments,
+  } = useAttachmentPreviews()
 
   // Check for issue context from ProjectStatusSidePanel (when implementing an issue)
   useEffect(() => {
@@ -1125,10 +588,12 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
     isTTSLoading,
     isTTSSupported,
   }), [
+    // copyMessageContent, copyMessageMetadata, exportMessageContent, exportMessageMetadata,
+    // formatCost and formatLatency are module-level imports (chatMessageActions.ts) — stable
+    // by construction, not reactive dependencies.
     chat.model, chat.messages, chat.isLoading, chat.id, user, conversationId,
     onUpdateMessages, onToolExecuted, handleRetry, handleEditMessage,
-    copyMessageContent, copyMessageMetadata, exportMessageContent, exportMessageMetadata,
-    handleOpenModelDetails, formatCost, formatLatency, handleOpenImageGallery,
+    handleOpenModelDetails, handleOpenImageGallery,
     handleOpenPdf, handleOpenTextFile, handleOpenAllAttachments,
     handleTextRevealChange,
     speak, stopSpeaking, isSpeaking, isTTSLoading, isTTSSupported
@@ -1142,324 +607,35 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
 
   return (
     <div className="h-full flex flex-col bg-background relative">
-      {/* Header bar - model selector and actions */}
-      <header className="flex-shrink-0 sticky top-0 flex items-center justify-between px-3 md:px-4 py-2 border-b border-border/50 bg-background/95 backdrop-blur-sm z-10">
-        {/* Left: Menu button (mobile) + Model selector */}
-        <div className="flex items-center gap-1">
-          {/* Mobile sidebar menu button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="md:hidden h-8 w-8 p-0 shrink-0"
-            onClick={openMobileSidebar}
-          >
-            <PremiumMenuIcon size={18} />
-          </Button>
-          <div className="hidden md:block min-w-[180px] max-w-[280px]">
-            <ModelComboBox
-              models={models}
-              value={chat.model?.model_id}
-              onValueChange={(modelId) => {
-                const model = models.find(m => m.model_id === modelId)
-                if (model) onModelSelect(model as Model)
-              }}
-              showFilters={showFilters}
-              onToggleFilters={onToggleFilters}
-              hasActiveFilters={hasActiveFilters}
-              filters={filters}
-              onFiltersChange={onFiltersChange}
-              providers={providers}
-              recentModelIds={recentModelIds}
-              variant="ghost"
-            />
-          </div>
-          {/* Mobile: Tap to open model selection sheet (hidden in multi-chat mode - tabs show models) */}
-          {!headerCenterContent && (
-            <button
-              onClick={() => setMobileModelSheetOpen(true)}
-              className="md:hidden flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted transition-colors max-w-[160px]"
-            >
-              {chat.model ? (
-                <>
-                  <ModelIcon
-                    modelName={chat.model.name}
-                    modelId={chat.model.model_id}
-                    provider={chat.model.provider}
-                    modelIconSlug={chat.model.model_icon_slug}
-                    modelIconUrl={chat.model.model_icon_url}
-                    providerIconSlug={chat.model.provider_icon_slug}
-                    providerIconUrl={chat.model.provider_icon_url}
-                    size={20}
-                    showTooltip={false}
-                  />
-                  <span className="text-sm font-medium truncate">
-                    {removeProviderPrefix(chat.model.name, chat.model.provider)}
-                  </span>
-                </>
-              ) : (
-                <span className="text-sm text-muted-foreground">Select model</span>
-              )}
-            </button>
-          )}
-        </div>
-
-        {/* Center: Optional content (e.g., multi-chat tab bar) */}
-        {headerCenterContent && (
-          <div className="absolute left-1/2 -translate-x-1/2 max-w-[calc(100vw-200px)] md:max-w-[calc(100vw-400px)]">
-            {headerCenterContent}
-          </div>
-        )}
-
-        {/* Right: Actions */}
-        <div className="flex items-center gap-1">
-          {/* Add comparison chat - hidden on mobile, shown in menu instead */}
-          {onAddChat && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onAddChat}
-                    className="hidden md:flex h-8 px-2 text-muted-foreground hover:text-foreground"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    <span className="text-xs">Compare</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Add another model to compare responses
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-
-          {/* Open IDE button - desktop only */}
-          {hasWorkspace && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setCodeEditorOpen(true)}
-                    className="hidden md:flex h-8 px-2 text-muted-foreground hover:text-foreground"
-                  >
-                    <Code2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Open IDE</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-
-          {/* Unified Panels popover */}
-          {(() => {
-            const totalArtifacts = currentChatSparks.length + imageCount + videoCount
-            const openPanelCount = [isArtifactsPanelOpen, isProjectPanelOpen, isPreviewPanelOpen].filter(Boolean).length
-            return (
-              <Popover>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={cn(
-                            "h-8 px-2 gap-1.5 relative",
-                            openPanelCount > 0
-                              ? "text-primary hover:text-primary/80"
-                              : "text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          <PanelRight className="h-4 w-4" />
-                          {openPanelCount > 0 && (
-                            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent>Panels</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <PopoverContent align="end" className="w-52 p-1.5">
-                  <button
-                    onClick={() => useArtifactsPanelStore.getState().setPanelOpen(!isArtifactsPanelOpen)}
-                    className={cn(
-                      "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors",
-                      isArtifactsPanelOpen ? "bg-accent text-accent-foreground" : "hover:bg-muted"
-                    )}
-                  >
-                    <GalleryVerticalEnd className={cn("h-4 w-4 shrink-0", isArtifactsPanelOpen ? "text-brand-500" : "text-muted-foreground")} />
-                    <span className="flex-1 text-left">Creations</span>
-                    {totalArtifacts > 0 && (
-                      <span className="text-xs tabular-nums text-muted-foreground">{totalArtifacts}</span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => isProjectPanelOpen ? closeProjectPanel() : openProjectPanel()}
-                    className={cn(
-                      "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors",
-                      isProjectPanelOpen ? "bg-accent text-accent-foreground" : "hover:bg-muted"
-                    )}
-                  >
-                    <FolderGit2 className={cn("h-4 w-4 shrink-0", isProjectPanelOpen ? "text-blue-500" : "text-muted-foreground")} />
-                    <span className="flex-1 text-left">Project</span>
-                  </button>
-                  <TooltipProvider delayDuration={300}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={() => isPreviewPanelOpen ? closePreviewPanel() : openPreviewPanel()}
-                          className={cn(
-                            "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors",
-                            isPreviewPanelOpen ? "bg-accent text-accent-foreground" : "hover:bg-muted"
-                          )}
-                        >
-                          <Globe className={cn("h-4 w-4 shrink-0", isPreviewPanelOpen ? "text-green-500" : "text-muted-foreground")} />
-                          <span className="flex-1 text-left">Dev Server</span>
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left"><p>Live preview of running processes</p></TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </PopoverContent>
-              </Popover>
-            )
-          })()}
-
-          {/* More Options Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {/* Change model - mobile only since selector opens sheet */}
-              <DropdownMenuItem
-                onClick={() => setMobileModelSheetOpen(true)}
-                className="md:hidden"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" /> Change model
-              </DropdownMenuItem>
-              {/* Compare models - mobile only, desktop has button */}
-              {onAddChat && (
-                <DropdownMenuItem
-                  onClick={onAddChat}
-                  className="md:hidden"
-                >
-                  <Plus className="h-4 w-4 mr-2" /> Compare models
-                </DropdownMenuItem>
-              )}
-              {/* Remove chat - mobile only, for multi-chat mode */}
-              {onRemoveChat && canRemoveChat && (
-                <DropdownMenuItem
-                  onClick={onRemoveChat}
-                  className="md:hidden text-destructive focus:text-destructive"
-                >
-                  <X className="h-4 w-4 mr-2" /> Remove chat
-                </DropdownMenuItem>
-              )}
-              {/* New conversation - mobile only */}
-              <DropdownMenuItem
-                onClick={() => navigate({ to: '/chats', search: { new: true } })}
-                className="md:hidden"
-              >
-                <MessageSquarePlus className="h-4 w-4 mr-2" /> New conversation
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="md:hidden" />
-
-              <DropdownMenuItem onClick={() => setInstructionsSheetOpen(true)}>
-                <ScrollText className="h-4 w-4 mr-2" /> Chat instructions
-              </DropdownMenuItem>
-              {hasWorkspace && (
-                <DropdownMenuItem onClick={() => setCodeEditorOpen(true)} className="md:hidden">
-                  <Code2 className="h-4 w-4 mr-2" /> Open IDE
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-
-              {(onCopyResponses || onExportResponses) && (
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <FileText className="h-4 w-4 mr-2" /> Responses
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {onCopyResponses && (
-                      <DropdownMenuItem onClick={onCopyResponses}>
-                        <Copy className="h-4 w-4 mr-2" /> Copy
-                      </DropdownMenuItem>
-                    )}
-                    {onExportResponses && (
-                      <DropdownMenuItem onClick={onExportResponses}>
-                        <Download className="h-4 w-4 mr-2" /> Export (.txt)
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              )}
-              {(onCopyMetadata || onExportMetadata) && (
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <Braces className="h-4 w-4 mr-2" /> Metadata
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {onCopyMetadata && (
-                      <DropdownMenuItem onClick={onCopyMetadata}>
-                        <Copy className="h-4 w-4 mr-2" /> Copy (JSON)
-                      </DropdownMenuItem>
-                    )}
-                    {onExportMetadata && (
-                      <DropdownMenuItem onClick={onExportMetadata}>
-                        <Download className="h-4 w-4 mr-2" /> Export (.json)
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              )}
-
-              {/* Save to Knowledge Base */}
-              {hasMessages && (
-                <DropdownMenuItem
-                  onClick={handleSaveToKnowledgeBase}
-                  disabled={isSavingToKnowledgeBase}
-                >
-                  {isSavingToKnowledgeBase ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <BookOpen className="h-4 w-4 mr-2" />
-                  )}
-                  Save to knowledge base
-                </DropdownMenuItem>
-              )}
-
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Exit immersive - hidden on mobile (mobile is always immersive) */}
-          {onExitImmersive && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onExitImmersive}
-                    className="hidden md:flex h-8 px-2 text-muted-foreground hover:text-foreground"
-                  >
-                    <Minimize2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Exit focus mode
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
-      </header>
+      <ImmersiveChatHeader
+        model={chat.model}
+        models={models}
+        onModelSelect={onModelSelect}
+        showFilters={showFilters}
+        onToggleFilters={onToggleFilters}
+        hasActiveFilters={hasActiveFilters}
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+        providers={providers}
+        recentModelIds={recentModelIds}
+        headerCenterContent={headerCenterContent}
+        onAddChat={onAddChat}
+        hasWorkspace={hasWorkspace}
+        onOpenCodeEditor={() => setCodeEditorOpen(true)}
+        sparksCount={currentChatSparks.length}
+        onRemoveChat={onRemoveChat}
+        canRemoveChat={canRemoveChat}
+        onOpenMobileModelSheet={() => setMobileModelSheetOpen(true)}
+        onOpenInstructions={() => setInstructionsSheetOpen(true)}
+        hasMessages={hasMessages}
+        onSaveToKnowledgeBase={handleSaveToKnowledgeBase}
+        isSavingToKnowledgeBase={isSavingToKnowledgeBase}
+        onCopyResponses={onCopyResponses}
+        onCopyMetadata={onCopyMetadata}
+        onExportResponses={onExportResponses}
+        onExportMetadata={onExportMetadata}
+        onExitImmersive={onExitImmersive}
+      />
 
       {/* Content wrapper - flex row for chat + artifacts panel */}
       <div className="flex-1 flex overflow-hidden">
@@ -1643,34 +819,12 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
       />
 
       {/* Save to Knowledge Base Confirmation Dialog */}
-      <Dialog open={showSaveToKBDialog} onOpenChange={setShowSaveToKBDialog}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>Save to Knowledge Base</DialogTitle>
-            <DialogDescription>
-              Save this conversation to your knowledge base? This will make the conversation content searchable by AI.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSaveToKBDialog(false)} disabled={isSavingToKnowledgeBase}>
-              Cancel
-            </Button>
-            <Button onClick={confirmSaveToKnowledgeBase} disabled={isSavingToKnowledgeBase}>
-              {isSavingToKnowledgeBase ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  Save
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SaveToKnowledgeBaseDialog
+        open={showSaveToKBDialog}
+        onOpenChange={setShowSaveToKBDialog}
+        isSaving={isSavingToKnowledgeBase}
+        onConfirm={confirmSaveToKnowledgeBase}
+      />
 
       {/* Model Details Modal */}
       <ModelDetailsModal
@@ -1715,386 +869,27 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
       />
 
       {/* All Attachments Modal */}
-      <Dialog open={isAllAttachmentsOpen} onOpenChange={setIsAllAttachmentsOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Attachments</DialogTitle>
-            <DialogDescription>
-              {allAttachments.length} item{allAttachments.length !== 1 ? 's' : ''}
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Group attachments into sections */}
-          {(() => {
-            const imageAtts = allAttachments.filter((a): a is ImageAttachment => a.type === 'image')
-            const videoAtts = allAttachments.filter((a): a is VideoAttachment => a.type === 'video')
-            const audioAtts = allAttachments.filter((a): a is AudioAttachment => a.type === 'audio')
-            const fileAtts = allAttachments.filter((a): a is FileAttachment => a.type === 'file')
-
-            // Categorize files by mime type or extension
-            const textCodeAtts = fileAtts.filter(f => {
-              const mimeType = f.file?.type || ''
-              const name = f.file?.name || ''
-              const ext = getFileExtension(name).toLowerCase()
-              // Text-based mime types or common text file extensions
-              return mimeType.startsWith('text/') ||
-                mimeType === 'application/json' ||
-                mimeType === 'application/xml' ||
-                mimeType === 'application/javascript' ||
-                ['txt', 'json', 'xml', 'csv', 'md', 'js', 'ts', 'jsx', 'tsx', 'py', 'html', 'css', 'yaml', 'yml', 'sh', 'sql'].includes(ext)
-            })
-
-            const pdfDocxAtts = fileAtts.filter(f => {
-              const mimeType = f.file?.type || ''
-              const name = f.file?.name || ''
-              const ext = getFileExtension(name).toLowerCase()
-              return ['pdf', 'doc', 'docx'].includes(ext) ||
-                mimeType === 'application/pdf' ||
-                mimeType === 'application/msword' ||
-                mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            })
-
-            return (
-              <div className="space-y-6 max-h-[60vh] overflow-y-auto">
-                {/* Images Section */}
-                {imageAtts.length > 0 && (
-                  <div>
-                    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                      <ImagePlus className="h-4 w-4" />
-                      <span>Images</span>
-                      <span className="text-xs text-muted-foreground/70">({imageAtts.length})</span>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {imageAtts.map((img, i) => {
-                        // Use assetId to load via API (direct URLs don't work due to auth)
-                        const assetId = (img as any).assetId || img.id
-                        const blobUrl = assetId ? loadedBlobUrls[assetId] : null
-                        const src = img.base64 || blobUrl || ''
-                        const alt = img.file?.name || 'image'
-                        const isLoading = assetId ? loadingAssetIds.has(assetId) : false
-                        const needsLoad = !src && assetId && !isLoading
-
-                        // Trigger loading if needed
-                        if (needsLoad) {
-                          loadAssetAsBlobUrl(assetId)
-                        }
-
-                        return (
-                          <button
-                            key={img.id}
-                            type="button"
-                            className="w-full h-48 rounded-md overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity"
-                            onClick={() => {
-                              if (!src) return
-                              // Hydrate images with blob URLs
-                              const imgs = imageAtts
-                                .map(a => {
-                                  const aAssetId = (a as any).assetId || a.id
-                                  const aBlobUrl = aAssetId ? loadedBlobUrls[aAssetId] : null
-                                  return { src: a.base64 || aBlobUrl || '', alt: a.file?.name || 'image' }
-                                })
-                                .filter(it => it.src)
-                              handleOpenImageGallery(imgs, i)
-                              setIsAllAttachmentsOpen(false)
-                            }}
-                          >
-                            {isLoading ? (
-                              <div className="w-full h-full flex items-center justify-center bg-muted/40">
-                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                              </div>
-                            ) : src ? (
-                              <img src={src} alt={alt} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground bg-muted/40">
-                                {alt}
-                              </div>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Videos Section */}
-                {videoAtts.length > 0 && (
-                  <div>
-                    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                      <Video className="h-4 w-4" />
-                      <span>Videos</span>
-                      <span className="text-xs text-muted-foreground/70">({videoAtts.length})</span>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {videoAtts.map((vid) => {
-                        const name = vid.file?.name || 'video'
-                        const ext = getFileExtension(name).toUpperCase()
-                        const sizeStr = formatFileSize(vid.file?.size || 0)
-                        const assetId = vid.assetId || vid.id
-                        const blobUrl = assetId ? loadedBlobUrls[assetId] : null
-                        const src = vid.preview || blobUrl || ''
-                        const isLoading = assetId ? loadingAssetIds.has(assetId) : false
-
-                        if (!src && assetId && !isLoading) {
-                          loadAssetAsBlobUrl(assetId)
-                        }
-
-                        return (
-                          <div
-                            key={vid.id}
-                            className="relative w-full h-48 rounded-md overflow-hidden bg-muted/40 group"
-                          >
-                            {isLoading ? (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                              </div>
-                            ) : src ? (
-                              <video
-                                src={src}
-                                preload="metadata"
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Video className="h-8 w-8 text-muted-foreground" />
-                              </div>
-                            )}
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                              <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
-                                <Play className="h-5 w-5 text-white ml-0.5" fill="white" />
-                              </div>
-                            </div>
-                            <div className="absolute bottom-1 left-1 flex items-center gap-1">
-                              <TypeBadge type={ext} />
-                              <span className="text-[10px] px-1.5 py-0 rounded bg-black/60 text-white">{sizeStr}</span>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Audio Section */}
-                {audioAtts.length > 0 && (
-                  <div>
-                    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                      <Music className="h-4 w-4" />
-                      <span>Audio</span>
-                      <span className="text-xs text-muted-foreground/70">({audioAtts.length})</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {audioAtts.map((aud) => {
-                        const name = aud.file?.name || 'audio'
-                        const ext = getFileExtension(name).toUpperCase()
-                        const sizeStr = formatFileSize(aud.file?.size || 0)
-                        return (
-                          <div
-                            key={aud.id}
-                            className="relative rounded-lg border border-border bg-secondary/30 p-2.5 w-full"
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="flex-shrink-0 p-1.5 rounded bg-gradient-to-br from-purple-500/20 to-pink-500/20">
-                                <Music className="h-4 w-4 text-purple-500" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium truncate leading-tight mb-1">{name}</p>
-                                <div className="flex items-center gap-1.5">
-                                  <TypeBadge type={ext} />
-                                  <span className="text-[10px] text-muted-foreground">{sizeStr}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Text/Code Section */}
-                {textCodeAtts.length > 0 && (
-                  <div>
-                    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                      <FileCode className="h-4 w-4" />
-                      <span>Text/Code</span>
-                      <span className="text-xs text-muted-foreground/70">({textCodeAtts.length})</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {textCodeAtts.map((f) => {
-                        const name = f.file?.name || 'file'
-                        const extension = getFileExtension(name)
-                        const sizeStr = formatFileSize(f.file?.size || 0)
-                        const isAvailable = Boolean(f.textContent || f.assetId)
-                        const isLoading = loadingFileId === f.id
-                        return (
-                          <button
-                            key={f.id}
-                            type="button"
-                            onClick={() => handleOpenTextFile(f)}
-                            disabled={!isAvailable || isLoading}
-                            className={cn(
-                              "relative group rounded-lg border border-border bg-secondary/30 transition-colors p-2.5 text-left w-full",
-                              isAvailable && !isLoading ? "hover:bg-secondary/50" : "opacity-60 cursor-not-allowed"
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="flex-shrink-0 p-1.5 rounded bg-primary/10">
-                                {isLoading ? (
-                                  <Loader2 className="h-4 w-4 text-primary animate-spin" />
-                                ) : (
-                                  <FileCode className="h-4 w-4 text-primary" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium truncate leading-tight mb-1">{name}</p>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[10px] px-1.5 py-0 rounded bg-muted font-medium">{extension}</span>
-                                  <span className="text-[10px] text-muted-foreground">{sizeStr}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* PDF/Docx Section */}
-                {pdfDocxAtts.length > 0 && (
-                  <div>
-                    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                      <FileType className="h-4 w-4" />
-                      <span>PDF/Documents</span>
-                      <span className="text-xs text-muted-foreground/70">({pdfDocxAtts.length})</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {pdfDocxAtts.map((f) => {
-                        const name = f.file?.name || 'file'
-                        const extension = getFileExtension(name)
-                        const sizeStr = formatFileSize(f.file?.size || 0)
-                        const assetId = (f as any).assetId || f.id
-                        const blobUrl = assetId ? loadedBlobUrls[assetId] : null
-                        const isPdf = extension.toLowerCase() === 'pdf' || (!!f.base64 && !f.textContent)
-                        const isAssetLoading = assetId ? loadingAssetIds.has(assetId) : false
-                        // For PDFs we can use base64 or fetch via assetId; for DOCX we fetch text content
-                        const isAvailable = isPdf
-                          ? Boolean(f.base64 || blobUrl || assetId)
-                          : Boolean(f.textContent || f.assetId)
-                        const isLoading = loadingFileId === f.id || isAssetLoading
-                        return (
-                          <button
-                            key={f.id}
-                            type="button"
-                            onClick={async () => {
-                              if (isPdf) {
-                                // Priority: base64 > loaded blob URL > fetch from API
-                                let pdfSource = f.base64 || blobUrl
-                                if (!pdfSource && assetId) {
-                                  pdfSource = await loadAssetAsBlobUrl(assetId)
-                                }
-                                if (pdfSource) {
-                                  handleOpenPdf(pdfSource, name)
-                                } else {
-                                  toast.error('Failed to load PDF')
-                                }
-                              } else {
-                                // For non-PDF documents, use the async file handler
-                                handleOpenTextFile(f)
-                              }
-                            }}
-                            disabled={!isAvailable || isLoading}
-                            className={cn(
-                              "relative group rounded-lg border border-border bg-secondary/30 transition-colors p-2.5 text-left w-full",
-                              isAvailable && !isLoading ? "hover:bg-secondary/50" : "opacity-60 cursor-not-allowed"
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="flex-shrink-0 p-1.5 rounded bg-primary/10">
-                                {isLoading ? (
-                                  <Loader2 className="h-4 w-4 text-primary animate-spin" />
-                                ) : (
-                                  <FileType className="h-4 w-4 text-primary" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium truncate leading-tight mb-1">{name}</p>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[10px] px-1.5 py-0 rounded bg-muted font-medium">{extension}</span>
-                                  <span className="text-[10px] text-muted-foreground">{sizeStr}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAllAttachmentsOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AllAttachmentsModal
+        open={isAllAttachmentsOpen}
+        onOpenChange={setIsAllAttachmentsOpen}
+        attachments={allAttachments}
+        loadedBlobUrls={loadedBlobUrls}
+        loadingAssetIds={loadingAssetIds}
+        loadingFileId={loadingFileId}
+        onLoadAsset={loadAssetAsBlobUrl}
+        onOpenImageGallery={handleOpenImageGallery}
+        onOpenTextFile={handleOpenTextFile}
+        onOpenPdf={handleOpenPdf}
+      />
 
       {/* Mobile Model Selection Sheet */}
-      <Sheet open={mobileModelSheetOpen} onOpenChange={setMobileModelSheetOpen}>
-        <SheetContent side="bottom" className="h-[70vh] rounded-t-xl">
-          <SheetHeader className="pt-2 pb-4">
-            <SheetTitle>Select a model</SheetTitle>
-          </SheetHeader>
-          <div className="overflow-y-auto h-[calc(100%-4rem)] -mx-6 px-6">
-            <div className="space-y-1">
-              {models.map((model) => {
-                const isSelected = model.model_id === chat.model?.model_id
-                return (
-                  <button
-                    key={model.model_id}
-                    onClick={() => {
-                      onModelSelect(model as Model)
-                      setMobileModelSheetOpen(false)
-                    }}
-                    className={cn(
-                      "w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors",
-                      isSelected
-                        ? "bg-accent text-accent-foreground"
-                        : "hover:bg-muted"
-                    )}
-                  >
-                    <ModelIcon
-                      modelName={model.name}
-                      modelId={model.model_id}
-                      provider={model.provider}
-                      modelIconSlug={model.model_icon_slug}
-                      modelIconUrl={model.model_icon_url}
-                      providerIconSlug={model.provider_icon_slug}
-                      providerIconUrl={model.provider_icon_url}
-                      size={24}
-                      showTooltip={false}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate text-sm">{removeProviderPrefix(model.name, model.provider)}</div>
-                      <div className="text-xs text-muted-foreground truncate">{model.provider}</div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-xs text-muted-foreground">
-                        {pricingUtils.formatCostWithUnit((model.cost_per_1m_prompt + model.cost_per_1m_completion) / 2)}
-                      </div>
-                    </div>
-                    {isSelected && (
-                      <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+      <MobileModelSheet
+        open={mobileModelSheetOpen}
+        onOpenChange={setMobileModelSheetOpen}
+        models={models}
+        selectedModelId={chat.model?.model_id}
+        onSelectModel={onModelSelect}
+      />
 
       {/* Voice Conversation Overlay - fullscreen voice mode like Voice Sessions */}
       <VoiceConversationOverlay

@@ -40,6 +40,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
 import { mcpApi, type MCPServer, type MCPPreconfiguredServer } from '@/api/mcp'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 import { cn } from '@/lib/utils'
 import { useThemeStore } from '@/store/themeStore'
 import { AddServerDialog } from './AddServerDialog'
@@ -128,8 +129,8 @@ export function CustomServersList({
       setDeleteDialogOpen(false)
       setServerToDelete(null)
       onRefresh()
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to delete server')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to delete server'))
     } finally {
       setIsDeleting(false)
     }
@@ -143,8 +144,8 @@ export function CustomServersList({
       const toolCount = response.data.tools?.length || 0
       toast.success(`Discovered ${toolCount} tool${toolCount !== 1 ? 's' : ''} from ${server.name}`)
       onRefresh()
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to discover tools')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to discover tools'))
     } finally {
       setDiscoveringTools(null)
     }
@@ -166,12 +167,8 @@ export function CustomServersList({
       } else {
         throw new Error('No authorization URL received')
       }
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.detail ||
-                       error.response?.data?.message ||
-                       error.message ||
-                       'Failed to initiate OAuth authorization'
-      toast.error(errorMsg)
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to initiate OAuth authorization'))
     } finally {
       setAuthorizingServer(null)
     }
@@ -188,8 +185,8 @@ export function CustomServersList({
         toast.error(`Failed to connect to ${server.name}`)
       }
       onRefresh()
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to reconnect')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to reconnect'))
     } finally {
       setReconnectingServer(null)
     }
@@ -329,17 +326,17 @@ export function CustomServersList({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-40">
-                      <DropdownMenuItem onClick={(e) => handleDiscoverTools(server, e as any)}>
+                      <DropdownMenuItem onClick={(e) => handleDiscoverTools(server, e)}>
                         <RefreshCw className="w-3.5 h-3.5 mr-2" />
                         Refresh Tools
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => handleEditClick(server, e as any)}>
+                      <DropdownMenuItem onClick={(e) => handleEditClick(server, e)}>
                         <Pencil className="w-3.5 h-3.5 mr-2" />
                         Edit
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        onClick={(e) => handleDeleteClick(server, e as any)}
+                        onClick={(e) => handleDeleteClick(server, e)}
                         className="text-red-500 focus:text-red-500"
                       >
                         <Trash2 className="w-3.5 h-3.5 mr-2" />

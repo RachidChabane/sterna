@@ -3,6 +3,8 @@
  *
  * Provides API methods for process management inside a running sandbox.
  */
+import axios from 'axios'
+import { orchestratorClient } from './client'
 
 // ===========================
 // Process Management API
@@ -16,11 +18,18 @@ export interface ProcessInfo {
   status: 'running' | 'stopped'
 }
 
-const ORCHESTRATOR_URL = import.meta.env.VITE_ORCHESTRATOR_URL || '/api/v1/sandbox'
-
-function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('access_token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
+/**
+ * Read the backend-supplied `detail` off a failed orchestratorClient
+ * request, falling back to `fallback` when the response has none —
+ * mirrors the `err.detail || fallback` pattern the raw `fetch()` calls
+ * this client replaces used against the parsed JSON error body.
+ */
+function detailError(err: unknown, fallback: string): Error {
+  if (axios.isAxiosError(err)) {
+    const detail = (err.response?.data as { detail?: string } | undefined)?.detail
+    if (detail) return new Error(detail)
+  }
+  return new Error(fallback)
 }
 
 /**
@@ -33,28 +42,30 @@ export async function startProcess(params: {
   command: string
   port: number
 }): Promise<ProcessInfo> {
-  const response = await fetch(`${ORCHESTRATOR_URL}/processes/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ ...params, sync_mode: true }),
-  })
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.detail || `Failed to start process (${response.status})`)
+  try {
+    const response = await orchestratorClient.post<ProcessInfo>('/processes/start', { ...params, sync_mode: true })
+    return response.data
+  } catch (err) {
+    const status = axios.isAxiosError(err) ? err.response?.status : undefined
+    throw detailError(err, `Failed to start process (${status})`)
   }
-  return response.json()
 }
 
 /**
  * List running processes with registered ports
  */
 export async function listProcesses(userId: string, chatId: string): Promise<ProcessInfo[]> {
-  const response = await fetch(
-    `${ORCHESTRATOR_URL}/processes/${userId}?chat_id=${encodeURIComponent(chatId)}`,
-    { headers: getAuthHeaders() },
-  )
-  if (!response.ok) return []
-  return response.json()
+  try {
+    const response = await orchestratorClient.get<ProcessInfo[]>(`/processes/${userId}`, {
+      params: { chat_id: chatId },
+      // Callers already swallow any failure and fall back to an empty
+      // list — an expired session here shouldn't interrupt with a modal.
+      suppressUnauthorizedModal: true,
+    })
+    return response.data
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -66,32 +77,30 @@ export async function stopProcess(params: {
   chat_id?: string
   pid: number
 }): Promise<{ success: boolean }> {
-  const response = await fetch(`${ORCHESTRATOR_URL}/processes/stop`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ ...params, sync_mode: true }),
-  })
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.detail || `Failed to stop process (${response.status})`)
+  try {
+    const response = await orchestratorClient.post<{ success: boolean }>('/processes/stop', { ...params, sync_mode: true })
+    return response.data
+  } catch (err) {
+    const status = axios.isAxiosError(err) ? err.response?.status : undefined
+    throw detailError(err, `Failed to stop process (${status})`)
   }
-  return response.json()
 }
 
 /**
  * Stop a background process by port (looks up PID from registry)
  */
 export async function stopProcessByPort(userId: string, conversationId: string, port: number): Promise<{ success: boolean }> {
-  const response = await fetch(`${ORCHESTRATOR_URL}/processes/stop-by-port`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ user_id: userId, conversation_id: conversationId, port }),
-  })
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.detail || `Failed to stop process (${response.status})`)
+  try {
+    const response = await orchestratorClient.post<{ success: boolean }>('/processes/stop-by-port', {
+      user_id: userId,
+      conversation_id: conversationId,
+      port,
+    })
+    return response.data
+  } catch (err) {
+    const status = axios.isAxiosError(err) ? err.response?.status : undefined
+    throw detailError(err, `Failed to stop process (${status})`)
   }
-  return response.json()
 }
 
 /**
@@ -104,16 +113,13 @@ export async function restartProcess(params: {
   command: string
   port: number
 }): Promise<ProcessInfo> {
-  const response = await fetch(`${ORCHESTRATOR_URL}/processes/restart`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ ...params, sync_mode: true }),
-  })
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    throw new Error(err.detail || `Failed to restart process (${response.status})`)
+  try {
+    const response = await orchestratorClient.post<ProcessInfo>('/processes/restart', { ...params, sync_mode: true })
+    return response.data
+  } catch (err) {
+    const status = axios.isAxiosError(err) ? err.response?.status : undefined
+    throw detailError(err, `Failed to restart process (${status})`)
   }
-  return response.json()
 }
 
 /**
@@ -129,13 +135,14 @@ const ORCHESTRATOR_DIRECT_URL = import.meta.env.VITE_ORCHESTRATOR_URL_DIRECT
  */
 export async function checkProcessHealth(userId: string, port: number): Promise<boolean> {
   try {
-    const response = await fetch(
-      `${ORCHESTRATOR_URL}/processes/health?user_id=${encodeURIComponent(userId)}&port=${port}`,
-      { headers: getAuthHeaders() },
-    )
-    if (!response.ok) return false
-    const data = await response.json()
-    return data.ready === true
+    const response = await orchestratorClient.get<{ ready?: boolean }>('/processes/health', {
+      params: { user_id: userId, port },
+      // This is polled in a tight loop while waiting for a preview server
+      // to come up; a session that expires mid-poll should fail this
+      // check silently rather than pop the session-expired modal.
+      suppressUnauthorizedModal: true,
+    })
+    return response.data.ready === true
   } catch {
     return false
   }
@@ -146,13 +153,14 @@ export async function checkProcessHealth(userId: string, port: number): Promise<
  * Requires the main JWT (sent via Authorization header).
  */
 export async function fetchPreviewToken(userId: string, port: number): Promise<string> {
-  const response = await fetch(
-    `${ORCHESTRATOR_URL}/preview/token?user_id=${encodeURIComponent(userId)}&port=${port}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() } },
-  )
-  if (!response.ok) throw new Error('Failed to get preview token')
-  const data = await response.json()
-  return data.token
+  try {
+    const response = await orchestratorClient.post<{ token: string }>('/preview/token', null, {
+      params: { user_id: userId, port },
+    })
+    return response.data.token
+  } catch {
+    throw new Error('Failed to get preview token')
+  }
 }
 
 /**

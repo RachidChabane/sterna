@@ -9,9 +9,9 @@
  * Requires VITE_ENABLE_DEV_AUTH=true (set by e2e/setup-env.ts).
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 
-async function loginDev(page: any) {
+async function loginDev(page: Page) {
   await page.goto('/login')
   await page.getByLabel('Email address').fill('dev@example.com')
   await page.getByLabel('Password', { exact: true }).fill('password123')

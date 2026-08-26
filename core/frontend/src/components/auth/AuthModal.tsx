@@ -19,6 +19,7 @@ import { Mail, Lock, Eye, EyeOff, Loader2, Github, AlertCircle } from 'lucide-re
 import { useToast } from '@/hooks/use-toast'
 import { authApi } from '@/api/endpoints'
 import { setTokens } from '@/api/client'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 
 /**
  * Authentication modal that appears instead of redirecting to login page.
@@ -117,7 +118,7 @@ export function AuthModal() {
     }
   }
 
-  const handleGoogleCallback = async (response: any) => {
+  const handleGoogleCallback = async (response: { credential?: string }) => {
     if (!response.credential) {
       toast({
         title: 'Google authentication failed',
@@ -160,11 +161,11 @@ export function AuthModal() {
       setTimeout(() => {
         setRedirecting(false)
       }, 500)
-    } catch (error: any) {
+    } catch (error) {
       console.error('[AuthModal] Google auth error:', error)
       toast({
         title: 'Authentication failed',
-        description: error.response?.data?.error || 'Could not authenticate with Google.',
+        description: getApiErrorMessage(error, 'Could not authenticate with Google.'),
         variant: 'destructive',
       })
     }

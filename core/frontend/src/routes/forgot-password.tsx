@@ -52,7 +52,7 @@ function ForgotPasswordPage() {
     setState('submitting')
     try {
       await authApi.resetPassword(sanitized)
-    } catch (err: any) {
+    } catch (err) {
       // Backend always returns 200 to avoid email enumeration, but log
       // anything unexpected without leaking it to the user.
       console.error('Password reset request failed:', err)

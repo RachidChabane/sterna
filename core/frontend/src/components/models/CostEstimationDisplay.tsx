@@ -19,22 +19,10 @@ import {
 } from '@/components/ui/tooltip'
 import { Calculator, Info, X } from 'lucide-react'
 import type { Attachment } from './types'
-
-interface CostEstimate {
-  prompt_tokens: number
-  completion_tokens: number
-  total_cost: number
-  costs: Array<{
-    model_id: string
-    model_name: string
-    cost: number
-    prompt_tokens: number
-    completion_tokens: number
-  }>
-}
+import type { NormalizedCostEstimate } from '@/api/llm'
 
 interface CostEstimationDisplayProps {
-  estimatedCosts: CostEstimate | null
+  estimatedCosts: NormalizedCostEstimate | null
   attachments: Attachment[]
   onClose: () => void
 }
@@ -46,7 +34,7 @@ export function CostEstimationDisplay({
 }: CostEstimationDisplayProps) {
   if (!estimatedCosts) return null
 
-  const hasMediaAttachments = attachments.some((att: any) =>
+  const hasMediaAttachments = attachments.some((att) =>
     att.type === 'image' || (att.type === 'file' && (
       (att.file?.type === 'application/pdf') ||
       ((att.file?.name || '').toLowerCase().endsWith('.pdf'))
@@ -81,7 +69,7 @@ export function CostEstimationDisplay({
                   Per model ({estimatedCosts.costs.length}):
                 </p>
                 <div className="space-y-1.5">
-                  {estimatedCosts.costs.map((cost: any, index: number) => (
+                  {estimatedCosts.costs.map((cost, index: number) => (
                     <div
                       key={`${cost.model_id}-${index}`}
                       className="px-2 py-1.5 rounded bg-muted/30"

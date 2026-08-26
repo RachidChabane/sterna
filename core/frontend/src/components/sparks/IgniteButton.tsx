@@ -36,6 +36,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { useUIStore } from '@/store/uiStore'
 import { sparksAPI, type SparkDeployment } from '@/api/sparks'
+import { getApiErrorMessage, hasErrorResponse } from '@/utils/errorMessages'
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -185,8 +186,8 @@ export function useIgniteDeploy({
         title: 'Deploying to Vercel...',
         description: 'This takes about 15-30 seconds.',
       })
-    } catch (error: any) {
-      const status = error?.response?.status
+    } catch (error) {
+      const status = hasErrorResponse(error) ? error.response?.status : undefined
       if (status === 409) {
         toast({ title: 'Deployment already in progress', variant: 'destructive' })
       } else if (status === 429) {
@@ -194,7 +195,7 @@ export function useIgniteDeploy({
       } else {
         toast({
           title: 'Failed to deploy',
-          description: error?.response?.data?.error || error.message,
+          description: getApiErrorMessage(error, 'Deployment failed'),
           variant: 'destructive',
         })
       }

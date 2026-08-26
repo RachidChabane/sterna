@@ -57,6 +57,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { useUIStore } from '@/store/uiStore'
 import { sparksAPI, type SparkVersion } from '@/api/sparks'
 import { assetsAPI, type Asset, type GalleryAsset } from '@/api/assets'
+import { fetchStream } from '@/api/transport'
+import { getApiErrorMessage, hasErrorResponse } from '@/utils/errorMessages'
 import { AssetImage } from './AssetImage'
 import { VideoThumbnail } from '@/components/videos/VideoPlayer'
 import { ImageDetailModal } from '@/components/images/ImageDetailModal'
@@ -240,10 +242,7 @@ function SparkPanelDetail({
   const handleDownload = useCallback(async () => {
     if (spark.download_url) {
       try {
-        const token = localStorage.getItem('access_token')
-        const resp = await fetch(spark.download_url, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
+        const resp = await fetchStream(spark.download_url)
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const blob = await resp.blob()
         const url = URL.createObjectURL(blob)
@@ -549,10 +548,10 @@ function AppPanelDetail({
       toast({ title: 'Dev server started' })
       // Close creations panel — preview is shown in the dev server panel
       closePanel()
-    } catch (error: any) {
+    } catch (error) {
       setPreviewState(app.id, { loading: false })
-      const status = error?.response?.status
-      const raw = error?.response?.data?.error || error?.message || 'Unknown error'
+      const status = hasErrorResponse(error) ? error.response?.status : undefined
+      const raw = getApiErrorMessage(error, 'Unknown error')
       const msg = typeof raw === 'string' ? raw : JSON.stringify(raw)
       if (status === 409) {
         toast({ title: 'Port already in use', description: 'Stop the other preview first', variant: 'destructive' })

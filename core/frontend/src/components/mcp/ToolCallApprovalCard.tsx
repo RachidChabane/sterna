@@ -18,17 +18,7 @@ import {
 } from '@/components/ui/select'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
-
-interface ToolCallApproval {
-  id: string
-  tool_id: string
-  tool_name: string
-  tool_description: string
-  server_name: string
-  server_icon_url?: string
-  arguments: Record<string, unknown>
-  status: 'pending' | 'approved' | 'rejected'
-}
+import type { ToolCallApproval } from '@/components/models/types'
 
 interface ToolCallApprovalCardProps {
   approval: ToolCallApproval

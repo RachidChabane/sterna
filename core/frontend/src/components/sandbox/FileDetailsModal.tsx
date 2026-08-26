@@ -16,6 +16,7 @@ import { Loader2, FileText, Clock, User, AlertCircle, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fsAPI, type FileMetadata } from '@/api/fs'
 import { useAuthStore } from '@/store/authStore'
+import { toErrorMessage } from '@/utils/errorMessages'
 
 interface FileDetailsModalProps {
   open: boolean
@@ -74,9 +75,9 @@ export function FileDetailsModal({
       } else {
         setError(result.error || 'Failed to load metadata')
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to load file metadata:', err)
-      setError(err.message || 'Failed to load metadata')
+      setError(toErrorMessage(err) || 'Failed to load metadata')
     } finally {
       setIsLoading(false)
     }

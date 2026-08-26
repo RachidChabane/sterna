@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { useStreamingTTS } from '@/hooks/useStreamingTTS'
 import { useSettingsStore } from '@/store/settingsStore'
-import { getAccessToken } from '@/api/client'
+import apiClient, { LONG_RUNNING_TIMEOUT_MS } from '@/api/client'
 import { toast } from 'sonner'
 import { SpatialPresence } from '@/components/voice-rooms/SpatialPresence'
 import { UserVoicePulse } from '@/components/voice-rooms/UserVoicePulse'
@@ -51,10 +51,10 @@ function extractToolAction(message: Message | undefined): { isExecuting: boolean
   // Find tool_executions steps
   for (const step of message.steps) {
     if (step.type === 'tool_executions' && step.executions?.length > 0) {
-      const isExecuting = step.executions.some((e: any) => e.isExecuting === true)
+      const isExecuting = step.executions.some((e) => e.isExecuting === true)
       if (isExecuting || step.isExecuting) {
         // Get action description from first executing tool
-        const exec = step.executions.find((e: any) => e.isExecuting) || step.executions[0]
+        const exec = step.executions.find((e) => e.isExecuting) || step.executions[0]
         const displayName = exec?.tool_call?.display_name
         const toolName = exec?.tool_call?.function?.name || ''
 
@@ -451,20 +451,16 @@ export function VoiceConversationOverlay({
           formData.append('audio', audioBlob, `recording.${extension}`)
           formData.append('language', sttLanguage)
 
-          const accessToken = getAccessToken()
-
-          const response = await fetch('/api/llm/transcribe/', {
-            method: 'POST',
-            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-            body: formData,
+          const response = await apiClient.post('/llm/transcribe/', formData, {
+            // Un-set the instance's default JSON Content-Type so the
+            // browser can set the multipart boundary itself.
+            headers: { 'Content-Type': undefined },
+            timeout: LONG_RUNNING_TIMEOUT_MS,
+          }).catch((err) => {
+            throw new Error(`Transcription failed: ${err?.response?.status ?? 'network error'}`)
           })
 
-
-          if (!response.ok) {
-            throw new Error(`Transcription failed: ${response.status}`)
-          }
-
-          const result = await response.json()
+          const result = response.data
           const transcript = result.transcript?.trim()
 
           if (!transcript) {
@@ -522,8 +518,8 @@ export function VoiceConversationOverlay({
     }
     if (Array.isArray(message.content)) {
       return message.content
-        .filter((part: any) => part.type === 'text')
-        .map((part: any) => part.text)
+        .filter((part): part is Extract<typeof part, { type: 'text' }> => part.type === 'text')
+        .map((part) => part.text)
         .join('\n')
     }
     return ''

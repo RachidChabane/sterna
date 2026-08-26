@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Re-export the agent_core tool id list to a temp file and diff it
+# against the committed
+# core/frontend/src/api/generated/agent-core-tool-ids.json. Exits 1 and
+# prints the diff on any drift, the same shape as script/schema-diff.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+committed_path="$repo_root/core/frontend/src/api/generated/agent-core-tool-ids.json"
+
+if [ ! -f "$committed_path" ]; then
+  echo "No committed tool id list found at ${committed_path#"$repo_root"/}; run script/tool-ids-snapshot first." >&2
+  exit 1
+fi
+
+work_dir="$(mktemp -d)"
+trap 'rm -rf "$work_dir"' EXIT
+
+current_path="$work_dir/agent-core-tool-ids.json"
+generator_log="$work_dir/generator.log"
+
+if ! (
+  cd "$repo_root/core"
+  DJANGO_SETTINGS_MODULE=sterna.settings.test "$repo_root/.venv/bin/python" - "$current_path" <<'PYEOF'
+import json
+import sys
+
+import django
+
+django.setup()
+
+from llm.agent_core.registry import discover_tools
+
+output_path = sys.argv[1]
+tool_ids = sorted(discover_tools().keys())
+
+with open(output_path, "w") as fh:
+    json.dump(tool_ids, fh, indent=2)
+    fh.write("\n")
+PYEOF
+) >"$generator_log" 2>&1; then
+  cat "$generator_log" >&2
+  exit 1
+fi
+
+if ! diff -u "$committed_path" "$current_path"; then
+  echo "Agent-core tool id drift detected: ${committed_path#"$repo_root"/} is out of date." >&2
+  echo "Run script/tool-ids-snapshot and commit the result." >&2
+  exit 1
+fi
+
+echo "==> Committed tool ids match llm.agent_core.registry.discover_tools()"
