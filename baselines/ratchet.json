@@ -48,7 +48,7 @@
       "core/frontend/src/components/voice-rooms/CreateRoomModal.tsx": 1914,
       "core/frontend/src/components/voice-rooms/VoiceRoomPage.tsx": 1183,
       "core/frontend/src/hooks/useMentionAutocomplete.ts": 1072,
-      "core/frontend/src/hooks/useMessageSending.ts": 2731,
+      "core/frontend/src/hooks/useMessageSending.ts": 970,
       "core/frontend/src/hooks/useVoiceRoomSocket.ts": 911,
       "core/frontend/src/pages/KnowledgeBasePage.tsx": 1060,
       "core/google-maps/main.py": 811,
