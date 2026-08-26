@@ -39,6 +39,8 @@ from .doubles import (
     content_chunk,
     done_chunk,
     generation_id_chunk,
+    image_chunk,
+    reasoning_chunk,
     tool_call_chunk,
     tool_definition,
     usage_chunk,
@@ -364,6 +366,34 @@ def _v2_file_and_catalog_tools() -> GraphDependencies:
     )
 
 
+def _v2_reasoning_turn() -> GraphDependencies:
+    return _v2_dependencies(
+        [
+            [
+                generation_id_chunk(GENERATION_ID),
+                reasoning_chunk("The notes mention two open items."),
+                content_chunk("There are two open items."),
+                usage_chunk(120, 40),
+                done_chunk(STOP),
+            ]
+        ]
+    )
+
+
+def _v2_image_output_turn() -> GraphDependencies:
+    return _v2_dependencies(
+        [
+            [
+                generation_id_chunk(GENERATION_ID),
+                content_chunk("Here is the requested image."),
+                image_chunk("https://example.invalid/golden-fixture.png"),
+                usage_chunk(120, 40),
+                done_chunk(STOP),
+            ]
+        ]
+    )
+
+
 def _v2_provider_error() -> GraphDependencies:
     return _v2_dependencies(
         [
@@ -461,5 +491,15 @@ def scenarios() -> List[ParityScenario]:
             name="v2_provider_error_mid_stream",
             build_dependencies=_v2_provider_error,
             divergences=(d.v2_error_is_labelled_generically(V2_ERROR_LABEL),),
+        ),
+        ParityScenario(
+            name="v2_reasoning_turn",
+            build_dependencies=_v2_reasoning_turn,
+            divergences=(d.v2_done_reports_tool_cost(),),
+        ),
+        ParityScenario(
+            name="v2_image_output_turn",
+            build_dependencies=_v2_image_output_turn,
+            divergences=(d.v2_done_reports_tool_cost(),),
         ),
     ]

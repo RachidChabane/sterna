@@ -26,7 +26,7 @@ _MESSAGE_CLASS_BY_ROLE = {
 }
 
 
-def _normalize_content(content):
+def normalize_content(content):
     """Flatten a text-only content-part list; keep multimodal lists intact."""
     if not isinstance(content, list):
         return content
@@ -59,7 +59,7 @@ def convert_messages(messages: List[Dict[str, Any]]) -> List:
 
         # Normalized before the role check so the multimodal diagnostic
         # fires for every message, exactly as it did inline.
-        content = _normalize_content(msg.get("content", ""))
+        content = normalize_content(msg.get("content", ""))
 
         message_class = _MESSAGE_CLASS_BY_ROLE.get(msg.get("role"))
         if message_class is None:

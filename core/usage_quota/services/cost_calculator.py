@@ -66,7 +66,7 @@ FALLBACK_PRICING = {
         'places_details': Decimal('0.017'),
         'air_quality': Decimal('0.005'),
         'street_view': Decimal('0.007'),
-        # Frontend photo-enrichment proxy (llm.views.google_maps_place_photo):
+        # Frontend photo-enrichment proxy (llm.views.google_maps.google_maps_place_photo):
         # one Places Text Search (~$0.032) + one photo fetch (~$0.007).
         'places_photo': Decimal('0.039'),
     },

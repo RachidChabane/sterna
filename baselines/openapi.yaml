@@ -4512,9 +4512,9 @@ paths:
     post:
       operationId: llm_completions_stream_complete_v2_create
       description: |-
-        Stream completion using LangChain with automatic tool calling loop.
+        Stream completion with automatic tool calling, on the agent core.
 
-        This is a V2 endpoint that properly handles multiple tool call cycles.
+        This is the V2 endpoint that properly handles multiple tool call cycles.
       tags:
       - llm
       security:

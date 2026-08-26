@@ -624,3 +624,28 @@ def get_prompt_builder() -> OptimizedPromptBuilder:
                 _prompt_builder = OptimizedPromptBuilder()
 
     return _prompt_builder
+
+
+def estimate_system_prompt(custom_prompt: Optional[str], features: Dict[str, Any]) -> str:
+    """System prompt used to approximate prompt-token cost for the given features.
+
+    Built through the same prompts_v2 builder the LangChain agent uses in
+    production, so the estimate reflects what the agent will actually send.
+
+    Args:
+        custom_prompt: User-provided system prompt override, if any
+        features: Mapping with any of enable_mcp_tools, enable_reasoning,
+            enable_file_tools, enable_image_generation, enable_video_generation
+    """
+    feature_keys = (
+        "mcp_tools", "reasoning", "file_tools", "image_generation", "video_generation",
+    )
+    enabled_features = {
+        key for key in feature_keys
+        if features.get(f"enable_{key}", False)
+    }
+    system_prompt, _metadata = get_prompt_builder().build_full_prompt(
+        custom_prompt=custom_prompt or None,
+        enabled_features=enabled_features,
+    )
+    return system_prompt

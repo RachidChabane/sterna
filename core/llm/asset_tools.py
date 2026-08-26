@@ -15,7 +15,7 @@ import json
 import logging
 from typing import Optional
 
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 # Reuse knowledge base context for user info
@@ -614,7 +614,7 @@ async def save_asset_to_workspace(asset_id: str, path: str) -> str:
         from asgiref.sync import sync_to_async
         from workspaces.models import Asset
         from workspaces.services.asset_storage import get_asset_storage_service
-        from .langchain_file_tools import _get_context
+        from .agent_tool_handlers import _get_context
 
         # Get file tools context for workspace access
         file_context = _get_context()

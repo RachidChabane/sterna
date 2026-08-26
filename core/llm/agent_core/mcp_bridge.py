@@ -57,7 +57,7 @@ class MCPToolSource:
     `ToolExecutionContext`: the port is already scoped to one MCP
     routing target at construction time, where `LegacyToolInvoker`
     dispatches by tool id across the unrelated catalog and
-    http_tool_executor sources.
+    sandbox_tool_executor sources.
     """
 
     def __init__(self, port: MCPToolPort):

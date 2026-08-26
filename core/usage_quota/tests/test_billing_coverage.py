@@ -313,7 +313,7 @@ class TestCodeSessionBilling(BillingCoverageBase):
         return ctx
 
     def test_bill_code_session_writes_code_session_row(self):
-        from llm.langchain_file_tools import _bill_code_session
+        from llm.agent_tool_handlers import _bill_code_session
         ctx = self._make_context()
         async_to_sync(_bill_code_session)(
             ctx, 0.05, "anthropic/claude-sonnet-4", "chat-abc",
@@ -325,7 +325,7 @@ class TestCodeSessionBilling(BillingCoverageBase):
         )
 
     def test_bill_code_session_zero_cost_skipped(self):
-        from llm.langchain_file_tools import _bill_code_session
+        from llm.agent_tool_handlers import _bill_code_session
         ctx = self._make_context()
         async_to_sync(_bill_code_session)(
             ctx, 0.0, "anthropic/claude-sonnet-4", "chat-abc",
@@ -333,7 +333,7 @@ class TestCodeSessionBilling(BillingCoverageBase):
         self.assertNotBilled(service=ServiceType.CODE_SESSION)
 
     def test_bill_code_session_missing_user_skipped(self):
-        from llm.langchain_file_tools import _bill_code_session
+        from llm.agent_tool_handlers import _bill_code_session
         class _Ctx:
             user_id = None
             chat_id = None
@@ -351,7 +351,7 @@ class TestCodingAgentDedupGuard(BillingCoverageBase):
     """
 
     def test_constant_contains_all_four_tools(self):
-        from llm.langchain_file_tools import CODING_AGENT_TOOL_NAMES
+        from llm.agent_tool_handlers import CODING_AGENT_TOOL_NAMES
         self.assertEqual(
             CODING_AGENT_TOOL_NAMES,
             frozenset({
@@ -456,22 +456,16 @@ class TestVoiceRoomLLMBilling(BillingCoverageBase):
 # ---------------------------------------------------------------------------
 
 
-def _make_agent(user, model="clamp/test-model"):
-    """LangChain agent wired to a real user for billing-path tests."""
-    from llm.langchain_agent import LangChainStreamingAgent
+def _make_ledger(user, model="clamp/test-model"):
+    """The agent-core turn's cost ledger, wired to a real user."""
+    from llm.agent.cost_ledger import CostLedger
 
-    return LangChainStreamingAgent(
-        model=model,
-        api_key="sk-test",
-        user_id=str(user.id),
-        conversation_id="conv-1",
-        chat_id="chat-1",
-    )
+    return CostLedger(lambda: str(user.id), model)
 
 
 class TestImageGenSingleNetBill(BillingCoverageBase):
     """Matrix rows #20/#21 — an OpenRouter image generated inside the
-    LangChain chat path produces exactly ONE net bill: the per-image
+    chat turn produces exactly ONE net bill: the per-image
     IMAGE_GENERATION row. The aggregate OPENROUTER/CHAT row must
     subtract the image-gen dollars (`image_gen_cost_in_bundle`).
     """
@@ -485,7 +479,7 @@ class TestImageGenSingleNetBill(BillingCoverageBase):
         }
 
     def test_classifier_marks_openrouter_image_gen(self):
-        from llm.langchain_agent import extract_billable_tool_costs
+        from llm.agent.cost_ledger import extract_billable_tool_costs
 
         tool_cost, image_cost = extract_billable_tool_costs(
             [self._image_tool_result(0.05)]
@@ -494,7 +488,7 @@ class TestImageGenSingleNetBill(BillingCoverageBase):
         self.assertAlmostEqual(image_cost, 0.05)
 
     def test_classifier_skips_non_openrouter_and_coding_tools(self):
-        from llm.langchain_agent import extract_billable_tool_costs
+        from llm.agent.cost_ledger import extract_billable_tool_costs
 
         tool_cost, image_cost = extract_billable_tool_costs([
             self._image_tool_result(0.05, provider="google_ai_studio"),
@@ -503,15 +497,15 @@ class TestImageGenSingleNetBill(BillingCoverageBase):
         self.assertEqual(tool_cost, 0.0)
         self.assertEqual(image_cost, 0.0)
 
-    def test_openrouter_image_in_langchain_chat_bills_exactly_once_net(self):
+    def test_openrouter_image_in_chat_bills_exactly_once_net(self):
         """Mocked-provider flow: the tool layer writes the per-image row
         (real `_record_billing`), then the chat settles through the real
-        `astream_chat` aggregate helper. The image dollars must appear in
+        aggregate cost-ledger helper. The image dollars must appear in
         exactly one UsageLog row and quota must be decremented once.
         """
+        from llm.agent.cost_ledger import extract_billable_tool_costs
         from llm.image_providers.base import ImageGenerationResult
         from llm.image_tools import _record_billing
-        from llm.langchain_agent import extract_billable_tool_costs
 
         # 1) Tool layer (as generate_image does after a mocked provider call)
         result = ImageGenerationResult(
@@ -528,12 +522,12 @@ class TestImageGenSingleNetBill(BillingCoverageBase):
             billing_origin="platform",
         )
 
-        # 2) Chat aggregate settlement (real astream_chat billing helper)
-        agent = _make_agent(self.user)
+        # 2) Chat aggregate settlement (real cost-ledger billing helper)
+        ledger = _make_ledger(self.user)
         tool_cost, image_cost = extract_billable_tool_costs(
             [self._image_tool_result(0.05)]
         )
-        billed = async_to_sync(agent._record_chat_aggregate_usage)(
+        billed = async_to_sync(ledger.record_chat_aggregate_usage)(
             0, 0, tool_cost, image_cost
         )
 
@@ -550,8 +544,8 @@ class TestImageGenSingleNetBill(BillingCoverageBase):
     def test_chat_aggregate_row_bills_residual_tool_cost(self):
         """Matrix row #2 — the aggregate OPENROUTER/CHAT row still bills
         non-image tool cost (nothing else double-records it)."""
-        agent = _make_agent(self.user)
-        billed = async_to_sync(agent._record_chat_aggregate_usage)(
+        ledger = _make_ledger(self.user)
+        billed = async_to_sync(ledger.record_chat_aggregate_usage)(
             0, 0, 0.03, 0.0
         )
         self.assertAlmostEqual(billed, 0.03)
@@ -981,7 +975,7 @@ class TestGoogleMapsPhotoProxy(BillingCoverageBase):
 
     def test_success_records_usage_for_request_user(self):
         client = self._authed_client()
-        with patch("llm.views.httpx_sync.Client") as mock_client_cls:
+        with patch("llm.services.google_maps_photo_service.httpx_sync.Client") as mock_client_cls:
             self._mock_upstream(mock_client_cls)
             response = client.post(
                 self.URL,
@@ -1001,7 +995,7 @@ class TestGoogleMapsPhotoProxy(BillingCoverageBase):
 
     def test_upstream_failure_does_not_bill(self):
         client = self._authed_client()
-        with patch("llm.views.httpx_sync.Client") as mock_client_cls:
+        with patch("llm.services.google_maps_photo_service.httpx_sync.Client") as mock_client_cls:
             self._mock_upstream(
                 mock_client_cls,
                 body={"success": False, "error": "no photo"},
@@ -1040,7 +1034,7 @@ class TestConnectionEndpointSecurity(BillingCoverageBase):
             with patch(
                 "django_ratelimit.core._get_window",
                 return_value=1_999_999_999,
-            ), patch("llm.views.OpenRouterClient") as mock_client_cls:
+            ), patch("llm.views.model_catalog.OpenRouterClient") as mock_client_cls:
                 mock_client_cls.return_value.complete.return_value = {}
                 mock_client_cls.return_value.list_models.return_value = []
                 for i in range(10):
@@ -1069,7 +1063,7 @@ class TestStreamCompleteRateLimitError(BillingCoverageBase):
 
         client = APIClient()
         client.force_authenticate(user=self.user)
-        with patch("llm.views.RateLimiter") as mock_rl:
+        with patch("llm.views.completions.RateLimiter") as mock_rl:
             mock_rl.return_value.wait_if_needed.side_effect = Exception(
                 "rate limited",
             )

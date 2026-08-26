@@ -18,7 +18,7 @@ app_name = "llm"
 
 urlpatterns = [
     path("", include(router.urls)),
-    # LangChain-based streaming (V2)
+    # Agent-core streaming (V2)
     path("completions/stream-complete-v2/", stream_complete_langchain, name="stream-complete-v2"),
     # Google Maps proxy (for frontend display, not sent to models)
     path("google-maps/places/search-photo/", google_maps_place_photo, name="google-maps-place-photo"),

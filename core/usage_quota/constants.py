@@ -12,8 +12,9 @@ billing layer cannot distinguish the two at the ServiceType level, so
 call-site enforcement is required:
   - `core/llm/image_tools.py:_record_billing` (Google AI Studio path)
     hard-codes billing_origin='platform'.
-  - The OpenRouter image-gen path is billed via langchain_agent.py's
-    accumulated_tool_cost path, which uses the resolved request origin.
+  - The OpenRouter image-gen path is billed via the chat turn's
+    aggregate cost-ledger path (`core/llm/agent/cost_ledger.py`), which
+    uses the resolved request origin.
 If a future caller forces billing_origin='byok' on an IMAGE_GENERATION
 op produced by Google AI Studio, the guard will NOT catch it.
 """

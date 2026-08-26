@@ -63,16 +63,8 @@ pydantic==2.10.5
 
 # LLM
 openai==1.59.2
-langchain==0.3.14
-langchain-openai==0.2.14
-langchain-core>=0.3.29
-# langchain-core>=0.3.64 requires langsmith>=0.3.45, which conflicts with
-# langchain==0.3.14's langsmith<0.3 pin above; langgraph-prebuilt (a hard
-# dependency of the langgraph package at every release) requires
-# langchain-core>=0.3.67 starting at its own 0.5.2 release. Pinning
-# langgraph any higher than 0.5.4 pulls a langgraph-prebuilt release past
-# that floor and the two constraints become unsatisfiable together.
-langgraph==0.5.4
+langgraph==1.2.11
+langchain-core==1.4.7
 beautifulsoup4==4.12.3
 trafilatura==2.0.0
 httpx==0.28.1
@@ -122,7 +114,7 @@ greenlet==3.2.0
 pgvector==0.3.6
 pypdf==5.1.0
 tiktoken==0.8.0
-langchain-text-splitters>=0.3.3
+langchain-text-splitters==1.1.2
 tenacity==9.0.0
 
 # Transactional email (Resend)

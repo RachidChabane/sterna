@@ -113,13 +113,13 @@ def event_payload(event: StreamEvent) -> JsonDict:
     if isinstance(event, ToolCallRequestEvent):
         return {
             "approvals": [_approval_payload(approval) for approval in event.approvals],
-            "tool_calls": [_tool_call_payload(call) for call in event.tool_calls],
+            "tool_calls": [tool_call_payload(call) for call in event.tool_calls],
         }
     if isinstance(event, FileToolExecutingEvent):
-        return {"tool_calls": [_tool_call_payload(call) for call in event.tool_calls]}
+        return {"tool_calls": [tool_call_payload(call) for call in event.tool_calls]}
     if isinstance(event, FileToolExecutedEvent):
         return {
-            "tool_calls": [_tool_call_payload(call) for call in event.tool_calls],
+            "tool_calls": [tool_call_payload(call) for call in event.tool_calls],
             "results": [dict(result) for result in event.results],
         }
     if isinstance(event, CodingAgentStepEvent):
@@ -165,7 +165,7 @@ def _done_payload(event: DoneEvent) -> JsonDict:
             "tool_calls": (
                 None
                 if tool_calls is None
-                else [_tool_call_payload(call) for call in tool_calls]
+                else [tool_call_payload(call) for call in tool_calls]
             ),
             "tool_cost": event.tool_cost,
             "awaiting_approval": event.awaiting_approval,
@@ -188,7 +188,7 @@ def _error_payload(event: ErrorEvent) -> JsonDict:
     return payload
 
 
-def _tool_call_payload(call: ToolCall) -> JsonDict:
+def tool_call_payload(call: ToolCall) -> JsonDict:
     return _present(
         {
             "id": call.id,

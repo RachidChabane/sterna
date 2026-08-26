@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import httpx
 from asgiref.sync import sync_to_async
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from sterna.middleware.request_id import request_id_headers

@@ -9,7 +9,7 @@ Two collaborators live here:
   streaming concerns and emits no SSE events.
 
 Django model imports stay inside methods: this package is imported at
-Django app-loading time via ``llm.langchain_agent``.
+Django app-loading time via ``llm.agent_service``.
 """
 
 import logging
@@ -17,8 +17,8 @@ from typing import Callable, Optional
 
 from asgiref.sync import sync_to_async
 
+from ..agent_tool_handlers import CODING_AGENT_TOOL_NAMES
 from ..catalog_service import CatalogService
-from ..langchain_file_tools import CODING_AGENT_TOOL_NAMES
 from ..pricing_config import PRICE_STORAGE_UNIT
 
 # Child of the configured "llm" logger (see sterna/logging.py APP_LOGGERS):
@@ -80,11 +80,6 @@ class CostLedger:
 
     Holds only what billing needs (the user id, the catalog model id) plus
     the ``final_usage_recorded`` flag the view's disconnect handler reads.
-    The two `record_*` methods are deliberately NOT unified: the LangChain
-    path bills tokens + surviving tool cost and marks the turn settled,
-    while the Direct Client path bills tool cost only, carries a
-    ``session_id``, and never marks the turn settled (the LLM dollars are
-    billed inline by ``OpenRouterClient._log_usage``).
     """
 
     def __init__(self, resolve_user_id: Callable[[], Optional[str]], model_id: str):
@@ -153,14 +148,13 @@ class CostLedger:
         total_tool_cost: float,
         image_gen_cost_in_bundle: float = 0.0,
     ) -> float:
-        """Bill the aggregate OPENROUTER/CHAT row for the LangChain path.
+        """Bill the aggregate OPENROUTER/CHAT row for one turn.
 
         The billable amount EXCLUDES OpenRouter image-gen cost
         (``image_gen_cost_in_bundle``): those dollars were already billed
         per-image by ``image_tools._record_billing`` (IMAGE_GENERATION
         row), so folding them into this aggregate would record the same
-        dollars twice and decrement quota twice. Mirrors
-        ``_astream_with_direct_client``'s pre-``done`` deduct.
+        dollars twice and decrement quota twice.
 
         Returns the amount actually billed (0.0 when nothing recorded).
         """
@@ -200,48 +194,3 @@ class CostLedger:
         except Exception:
             logger.error("langchain.quota_log_failed", exc_info=True)
             return 0.0
-
-    async def record_direct_client_tool_cost(
-        self,
-        accumulated_tool_cost: float,
-        image_gen_cost_in_bundle: float,
-        session_id: str,
-    ) -> None:
-        """Deduct the surviving tool cost on the Direct Client path.
-
-        Deduct the surviving tool cost (OpenRouter image-gen after
-        the E2.a dedup) so the Direct Client path no longer leaks
-        it — closes matrix gap #2. LLM cost is billed inline by
-        `OpenRouterClient._log_usage`; we only deduct tool cost here.
-        Subtract image-gen dollars — image_tools.py wrote a
-        per-image UsageLog row already; the aggregate must
-        not double-bill.
-        """
-        aggregate_amount = accumulated_tool_cost - image_gen_cost_in_bundle
-        if aggregate_amount <= 0 or not self._user_id:
-            return
-        try:
-            from decimal import Decimal
-            from authentication.models import User
-            from usage_quota.billing import get_billing_service, BillableOperation
-            from usage_quota.models import ServiceType, FeatureType
-
-            tool_user = await sync_to_async(User.objects.get)(id=self._user_id)
-            origin = await self.resolve_billing_origin()
-            op = BillableOperation(
-                service=ServiceType.OPENROUTER,
-                feature=FeatureType.CHAT,
-                model_id=self._model_id,
-                cost_usd=Decimal(str(aggregate_amount)),
-                session_id=session_id,
-            )
-            await sync_to_async(get_billing_service().record_usage)(
-                tool_user, op, billing_origin=origin,
-            )
-            logger.info(
-                f"[LangChain] Direct Client tool_cost recorded "
-                f"(origin={origin}): ${aggregate_amount:.6f} "
-                f"(image-gen excluded: ${image_gen_cost_in_bundle:.6f})"
-            )
-        except Exception:
-            logger.error("direct_client.tool_cost_deduct_failed", exc_info=True)

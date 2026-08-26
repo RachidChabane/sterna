@@ -2,7 +2,7 @@
 
 The parser feeds ``total_cost_usd`` into the two-layer billing chain
 (claude_output_parser -> coding_agent_runner -> coding_agent_service ->
-langchain_file_tools -> accumulated_tool_cost), so cost extraction and
+agent_tool_handlers -> accumulated_tool_cost), so cost extraction and
 resilience to malformed stream-json output are load-bearing.
 
 Pure unit tests: no docker, no network.

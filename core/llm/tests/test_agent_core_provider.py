@@ -225,6 +225,30 @@ class ToolCallAccumulatorTests(unittest.TestCase):
         calls = accumulator.tool_calls()
         self.assertEqual([call.id for call in calls], ["call-b", "call-a"])
 
+    def test_a_call_without_an_id_is_given_one(self):
+        accumulator = ToolCallAccumulator()
+        accumulator.absorb(
+            ProviderToolCallDeltaChunk(index=0, name="search", arguments_delta="{}")
+        )
+
+        call = accumulator.tool_calls()[0]
+
+        self.assertRegex(call.id, r"^call_[0-9a-f]{16}$")
+        self.assertEqual(accumulator.tool_calls()[0].id, call.id)
+
+    def test_two_calls_without_ids_are_told_apart(self):
+        accumulator = ToolCallAccumulator()
+        accumulator.absorb(
+            ProviderToolCallDeltaChunk(index=0, name="one", arguments_delta="{}")
+        )
+        accumulator.absorb(
+            ProviderToolCallDeltaChunk(index=1, name="two", arguments_delta="{}")
+        )
+
+        first, second = accumulator.tool_calls()
+
+        self.assertNotEqual(first.id, second.id)
+
     def test_empty_accumulator_is_falsy(self):
         self.assertFalse(ToolCallAccumulator())
 

@@ -16,7 +16,7 @@ from decimal import Decimal
 from typing import Any, Dict, Literal, Optional
 
 from asgiref.sync import sync_to_async
-from langchain.tools import tool
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from llm.image_providers import (
@@ -481,7 +481,7 @@ async def generate_image(
         # Always write a per-image UsageLog row (service=IMAGE_GENERATION,
         # tagged 'tool': 'generate_image') so the image-gen count provider
         # has a single attribution path. The OpenRouter aggregate in
-        # langchain_agent.py subtracts image-gen cost before writing its
+        # The chat aggregate cost-ledger row subtracts image-gen cost before writing its
         # aggregate row — see Section 2.11 of the task-10 plan.
         # For non-OpenRouter providers, bill the platform (default).
         # For OpenRouter, billing_origin follows the user's API-key
@@ -532,7 +532,7 @@ async def generate_image(
                 "description": prompt,
             },
             "model": model,
-            "provider": result.provider,  # Used by langchain_agent to determine billing path
+            "provider": result.provider,  # Used by the cost ledger to determine billing path
             "generation_time_ms": result.generation_time_ms,
             "cost_usd": float(cost_usd),  # Include cost for frontend to add to message total
         }
@@ -652,7 +652,7 @@ async def edit_image(
         # Always write a per-image UsageLog row (service=IMAGE_GENERATION,
         # tagged 'tool': 'generate_image'). For OpenRouter-routed
         # edit_image calls, billing_origin follows the user's API-key
-        # resolution. The aggregate-write in langchain_agent.py subtracts
+        # resolution. The chat aggregate cost-ledger row subtracts
         # image-gen cost so the same dollars aren't double-billed.
         bill_origin = 'platform'
         if result.provider == 'openrouter':
@@ -693,7 +693,7 @@ async def edit_image(
                 "description": prompt,
             },
             "model": model,
-            "provider": result.provider,  # Used by langchain_agent to determine billing path
+            "provider": result.provider,  # Used by the cost ledger to determine billing path
             "generation_time_ms": result.generation_time_ms,
             "cost_usd": float(cost_usd),  # Include cost for frontend to add to message total
         }, ensure_ascii=False)

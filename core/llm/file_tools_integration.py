@@ -23,7 +23,7 @@ def get_tool_executor():
     """Get or create HTTPToolExecutor instance."""
     global _tool_executor
     if _tool_executor is None:
-        from llm.http_tool_executor import HTTPToolExecutor
+        from llm.sandbox_tool_executor import HTTPToolExecutor
         # Use container name for orchestrator service
         _tool_executor = HTTPToolExecutor(orchestrator_url="http://sterna-orchestrator:8003")
         logger.info("Initialized HTTPToolExecutor for file tools")
@@ -122,7 +122,7 @@ def execute_file_tool_call(
 
     try:
         # Create a new tool executor with the auth token for this request
-        from llm.http_tool_executor import HTTPToolExecutor
+        from llm.sandbox_tool_executor import HTTPToolExecutor
         tool_executor = HTTPToolExecutor(
             orchestrator_url="http://sterna-orchestrator:8003",
             auth_token=auth_token,
@@ -150,7 +150,7 @@ def execute_file_tool_call(
 
         # For coding agent tools, simplify the result for the LLM (don't send full execution logs)
         # But include full data for frontend display/persistence
-        from .langchain_file_tools import CODING_AGENT_TOOL_NAMES
+        from .agent_tool_handlers import CODING_AGENT_TOOL_NAMES
         if tool_name in CODING_AGENT_TOOL_NAMES:
             llm_result = _simplify_coding_agent_result(result)
             # Include full result data for frontend (steps, duration, tokens, etc.)

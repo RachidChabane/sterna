@@ -9,21 +9,21 @@ are gated"); schema fidelity against
 `sandbox.orchestrator.file_tools.FILE_TOOLS`, the model-facing tool
 contract legacy V1 sends the model
 (`test_agent_core_file_tools_drift.py`); and default approval against
-the `file_tool_names` set `llm.views.stream_complete` runs ungated
-(`test_agent_core_approval_classification.py` — the real V1 approval
-gate: everything else that endpoint sees requires approval, regardless
-of whether it is also a handler `HTTPToolExecutor` can dispatch or a
-catalog tool). This module reads all four legacy sources once so each
-test imports rather than re-derives them.
+`V1_AUTO_TOOL_NAMES`, the tool ids the direct-completion endpoint runs
+without asking the user first (`test_agent_core_approval_classification.py`
+— the real V1 approval gate: everything else that endpoint sees
+requires approval, regardless of whether it is also a handler
+`HTTPToolExecutor` can dispatch or a catalog tool). This module holds
+all four legacy sources so each test imports rather than re-derives
+them.
 
-`http_tool_executor_handler_ids`, `file_tools_definitions`, and
-`views_file_tool_names` parse their source file with `ast` instead of
-importing it: `llm.http_tool_executor` and `llm.views` both import
-Django and Django REST Framework directly, and `sandbox.orchestrator`
-has no `__init__.py` — it is not a package the rest of `core` imports
-from, and reading it here must not become the first thing that does.
-Neither constraint applies to `llm.tool_catalog.core_tools`, which is
-imported directly.
+`sandbox_tool_executor_handler_ids` and `file_tools_definitions` parse
+their source file with `ast` instead of importing it:
+`llm.sandbox_tool_executor` imports Django directly, and
+`sandbox.orchestrator` has no `__init__.py` — it is not a package the
+rest of `core` imports from, and reading it here must not become the
+first thing that does. Neither constraint applies to
+`llm.tool_catalog.core_tools`, which is imported directly.
 """
 
 from __future__ import annotations
@@ -36,11 +36,26 @@ from llm.tool_catalog import core_tools as core_tools_module
 from llm.tool_catalog.models import ToolDefinition as LegacyToolDefinition
 
 CORE_ROOT = Path(__file__).resolve().parent.parent.parent
-HTTP_TOOL_EXECUTOR = CORE_ROOT / "llm" / "http_tool_executor.py"
+HTTP_TOOL_EXECUTOR = CORE_ROOT / "llm" / "sandbox_tool_executor.py"
 SANDBOX_FILE_TOOLS = CORE_ROOT / "sandbox" / "orchestrator" / "file_tools.py"
-VIEWS = CORE_ROOT / "llm" / "views.py"
-STREAM_COMPLETE_FUNCTION_NAME = "stream_complete"
-FILE_TOOL_NAMES_VARIABLE_NAME = "file_tool_names"
+
+V1_AUTO_TOOL_NAMES: Set[str] = {
+    "list_files",
+    "read_file",
+    "write_file",
+    "create_directory",
+    "delete_file",
+    "rename_file",
+}
+"""The tool ids the direct-completion endpoint runs without asking first.
+
+Every other call that endpoint sees — a catalog tool, an MCP tool, or
+any other sandbox handler — is queued for the user's approval, which is
+what makes this set, rather than `HTTPToolExecutor`'s handler dict, V1's
+approval classification: a handler id answers "does legacy execution
+logic exist for this tool", an orthogonal question from "does this
+endpoint run it without asking first".
+"""
 
 
 def catalog_tool_definitions() -> Dict[str, LegacyToolDefinition]:
@@ -53,9 +68,9 @@ def catalog_tool_definitions() -> Dict[str, LegacyToolDefinition]:
     This answers "which tools exist" (V1 offers this to the model via
     the catalog), not "which tools run without approval" — a catalog
     tool is gated same as any other unless it is also named in
-    `views_file_tool_names`. Use this only for coverage
+    `V1_AUTO_TOOL_NAMES`. Use this only for coverage
     (`test_agent_core_tool_coverage.py`); for the ungated set, read
-    `views_file_tool_names` instead.
+    `V1_AUTO_TOOL_NAMES` instead.
     """
 
     return {
@@ -65,7 +80,7 @@ def catalog_tool_definitions() -> Dict[str, LegacyToolDefinition]:
     }
 
 
-def http_tool_executor_handler_ids() -> Set[str]:
+def sandbox_tool_executor_handler_ids() -> Set[str]:
     """The tool ids `HTTPToolExecutor.execute_tool_call` dispatches, read from source.
 
     This answers "which tools exist" (has legacy execution logic
@@ -116,46 +131,4 @@ def file_tools_definitions() -> Dict[str, Dict[str, Any]]:
     raise AssertionError(
         f"could not find a `FILE_TOOLS: ... = [...]` literal in {SANDBOX_FILE_TOOLS}; "
         "this test's characterization of the legacy model-facing tool contract is stale."
-    )
-
-
-def views_file_tool_names() -> Set[str]:
-    """The tool ids `llm.views.stream_complete` runs without approval, read from source.
-
-    `stream_complete` assigns a `file_tool_names` set literal, then
-    later in the same function branches on membership in it: a call
-    naming one of these runs immediately, and every other tool call
-    from that endpoint — catalog or sandbox alike, `HTTPToolExecutor`
-    handler or not — is queued for the user's approval first. This is
-    V1's actual approval gate, distinct from
-    `http_tool_executor_handler_ids`, which only answers which tools
-    have a handler at all.
-
-    Reads by parsing `llm.views` with `ast` rather than importing it:
-    `llm.views` imports Django and Django REST Framework directly.
-    """
-
-    tree = ast.parse(VIEWS.read_text(encoding="utf-8"), filename=str(VIEWS))
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and node.name == STREAM_COMPLETE_FUNCTION_NAME
-        ):
-            for inner in ast.walk(node):
-                if (
-                    isinstance(inner, ast.Assign)
-                    and len(inner.targets) == 1
-                    and isinstance(inner.targets[0], ast.Name)
-                    and inner.targets[0].id == FILE_TOOL_NAMES_VARIABLE_NAME
-                    and isinstance(inner.value, ast.Set)
-                ):
-                    return set(ast.literal_eval(inner.value))
-            raise AssertionError(
-                f"could not find a `{FILE_TOOL_NAMES_VARIABLE_NAME} = {{...}}` set "
-                f"literal inside `{STREAM_COMPLETE_FUNCTION_NAME}` in {VIEWS}; "
-                "this test's characterization of V1's approval gate is stale."
-            )
-    raise AssertionError(
-        f"could not find a `def {STREAM_COMPLETE_FUNCTION_NAME}(...)` function in {VIEWS}; "
-        "this test's characterization of V1's approval gate is stale."
     )

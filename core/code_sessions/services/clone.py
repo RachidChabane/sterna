@@ -497,7 +497,7 @@ async def _get_cloned_repo(conversation_id: str):
 
     Uses ``asyncio.to_thread`` rather than ``asgiref.sync.sync_to_async`` on
     purpose: this function is reached both from genuinely async request
-    handling (the coding-agent tool path, see ``llm.langchain_file_tools``)
+    handling (the coding-agent tool path, see ``llm.agent_tool_handlers``)
     and from a plain DRF view that manually opens its own event loop with
     ``asyncio.new_event_loop().run_until_complete(...)`` (see
     ``code_sessions.views.ensure_repo``). ``sync_to_async``'s default
