@@ -3,11 +3,13 @@
 `llm.agent_core` emits typed events and knows nothing about any
 endpoint's format. The V1 stream-completion endpoint speaks a format
 its clients parse as it stands, and that format differs from a plain
-rendering of those events in six ways:
+rendering of those events in seven ways:
 
 * token and cost figures reach a client only on the terminal `done`
   event, and they are the running totals of the whole turn rather than
   the figures of the generation that just ended,
+* each generation's cost figures are quantized to 8 decimal places as
+  they fold into those totals,
 * `done` reports the model, the finish reason and those totals, without
   naming the provider generations the turn spanned,
 * a round of tool calls is announced once, after the calls have run,
@@ -27,6 +29,7 @@ a client that has never parsed one.
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from typing import Any, AsyncIterator, List, Mapping
 
 from ..agent_core import sse
@@ -76,6 +79,21 @@ COMPLETION_TOKENS = "completion_tokens"
 TOTAL_TOKENS = "total_tokens"
 
 _WIRE_TOOL_CALL_ORDER = (ID_FIELD, TYPE_FIELD, FUNCTION_FIELD)
+
+COST_QUANTUM = Decimal("0.00000001")
+"""The precision -- 8 decimal places -- a generation's cost is quantized to."""
+
+
+def _quantized(value: float) -> float:
+    """`value`, rounded to `COST_QUANTUM`'s 8 decimal places, as a `float`.
+
+    Routed through `Decimal(str(value))` rather than `Decimal(value)`:
+    the latter reproduces the binary float's exact (and often
+    long-tailed) value before rounding it, while the former rounds the
+    same decimal digits `repr(value)` would show.
+    """
+
+    return float(Decimal(str(value)).quantize(COST_QUANTUM))
 
 
 class V1Wire:
@@ -128,9 +146,9 @@ class V1Wire:
     def _record(self, event: UsageUpdateEvent) -> None:
         self._accounting.record_generation_cost(
             usage=event.usage,
-            cost=event.cost,
-            prompt_cost=event.prompt_cost,
-            completion_cost=event.completion_cost,
+            cost=_quantized(event.cost),
+            prompt_cost=_quantized(event.prompt_cost),
+            completion_cost=_quantized(event.completion_cost),
         )
 
     def _executed_frame(self, event: FileToolExecutedEvent) -> str:

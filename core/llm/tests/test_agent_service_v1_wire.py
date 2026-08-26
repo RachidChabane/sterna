@@ -168,6 +168,40 @@ class V1WireShapeTests(unittest.TestCase):
         self.assertEqual(done["cost"], 0.0003)
         self.assertNotIn("tool_cost", done)
 
+    def test_done_quantizes_cost_fields_to_eight_decimal_places(self):
+        """A `done` cost figure is quantized the way legacy `main` priced a
+        generation, not left as raw IEEE-754 arithmetic.
+
+        Fed straight to `V1Wire` as `UsageUpdateEvent` fields -- no
+        `CatalogPriceCostAccountant` runs here to patch out, so this pins
+        the wire's own rendering rather than trusting an accountant double
+        the way the V1 golden's `_post` helper does.
+        """
+
+        events = [
+            UsageUpdateEvent(
+                usage=Usage(prompt_tokens=100, completion_tokens=20, total_tokens=120),
+                cost=0.1 * 3,  # 0.30000000000000004 in raw float arithmetic
+                prompt_cost=1 / 3,  # 0.3333333333333333 (16 threes)
+                completion_cost=1 / 7,  # 0.14285714285714285
+                generation_id="gen-1",
+                generation_ids=["gen-1"],
+            ),
+            DoneEvent(
+                model="fixture/golden-model",
+                finish_reason=FinishReason.STOP,
+                usage=Usage(prompt_tokens=100, completion_tokens=20, total_tokens=120),
+                cost=0.1 * 3,
+            ),
+        ]
+
+        frames = asyncio.run(_frames_of(events))
+
+        done = json.loads(frames[-1].split("data: ", 1)[1])
+        self.assertEqual(done["cost"], 0.3)
+        self.assertEqual(done["prompt_cost"], 0.33333333)
+        self.assertEqual(done["completion_cost"], 0.14285714)
+
     def test_error_frame_carries_the_message_alone(self):
         event = ErrorEvent(
             error="The AI service is temporarily unavailable. Please try again.",
