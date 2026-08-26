@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 
 from workspace_client import get_workspace_client
 import opencode_harness
+from budget_guard import over_budget, terminate_command
 from claude_permission_profile import settings_for as claude_settings_for
 from coding_harness import (
     OPENCODE,
@@ -727,6 +728,7 @@ class CodingAgentRunner:
         sub_agents: Optional[List[Dict[str, Any]]] = None,
         user_model_preferences: Optional[Dict[str, str]] = None,
         harness: Optional[str] = None,
+        budget_usd: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Execute Coding Agent agent.
@@ -743,6 +745,9 @@ class CodingAgentRunner:
             mode: Agent mode - "plan" (create plan), "implement" (execute plan), or "auto" (default)
             plan_id: Plan ID to implement (required when mode="implement")
             sub_agents: Sub-agent definitions as {name, markdown} dicts
+            budget_usd: Remaining quota ceiling for this job. `None` enforces
+                no ceiling; otherwise the job is stopped once its running
+                cost crosses it (see `budget_guard.over_budget`).
 
         Returns:
             Dict with execution results
@@ -826,7 +831,7 @@ class CodingAgentRunner:
 
             # Execute the runner script
             result = await self._run_agent(
-                container, job_dir, api_key, model, job_token=job_token
+                container, job_dir, api_key, model, job_token=job_token, budget_usd=budget_usd,
             )
 
             # Capture workspace state AFTER execution
@@ -866,6 +871,7 @@ class CodingAgentRunner:
                     "duration_ms": duration_ms,
                     "versions_created": versions_created,
                     "total_cost_usd": result.get("total_cost_usd", 0.0),
+                    "total_tokens": result.get("total_tokens", 0),
                     "plan_content": result.get("plan_content"),
                 }
             else:
@@ -877,6 +883,8 @@ class CodingAgentRunner:
                     "duration_ms": duration_ms,
                     "versions_created": versions_created,
                     "total_cost_usd": result.get("total_cost_usd", 0.0),
+                    "total_tokens": result.get("total_tokens", 0),
+                    "quota_exceeded": result.get("quota_exceeded", False),
                 }
 
         except asyncio.TimeoutError:
@@ -1321,6 +1329,7 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
         api_key: str,
         model: str,
         job_token: str = "",
+        budget_usd: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Run the Coding Agent CLI agent.
@@ -1645,6 +1654,7 @@ Do NOT use ask_user for:
                         output_file=output_file,
                         progress_file=progress_file,
                         harness=harness,
+                        budget_usd=budget_usd,
                     ),
                     timeout=self.EXECUTION_TIMEOUT
                 )
@@ -1672,8 +1682,13 @@ Do NOT use ask_user for:
             parsed = parse_run_output(harness, stdout, workspace_path)
             logger.info(f"[CodingAgent] Parsed {len(parsed.steps)} steps from output")
 
+            quota_exceeded = result.get("quota_exceeded", False)
+            if quota_exceeded:
+                logger.warning(f"[CodingAgent] Job {job_id} stopped: quota exceeded mid-run")
+                parsed.success = False
+                parsed.error = "Coding agent stopped: usage quota exceeded mid-run"
             # Override: if process was killed but parser didn't detect error
-            if exit_code != 0 and parsed.success:
+            elif exit_code != 0 and parsed.success:
                 logger.warning(f"[CodingAgent] Parser reported success but exit_code={exit_code} — overriding to failure")
                 parsed.success = False
                 parsed.error = parsed.error or f"Agent process exited with code {exit_code} (likely killed by signal)"
@@ -1700,7 +1715,7 @@ Do NOT use ask_user for:
                     "total_cost_usd": parsed.total_cost_usd,
                 }
             else:
-                return {
+                failure: Dict[str, Any] = {
                     "success": False,
                     "error": parsed.error or f"CLI exited with code {exit_code}",
                     "summary": parsed.summary,
@@ -1709,6 +1724,9 @@ Do NOT use ask_user for:
                     "files_created": parsed.files_created,
                     "total_cost_usd": parsed.total_cost_usd,
                 }
+                if quota_exceeded:
+                    failure["quota_exceeded"] = True
+                return failure
 
         except asyncio.TimeoutError:
             # Update progress file to indicate timeout before re-raising
@@ -1750,130 +1768,6 @@ Do NOT use ask_user for:
             if progress:
                 partial_cost = progress.get("total_cost_usd", 0.0)
             return {"success": False, "error": str(e), "total_cost_usd": partial_cost}
-
-    async def _execute_with_streaming(
-        self,
-        container,
-        cmd: str,
-        workspace_path: str,
-        env: Dict[str, str],
-        progress_file: str,
-        harness: str = "",
-    ) -> Dict[str, Any]:
-        """
-        Execute the coding-agent CLI with streaming output for progress tracking.
-
-        Args:
-            container: Docker container to run in
-            cmd: Command to execute
-            workspace_path: Working directory
-            env: Environment variables
-            progress_file: Path to write progress JSON for monitoring
-
-        Returns:
-            Dict with output and exit_code
-        """
-        def _run_streaming():
-            """Run the streaming execution in a thread."""
-            parser = create_adapter(harness, workspace_path)
-            all_output = []
-            step_count = 0
-
-            try:
-                # Write initial progress file to indicate agent is starting
-                logger.info(f"[CodingAgent] Writing initial progress file: {progress_file}")
-                self._write_progress_file(container, progress_file, parser, 0)
-
-                # Execute with streaming enabled
-                # Use tty=True to disable output buffering (critical for real-time streaming)
-                exec_id = container.client.api.exec_create(
-                    container.id,
-                    ["sh", "-c", cmd],
-                    workdir=workspace_path,
-                    user="sandboxuser",
-                    environment=env,
-                    tty=False,  # Keep False since we use stdbuf for line buffering
-                )
-
-                logger.info(f"[CodingAgent] Started exec {exec_id['Id'][:12]}, streaming output...")
-
-                # Start execution with stream=True
-                output_stream = container.client.api.exec_start(
-                    exec_id["Id"],
-                    stream=True,
-                    demux=True,
-                )
-
-                # Buffer for incomplete lines
-                line_buffer = ""
-                chunks_received = 0
-
-                # Process output as it comes
-                for stdout_chunk, stderr_chunk in output_stream:
-                    chunks_received += 1
-                    if chunks_received <= 5 or chunks_received % 50 == 0:
-                        logger.info(f"[CodingAgent] Received chunk {chunks_received}: stdout={len(stdout_chunk) if stdout_chunk else 0}b, stderr={len(stderr_chunk) if stderr_chunk else 0}b")
-                    # Handle stdout
-                    if stdout_chunk:
-                        chunk_text = stdout_chunk.decode('utf-8', errors='replace')
-                        all_output.append(chunk_text)
-
-                        # Parse complete lines
-                        line_buffer += chunk_text
-                        while '\n' in line_buffer:
-                            line, line_buffer = line_buffer.split('\n', 1)
-                            if line.strip() and parser.ingest(line):
-                                step_count += 1
-
-                                # Write progress to file for real-time monitoring
-                                self._write_progress_file(
-                                    container,
-                                    progress_file,
-                                    parser,
-                                    step_count
-                                )
-
-                    # Handle stderr (usually errors or warnings)
-                    if stderr_chunk:
-                        stderr_text = stderr_chunk.decode('utf-8', errors='replace')
-                        all_output.append(stderr_text)
-                        logger.info(f"[CodingAgent] stderr ({len(stderr_text)}b): {stderr_text[:500]}")
-
-                logger.info(f"[CodingAgent] Stream completed: {chunks_received} chunks, {len(all_output)} output parts, {step_count} steps parsed")
-
-                # Process any remaining buffered line
-                if line_buffer.strip() and parser.ingest(line_buffer):
-                    step_count += 1
-                    self._write_progress_file(container, progress_file, parser, step_count)
-
-                # Get exit code
-                exec_inspect = container.client.api.exec_inspect(exec_id["Id"])
-                exit_code = exec_inspect.get("ExitCode", 1)
-
-                # Final progress update
-                self._write_progress_file(
-                    container,
-                    progress_file,
-                    parser,
-                    step_count,
-                    completed=True,
-                    exit_code=exit_code
-                )
-
-                return {
-                    "output": "".join(all_output),
-                    "exit_code": exit_code,
-                }
-
-            except Exception as e:
-                logger.error(f"[CodingAgent] Streaming execution error: {e}", exc_info=True)
-                return {
-                    "output": "".join(all_output) if all_output else "",
-                    "exit_code": 1,
-                }
-
-        # Run in thread to not block the event loop
-        return await asyncio.to_thread(_run_streaming)
 
     def _write_progress_file(
         self,
@@ -1954,6 +1848,7 @@ Do NOT use ask_user for:
         output_file: str,
         progress_file: str,
         harness: str = "",
+        budget_usd: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Execute the coding-agent CLI with file-based progress tracking.
@@ -1971,9 +1866,11 @@ Do NOT use ask_user for:
             env: Environment variables
             output_file: Path where command output is being written via tee
             progress_file: Path to write progress JSON for monitoring
+            budget_usd: Quota ceiling; the process is signalled to stop once
+                crossed (see `budget_guard.over_budget`).
 
         Returns:
-            Dict with output and exit_code
+            Dict with output, exit_code and quota_exceeded
         """
         def _run_with_file_polling():
             """Run command in background and poll output file for progress updates."""
@@ -1981,6 +1878,7 @@ Do NOT use ask_user for:
             parser = create_adapter(harness, workspace_path)
             step_count = 0
             last_file_position = 0
+            quota_exceeded = False
             # Derive control file directory from output_file location
             # In plan mode, output_file is in job_dir (not workspace), so pid/exit-code follow
             _control_dir = "/".join(output_file.rsplit("/", 1)[:-1]) if "/" in output_file else workspace_path
@@ -2097,6 +1995,16 @@ Do NOT use ask_user for:
                                         step_count
                                     )
 
+                    # Quota ceiling crossed: signal the process to stop. The
+                    # zombie/exit-code handling below then runs unchanged —
+                    # a killed process is already indistinguishable from a
+                    # timed-out one at this layer.
+                    if not quota_exceeded and over_budget(parser, budget_usd):
+                        quota_exceeded = True
+                        logger.warning(f"[CodingAgent] Budget ${budget_usd} crossed at ${parser.total_cost_usd} — stopping job")
+                        if pid:
+                            container.exec_run(terminate_command(pid), user="sandboxuser")
+
                     # Log progress periodically (more frequently at start for debugging)
                     if poll_count <= 5 or poll_count % 20 == 0:
                         logger.info(f"[CodingAgent] Poll {poll_count}: {step_count} steps, {last_file_position} bytes, running={is_running}")
@@ -2165,6 +2073,7 @@ Do NOT use ask_user for:
                 return {
                     "output": full_output,
                     "exit_code": exit_code,
+                    "quota_exceeded": quota_exceeded,
                 }
 
             except Exception as e:
@@ -2178,6 +2087,7 @@ Do NOT use ask_user for:
                 return {
                     "output": output,
                     "exit_code": 1,
+                    "quota_exceeded": quota_exceeded,
                 }
 
         # Run in thread to not block the event loop

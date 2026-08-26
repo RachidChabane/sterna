@@ -298,13 +298,13 @@ class TestGoogleMapsBilling(BillingCoverageBase):
 class TestCodeSessionBilling(BillingCoverageBase):
     """Matrix rows #8-#11.
 
-    `_bill_code_session` is the single bill site for coding-agent runs.
+    `bill_code_session` is the single bill site for coding-agent runs.
     The chat-row accumulator dedup is verified indirectly by ensuring the
     helper writes a dedicated `CODE_SESSION/CODE_SESSION` row.
     """
 
     def _make_context(self):
-        # Lightweight stand-in matching the attributes _bill_code_session reads.
+        # Lightweight stand-in matching the attributes bill_code_session reads.
         class _Ctx:
             pass
         ctx = _Ctx()
@@ -313,9 +313,9 @@ class TestCodeSessionBilling(BillingCoverageBase):
         return ctx
 
     def test_bill_code_session_writes_code_session_row(self):
-        from llm.agent_tool_handlers import _bill_code_session
+        from llm.services.coding_agent_billing import bill_code_session
         ctx = self._make_context()
-        async_to_sync(_bill_code_session)(
+        async_to_sync(bill_code_session)(
             ctx, 0.05, "anthropic/claude-sonnet-4", "chat-abc",
         )
         self.assertBilled(
@@ -325,19 +325,19 @@ class TestCodeSessionBilling(BillingCoverageBase):
         )
 
     def test_bill_code_session_zero_cost_skipped(self):
-        from llm.agent_tool_handlers import _bill_code_session
+        from llm.services.coding_agent_billing import bill_code_session
         ctx = self._make_context()
-        async_to_sync(_bill_code_session)(
+        async_to_sync(bill_code_session)(
             ctx, 0.0, "anthropic/claude-sonnet-4", "chat-abc",
         )
         self.assertNotBilled(service=ServiceType.CODE_SESSION)
 
     def test_bill_code_session_missing_user_skipped(self):
-        from llm.agent_tool_handlers import _bill_code_session
+        from llm.services.coding_agent_billing import bill_code_session
         class _Ctx:
             user_id = None
             chat_id = None
-        async_to_sync(_bill_code_session)(
+        async_to_sync(bill_code_session)(
             _Ctx(), 0.05, "anthropic/claude-sonnet-4", "",
         )
         self.assertNotBilled(service=ServiceType.CODE_SESSION)

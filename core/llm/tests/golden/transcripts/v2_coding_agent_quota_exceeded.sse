@@ -1,0 +1,33 @@
+event: generation_id
+data: {"generation_id": "genid-golden-first"}
+
+event: content
+data: {"content": "Handing this to the coding agent."}
+
+event: file_tool_executing
+data: {"tool_calls": [{"function": {"name": "...", "arguments": "{}"}, "id": "loading", "type": "function"}]}
+
+event: usage_update
+data: {"usage": {"prompt_tokens": 120, "completion_tokens": 40, "total_tokens": 160}, "cost": 0.00019999999999999998, "prompt_cost": 0.00011999999999999999, "completion_cost": 7.999999999999999e-05, "generation_id": "genid-golden-first", "generation_ids": ["genid-golden-first"]}
+
+event: file_tool_executing
+data: {"tool_calls": [{"id": "toolcall-implement-plan", "type": "function", "function": {"name": "implement_plan", "arguments": "{\"plan_id\": \"<uuid-1>\"}"}, "display_name": "Implement Plan"}]}
+
+event: heartbeat
+data: {"tool": "implement_plan", "elapsed_seconds": <elapsed-seconds>}
+
+event: file_tool_executed
+data: {"tool_calls": [{"id": "toolcall-implement-plan", "type": "function", "function": {"name": "implement_plan", "arguments": "{\"plan_id\": \"<uuid-1>\"}"}, "display_name": "Implement Plan"}], "results": [{"tool_call": {"id": "toolcall-implement-plan", "type": "function", "function": {"name": "implement_plan", "arguments": "{\"plan_id\": \"<uuid-1>\"}"}}, "result": {"success": false, "status": "error", "error_type": "quota_exceeded", "message": "Coding agent stopped: usage quota exceeded mid-run.", "limit_type": "weekly", "remaining_usd": 20.0}, "success": false}]}
+
+event: generation_id
+data: {"generation_id": "genid-golden-follow-up"}
+
+event: content
+data: {"content": "The coding agent ran out of usage quota partway through."}
+
+event: usage_update
+data: {"usage": {"prompt_tokens": 320, "completion_tokens": 65, "total_tokens": 385}, "cost": 0.00045, "prompt_cost": 0.00031999999999999997, "completion_cost": 0.00013, "generation_id": "genid-golden-follow-up", "generation_ids": ["genid-golden-first", "genid-golden-follow-up"]}
+
+event: done
+data: {"model": "fixture/golden-model", "finish_reason": "stop", "usage": {"prompt_tokens": 320, "completion_tokens": 65, "total_tokens": 385}, "cost": 0.00045, "prompt_cost": 0.00031999999999999997, "completion_cost": 0.00013, "tool_cost": 0.0, "generation_id": "genid-golden-follow-up", "generation_ids": ["genid-golden-first", "genid-golden-follow-up"]}
+

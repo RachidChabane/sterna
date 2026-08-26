@@ -54,6 +54,7 @@ class CodingAgentResult:
     error: Optional[str] = None
     total_tokens: int = 0
     total_cost_usd: float = 0.0  # Cost from OpenRouter API calls
+    quota_exceeded: bool = False  # The runner stopped the job on a mid-run quota ceiling
 
 
 @dataclass
@@ -314,6 +315,7 @@ class CodingAgentService:
         plan_id: Optional[str] = None,
         sub_agents: Optional[List[Dict[str, Any]]] = None,
         user_model_preferences: Optional[Dict[str, str]] = None,
+        budget_usd: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Execute a Coding Agent task.
@@ -334,6 +336,8 @@ class CodingAgentService:
             model_metadata: Model metadata for file attribution (model_name, model_id, provider, icons)
             mode: Agent mode - "plan" (create plan), "implement" (execute plan), or "auto" (default)
             plan_id: Plan ID to implement (required when mode="implement")
+            budget_usd: Quota ceiling passed to the orchestrator; the job is
+                stopped mid-run if crossed. `None` enforces no ceiling.
 
         Returns:
             Dict with execution results
@@ -371,6 +375,7 @@ class CodingAgentService:
                 plan_id=plan_id,
                 sub_agents=sub_agents,
                 user_model_preferences=user_model_preferences,
+                budget_usd=budget_usd,
             )
 
             # Update job with results
@@ -394,6 +399,7 @@ class CodingAgentService:
                 error=result.get("error"),
                 total_tokens=result.get("total_tokens", 0),
                 total_cost_usd=result.get("total_cost_usd", 0.0),
+                quota_exceeded=result.get("quota_exceeded", False),
             )
 
             # Parse steps if provided
@@ -425,6 +431,7 @@ class CodingAgentService:
                     "files_created": job.result.files_created,
                     "total_tokens": job.result.total_tokens,
                     "total_cost_usd": job.result.total_cost_usd,
+                    "quota_exceeded": job.result.quota_exceeded,
                 },
                 "duration_ms": job.duration_ms,
             }
@@ -491,6 +498,7 @@ class CodingAgentService:
         plan_id: Optional[str] = None,
         sub_agents: Optional[List[Dict[str, Any]]] = None,
         user_model_preferences: Optional[Dict[str, str]] = None,
+        budget_usd: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Send execution request to orchestrator service.
@@ -505,6 +513,7 @@ class CodingAgentService:
             mode: Agent mode - "plan", "implement", or "auto"
             plan_id: Plan ID for implement mode
             sub_agents: Sub-agent definitions as {name, markdown} dicts
+            budget_usd: Quota ceiling the orchestrator enforces mid-run
 
         Returns:
             Dict with execution results from orchestrator
@@ -524,6 +533,7 @@ class CodingAgentService:
             "plan_id": plan_id,
             "sub_agents": sub_agents,
             "user_model_preferences": user_model_preferences,
+            "budget_usd": budget_usd,
         }
 
         headers = {
@@ -661,6 +671,7 @@ async def execute_coding_agent(
     plan_id: Optional[str] = None,
     sub_agents: Optional[List[Dict[str, Any]]] = None,
     user_model_preferences: Optional[Dict[str, str]] = None,
+    budget_usd: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Convenience function to execute Coding Agent.
@@ -680,6 +691,7 @@ async def execute_coding_agent(
         plan_id: Plan ID for implement mode
         sub_agents: Sub-agent definitions as {name, markdown} dicts
         user_model_preferences: User's tier→model mapping for sandbox ENV vars
+        budget_usd: Quota ceiling; the job is stopped mid-run if crossed
 
     Returns:
         Dict with execution results
@@ -700,6 +712,7 @@ async def execute_coding_agent(
         plan_id=plan_id,
         sub_agents=sub_agents,
         user_model_preferences=user_model_preferences,
+        budget_usd=budget_usd,
     )
 
 

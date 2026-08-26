@@ -43,6 +43,7 @@ THREAD_ID_PREFIX = "parity"
 OUT_OF_SCOPE_TRANSCRIPTS = frozenset({
     "v2_coding_agent_plan_mode",
     "v2_coding_agent_implement_mode",
+    "v2_coding_agent_quota_exceeded",
 })
 
 

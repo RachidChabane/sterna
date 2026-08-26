@@ -528,18 +528,10 @@ class CodingAgentExecuteRequest(BaseModel):
         default="auto",
         description="Agent mode: 'plan' (create plan), 'implement' (execute plan), or 'auto' (default)"
     )
-    plan_id: Optional[str] = Field(
-        default=None,
-        description="Plan ID to implement (required when mode='implement')"
-    )
-    sub_agents: Optional[List[Dict[str, Any]]] = Field(
-        default=None,
-        description="Sub-agent definitions as {name, markdown} dicts"
-    )
-    user_model_preferences: Optional[Dict[str, str]] = Field(
-        default=None,
-        description="User's tier→model mapping: {fast_model_id, balanced_model_id, powerful_model_id}"
-    )
+    plan_id: Optional[str] = Field(default=None, description="Plan ID to implement (required when mode='implement')")
+    sub_agents: Optional[List[Dict[str, Any]]] = Field(default=None, description="Sub-agent definitions as {name, markdown} dicts")
+    user_model_preferences: Optional[Dict[str, str]] = Field(default=None, description="User's tier→model mapping: {fast_model_id, balanced_model_id, powerful_model_id}")
+    budget_usd: Optional[float] = None  # Quota ceiling; the job stops once its running cost crosses it
 
 
 class CodingAgentExecuteResponse(BaseModel):
@@ -552,6 +544,9 @@ class CodingAgentExecuteResponse(BaseModel):
     steps: List[Dict[str, Any]] = []
     error: Optional[str] = None
     duration_ms: int = 0
+    total_tokens: int = 0
+    total_cost_usd: float = 0.0
+    quota_exceeded: bool = False
 
 
 class CodingAgentProgressRequest(BaseModel):
@@ -1840,6 +1835,7 @@ async def execute_coding_agent(
             plan_id=request.plan_id,
             sub_agents=request.sub_agents,
             user_model_preferences=request.user_model_preferences,
+            budget_usd=request.budget_usd,
         )
 
         logger.info(
@@ -1856,6 +1852,9 @@ async def execute_coding_agent(
             steps=result.get("steps", []),
             error=result.get("error"),
             duration_ms=result.get("duration_ms", 0),
+            total_tokens=result.get("total_tokens", 0),
+            total_cost_usd=result.get("total_cost_usd", 0.0),
+            quota_exceeded=result.get("quota_exceeded", False),
         )
 
     except ImportError:

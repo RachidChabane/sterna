@@ -43,7 +43,8 @@
         "fast_model_id": "anthropic/claude-haiku-4.5",
         "balanced_model_id": "anthropic/claude-sonnet-4.5",
         "powerful_model_id": "anthropic/claude-opus-4"
-      }
+      },
+      "budget_usd": 20.0
     }
   }
 ]

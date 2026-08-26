@@ -38,6 +38,9 @@ EXECUTE_RESPONSE_FIELDS = (
     "steps",
     "error",
     "duration_ms",
+    "total_tokens",
+    "total_cost_usd",
+    "quota_exceeded",
 )
 
 # Exactly the fields `CodingAgentProgressResponse` serializes.
@@ -68,6 +71,9 @@ _EXECUTE_DEFAULTS: Dict[str, Any] = {
     "steps": [],
     "error": None,
     "duration_ms": 0,
+    "total_tokens": 0,
+    "total_cost_usd": 0.0,
+    "quota_exceeded": False,
 }
 
 _PROGRESS_DEFAULTS: Dict[str, Any] = {

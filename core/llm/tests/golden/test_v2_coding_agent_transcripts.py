@@ -73,6 +73,8 @@ IMPLEMENT_TOOL_CALL_ID = "toolcall-implement-plan"
 
 PLAN_JOB_ID = "job-golden-plan"
 IMPLEMENT_JOB_ID = "job-golden-implement"
+QUOTA_EXCEEDED_JOB_ID = "job-golden-quota-exceeded"
+QUOTA_EXCEEDED_PARTIAL_COST = 18.75
 
 TASK = "Archive expired sessions instead of deleting them"
 
@@ -205,6 +207,25 @@ def _implement_orchestrator():
         execute=_implement_execute_response(),
         progress=_blocked_progress_response(),
     )
+
+
+def _quota_exceeded_execute_response():
+    """What `/coding-agent/execute` serves for a run the runner stopped
+    partway through because the user's quota ran out."""
+    return execute_response(
+        success=False,
+        job_id=QUOTA_EXCEEDED_JOB_ID,
+        error="Coding agent stopped: usage quota exceeded mid-run",
+        steps=IMPLEMENT_STEPS[:2],
+        total_cost_usd=QUOTA_EXCEEDED_PARTIAL_COST,
+        total_tokens=64000,
+        quota_exceeded=True,
+        duration_ms=53000,
+    )
+
+
+def _quota_exceeded_orchestrator():
+    return OrchestratorDouble(execute=_quota_exceeded_execute_response())
 
 
 def generation_id_chunk(generation_id):
@@ -412,6 +433,59 @@ class CodingAgentGoldenTests(APITestCase):
         plan.refresh_from_db()
         self.assertEqual(plan.status, AgentPlan.Status.COMPLETED)
         self.assertEqual(plan.implementation_branch, f"implement/{plan.slug}")
+
+    # --- (c) mid-run quota exhaustion: the runner stops the job early ---
+
+    def test_implement_mode_quota_exceeded_transcript(self):
+        plan = self._seed_ready_plan()
+        orchestrator = _quota_exceeded_orchestrator()
+
+        raw = self._post(
+            self._script(
+                IMPLEMENT_TOOL_CALL_ID,
+                IMPLEMENT_TOOL_NAME,
+                {"plan_id": str(plan.id)},
+                "The coding agent ran out of usage quota partway through.",
+            ),
+            orchestrator,
+        )
+
+        assert_stream_is_substantive(
+            self,
+            raw,
+            ["generation_id", "content", "file_tool_executing", "file_tool_executed", "done"],
+        )
+        assert_matches_golden(self, "v2_coding_agent_quota_exceeded", raw)
+        assert_matches_golden_json(
+            self, "v2_coding_agent_quota_exceeded_orchestrator", orchestrator.request_log()
+        )
+
+    def test_implement_mode_quota_exceeded_bills_the_partial_cost(self):
+        from decimal import Decimal
+
+        from code_sessions.models import AgentPlan
+        from usage_quota.models import ServiceType, UsageLog
+
+        plan = self._seed_ready_plan()
+        orchestrator = _quota_exceeded_orchestrator()
+
+        self._post(
+            self._script(
+                IMPLEMENT_TOOL_CALL_ID,
+                IMPLEMENT_TOOL_NAME,
+                {"plan_id": str(plan.id)},
+                "The coding agent ran out of usage quota partway through.",
+            ),
+            orchestrator,
+        )
+
+        plan.refresh_from_db()
+        self.assertEqual(plan.status, AgentPlan.Status.FAILED)
+
+        log = UsageLog.objects.get(user=self.user, service=ServiceType.CODE_SESSION)
+        self.assertEqual(log.request_id, QUOTA_EXCEEDED_JOB_ID)
+        self.assertEqual(log.cost_usd, Decimal(str(QUOTA_EXCEEDED_PARTIAL_COST)))
+        self.assertEqual(log.model_id, MODEL_ID)
 
 
 class CodingAgentQuestionRoundTripGoldenTests(SimpleTestCase):
