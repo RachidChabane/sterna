@@ -9,6 +9,7 @@
  */
 
 import { memo, useCallback, useMemo, useRef, useEffect, useLayoutEffect, useState } from 'react'
+import { hasErrorResponse } from '@/utils/errorMessages'
 import { useVoiceConversation } from '@/hooks/useVoiceConversation'
 import { Button } from '@/components/ui/button'
 import {
@@ -109,7 +110,9 @@ import { useUIStore } from '@/store/uiStore'
 import { toast } from 'sonner'
 import { removeProviderPrefix } from '@/lib/model-utils'
 import { pricingUtils } from '@/lib/pricing-utils'
-import type { Chat, Model, Message, ModelParameters, Attachment, FileAttachment, ImageAttachment, VideoAttachment, AudioAttachment } from './types'
+import type { Chat, Model, Message, ModelParameters, Attachment, FileAttachment, ImageAttachment, VideoAttachment, AudioAttachment, AttachmentLike, Filters, ToolExecutedHandler } from './types'
+import type { NormalizedCostEstimate } from '@/api/llm'
+import type { MCPServer } from '@/api/mcp'
 import { getFileExtension } from '@/utils/fileUtils'
 import { TypeBadge } from '@/lib/type-badges'
 import { formatFileSize } from '@/utils/imageUtils'
@@ -133,15 +136,14 @@ interface ImmersiveChatViewProps {
   canCancel: boolean
   onExitImmersive?: () => void
   onParametersChange: (params: ModelParameters) => void
-  onToolExecuted?: (toolCallId: string, toolName: string, result: any) => void
+  onToolExecuted?: ToolExecutedHandler
   onAddChat?: () => void
-
   // Model selection
   showFilters?: boolean
   onToggleFilters?: () => void
   hasActiveFilters?: boolean
-  filters?: any
-  onFiltersChange?: (filters: any) => void
+  filters?: Filters
+  onFiltersChange?: (filters: Filters) => void
   providers?: string[]
   recentModelIds?: string[]
 
@@ -166,13 +168,12 @@ interface ImmersiveChatViewProps {
   knowledgeBaseState?: FeatureState
   onToggleKnowledgeBase?: () => void
   hasKnowledgeBaseSupport?: boolean
-  activeServers?: any[]
-
+  activeServers?: MCPServer[]
   // Cost estimation
-  estimatedCosts?: any
+  estimatedCosts?: NormalizedCostEstimate | null
   onEstimateCost?: (text: string) => Promise<void>
   isEstimating?: boolean
-  setEstimatedCost?: (cost: any) => void
+  setEstimatedCost?: (cost: NormalizedCostEstimate | null) => void
 
   // Attachments
   attachments: Attachment[]
@@ -716,7 +717,6 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
   // Handle send
   const handleSend = useCallback(async (content: string) => {
 
-
     try {
       await onSendMessage(content, attachments)
 
@@ -773,7 +773,7 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
       const toRemove = new Set<number>([userMessageIndex, assistantMessageIndex])
       for (let i = userMessageIndex + 1; i < assistantMessageIndex; i++) {
         const m = messages[i]
-        if (m.role === 'assistant' && (m as any).isUnsupported) toRemove.add(i)
+        if (m.role === 'assistant' && m.isUnsupported) toRemove.add(i)
       }
       const updatedMessages = messages.filter((_, idx) => !toRemove.has(idx))
 
@@ -989,14 +989,14 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
         cost_per_1m_completion: 0,
         max_tokens: chat.model.max_tokens || 0,
         supports_streaming: true,
-        supports_functions: Boolean((chat.model as any).supports_functions),
-        supports_structured_outputs: Boolean((chat.model as any).supports_structured_outputs),
-        supports_reasoning: Boolean((chat.model as any).supports_reasoning),
-        supports_prompt_caching: Boolean((chat.model as any).supports_prompt_caching),
+        supports_functions: Boolean(chat.model.supports_functions),
+        supports_structured_outputs: Boolean(chat.model.supports_structured_outputs),
+        supports_reasoning: Boolean(chat.model.supports_reasoning),
+        supports_prompt_caching: Boolean(chat.model.supports_prompt_caching),
         supports_stream_cancellation: true,
         modality: null,
         input_modalities: chat.model.input_modalities || [],
-        output_modalities: (chat.model as any).output_modalities || ['text'],
+        output_modalities: chat.model.output_modalities || ['text'],
         tokenizer: null,
         max_completion_tokens: null,
         is_moderated: false,
@@ -1028,8 +1028,8 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
         description: result.filename,
       })
       setShowSaveToKBDialog(false)
-    } catch (error: any) {
-      const errorData = error.response?.data
+    } catch (error) {
+      const errorData = hasErrorResponse(error) ? error.response?.data as { existing_document_id?: string; error?: string } | undefined : undefined
       if (errorData?.existing_document_id) {
         toast.error('Already saved', {
           description: errorData.error || 'This conversation is already in your knowledge base',
@@ -1767,7 +1767,7 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {imageAtts.map((img, i) => {
                         // Use assetId to load via API (direct URLs don't work due to auth)
-                        const assetId = (img as any).assetId || img.id
+                        const assetId = img.assetId || img.id
                         const blobUrl = assetId ? loadedBlobUrls[assetId] : null
                         const src = img.base64 || blobUrl || ''
                         const alt = img.file?.name || 'image'
@@ -1789,7 +1789,7 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
                               // Hydrate images with blob URLs
                               const imgs = imageAtts
                                 .map(a => {
-                                  const aAssetId = (a as any).assetId || a.id
+                                  const aAssetId = a.assetId || a.id
                                   const aBlobUrl = aAssetId ? loadedBlobUrls[aAssetId] : null
                                   return { src: a.base64 || aBlobUrl || '', alt: a.file?.name || 'image' }
                                 })
@@ -1973,7 +1973,7 @@ export const ImmersiveChatView = memo(function ImmersiveChatView({
                         const name = f.file?.name || 'file'
                         const extension = getFileExtension(name)
                         const sizeStr = formatFileSize(f.file?.size || 0)
-                        const assetId = (f as any).assetId || f.id
+                        const assetId = f.assetId || f.id
                         const blobUrl = assetId ? loadedBlobUrls[assetId] : null
                         const isPdf = extension.toLowerCase() === 'pdf' || (!!f.base64 && !f.textContent)
                         const isAssetLoading = assetId ? loadingAssetIds.has(assetId) : false

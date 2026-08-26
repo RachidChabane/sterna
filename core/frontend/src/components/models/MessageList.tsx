@@ -52,6 +52,7 @@ import { FileToolExecutionsDisplay } from './FileToolExecutionsDisplay'
 import { MessageSteps } from './MessageSteps'
 import { MentionText } from './MentionText'
 import { AssetImage } from './AssetImage'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 import { assetsAPI } from '@/api/assets'
 import { mcpApi, type MCPToolApproval, type MCPToolExecution } from '@/api/mcp'
 import { extractTextFromContent, stripActionTags } from '@/utils/chatUtils'
@@ -59,7 +60,7 @@ import { useStreamingText } from '@/hooks/useStreamingText'
 import { getFileExtension } from '@/utils/fileUtils'
 import { TypeBadge } from '@/lib/type-badges'
 import { formatFileSize } from '@/utils/imageUtils'
-import type { Attachment, ImageAttachment, FileAttachment, VideoAttachment, AudioAttachment } from './types'
+import type { Attachment, ImageAttachment, FileAttachment, VideoAttachment, AudioAttachment, AttachmentLike, WebSource } from './types'
 
 // Helper to format timestamp - always shows date and time in user-friendly format
 function formatTimestamp(date: Date): string {
@@ -89,7 +90,7 @@ function StreamingMarkdown({ content, isStreaming, className, webSources }: {
   content: string
   isStreaming: boolean
   className?: string
-  webSources?: any[]
+  webSources?: WebSource[]
 }) {
   const ctx = useChatPanelContextSafe()
   const { displayedText, isRevealing } = useStreamingText(
@@ -171,8 +172,8 @@ function MessageAttachmentsCarousel({
   // Render an image attachment card - clean with subtle shadow
   const renderImageCard = (img: ImageAttachment, idx: number) => {
     const cached = cachedAttachments[img.id]
-    const fileName = (img as any).file?.name || cached?.name || 'image'
-    const assetId = (img as any).assetId || img.id
+    const fileName = img.file?.name || cached?.name || 'image'
+    const assetId = img.assetId || img.id
     return (
       <button
         key={`img-${img.id}`}
@@ -180,12 +181,12 @@ function MessageAttachmentsCarousel({
         onClick={() => {
           const images = imgAtts.map((i, imgIdx) => {
             const c = cachedAttachments[i.id]
-            const assetId = (i as any).assetId || i.id
+            const assetId = i.assetId || i.id
             // Prefer base64 for immediate display, fallback to asset download URL
             const src = i.base64 || c?.base64 || (assetId ? `/api/workspaces/assets/${assetId}/download/` : '')
             return {
               src,
-              alt: (i as any).file?.name || c?.name || `Image ${imgIdx + 1}`,
+              alt: i.file?.name || c?.name || `Image ${imgIdx + 1}`,
               assetId
             }
           })
@@ -211,7 +212,7 @@ function MessageAttachmentsCarousel({
     const cached = cachedAttachments[f.id]
     const name = f.file?.name || cached?.name || 'file'
     const extension = getFileExtension(name)
-    const assetId = (f as any).assetId || f.id
+    const assetId = f.assetId || f.id
     const hasBase64 = !!(f.base64 || cached?.base64)
     const hasTextContent = !!(f.textContent || cached?.textContent)
     // PDF detection: extension matters, not whether text was extracted
@@ -239,9 +240,9 @@ function MessageAttachmentsCarousel({
           } else if (assetId) {
             onOpenTextFile({
               id: f.id, type: 'file',
-              file: f.file || { name, type: (f as any).fileType || 'text/plain', size: fileSize } as File,
+              file: f.file || { name, type: (f as AttachmentLike).fileType || 'text/plain', size: fileSize } as File,
               base64: undefined, textContent: undefined, assetId,
-            } as any)
+            })
           }
         }}
         className="group relative flex-shrink-0 w-[140px] h-[88px] rounded-lg bg-muted/30 ring-1 ring-border/50 hover:ring-primary/50 hover:bg-muted/50 active:ring-primary/70 active:bg-muted/60 active:scale-[0.98] transition-all duration-200 shadow-sm hover:shadow-md p-2.5 flex flex-col touch-manipulation"
@@ -265,8 +266,8 @@ function MessageAttachmentsCarousel({
 
   // Render a video attachment card
   const renderVideoCard = (v: VideoAttachment) => {
-    const name = v.file?.name || (v as any).fileName || 'video'
-    const assetId = (v as any).assetId || v.id
+    const name = v.file?.name || (v as AttachmentLike).fileName || 'video'
+    const assetId = v.assetId || v.id
     const previewUrl = v.preview || (assetId ? `/api/workspaces/assets/${assetId}/download/` : '')
     return (
       <div
@@ -292,8 +293,8 @@ function MessageAttachmentsCarousel({
 
   // Render an audio attachment card
   const renderAudioCard = (a: AudioAttachment) => {
-    const name = a.file?.name || (a as any).fileName || 'audio'
-    const fileSize = a.file?.size || (a as any).fileSize || 0
+    const name = a.file?.name || (a as AttachmentLike).fileName || 'audio'
+    const fileSize = a.file?.size || (a as AttachmentLike).fileSize || 0
     return (
       <div
         key={`aud-${a.id}`}
@@ -584,7 +585,7 @@ export function MessageList() {
             {/* Tool call approval requests */}
             {message.role === 'assistant' && message.pending_approvals && message.pending_approvals.length > 0 && (
               <div className="space-y-2 mt-2">
-                {message.pending_approvals.map((approval: any) => (
+                {message.pending_approvals.map((approval) => (
                   <ToolCallApprovalCard
                     key={approval.id}
                     approval={approval}
@@ -605,9 +606,7 @@ export function MessageList() {
                             if (msg.timestamp === message.timestamp) {
                               return {
                                 ...msg,
-                                pending_approvals: msg.pending_approvals?.filter(
-                                  (a: any) => a.id !== approvalId
-                                )
+                                pending_approvals: msg.pending_approvals?.filter((a) => a.id !== approvalId)
                               }
                             }
                             return msg
@@ -630,11 +629,11 @@ export function MessageList() {
                           title: 'Tool approved',
                           description: `${approval.tool_name} has been approved and executed successfully.`,
                         })
-                      } catch (error: any) {
+                      } catch (error) {
                         console.error('Failed to approve tool:', error)
                         toast({
                           title: 'Approval failed',
-                          description: error.response?.data?.error || 'Failed to approve tool execution',
+                          description: getApiErrorMessage(error, 'Failed to approve tool execution'),
                           variant: 'destructive',
                         })
                       }
@@ -650,9 +649,7 @@ export function MessageList() {
                             if (msg.timestamp === message.timestamp) {
                               return {
                                 ...msg,
-                                pending_approvals: msg.pending_approvals?.filter(
-                                  (a: any) => a.id !== approvalId
-                                )
+                                pending_approvals: msg.pending_approvals?.filter((a) => a.id !== approvalId)
                               }
                             }
                             return msg
@@ -665,11 +662,11 @@ export function MessageList() {
                           title: 'Tool rejected',
                           description: `${approval.tool_name} has been rejected and will not execute.`,
                         })
-                      } catch (error: any) {
+                      } catch (error) {
                         console.error('Failed to reject tool:', error)
                         toast({
                           title: 'Rejection failed',
-                          description: error.response?.data?.error || 'Failed to reject tool execution',
+                          description: getApiErrorMessage(error, 'Failed to reject tool execution'),
                           variant: 'destructive',
                         })
                       }

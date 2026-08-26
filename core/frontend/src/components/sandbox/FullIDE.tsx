@@ -23,6 +23,7 @@ import { BottomPanel } from './BottomPanel'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import axios from 'axios'
+import { toErrorMessage } from '@/utils/errorMessages'
 import { getAccessToken, orchestratorClient } from '@/api/client'
 import { fsAPI } from '@/api/fs'
 import { getPreviewUrl, fetchPreviewToken } from '@/api/sandbox'
@@ -540,11 +541,11 @@ export function FullIDE({
           variant: 'destructive',
         })
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to open file:', error)
       toast({
         title: 'Error',
-        description: error.message || 'Failed to open file',
+        description: toErrorMessage(error) || 'Failed to open file',
         variant: 'destructive',
       })
     }
@@ -613,11 +614,11 @@ export function FullIDE({
           variant: 'destructive',
         })
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to save file:', error)
       toast({
         title: 'Error',
-        description: error.message || 'Failed to save file',
+        description: toErrorMessage(error) || 'Failed to save file',
         variant: 'destructive',
       })
     } finally {
@@ -688,11 +689,11 @@ export function FullIDE({
         setNewItemDialog(null)
         setNewItemName('')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create item:', error)
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create item',
+        description: toErrorMessage(error) || 'Failed to create item',
         variant: 'destructive',
       })
     }
@@ -725,11 +726,11 @@ export function FullIDE({
       } else {
         throw new Error(result.error || 'Failed to delete')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to delete:', error)
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete',
+        description: toErrorMessage(error) || 'Failed to delete',
         variant: 'destructive',
       })
     }
@@ -775,11 +776,11 @@ export function FullIDE({
       } else {
         throw new Error(result.error || 'Failed to rename')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to rename:', error)
       toast({
         title: 'Error',
-        description: error.message || 'Failed to rename',
+        description: toErrorMessage(error) || 'Failed to rename',
         variant: 'destructive',
       })
     }
@@ -831,11 +832,11 @@ export function FullIDE({
       } else {
         throw new Error(result.error || 'Failed to move')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to move:', error)
       toast({
         title: 'Error',
-        description: error.message || 'Failed to move item',
+        description: toErrorMessage(error) || 'Failed to move item',
         variant: 'destructive',
       })
     }
@@ -896,11 +897,11 @@ export function FullIDE({
       } else {
         throw new Error(result.error || 'Failed to read file')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to download file:', error)
       toast({
         title: 'Download Failed',
-        description: error.message || 'Failed to download file',
+        description: toErrorMessage(error) || 'Failed to download file',
         variant: 'destructive',
       })
     }
@@ -981,11 +982,11 @@ export function FullIDE({
         title: 'Download Complete',
         description: `Downloaded ${allFiles.length} files as ZIP`,
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to download workspace:', error)
       toast({
         title: 'Download Failed',
-        description: error.message || 'Failed to download workspace',
+        description: toErrorMessage(error) || 'Failed to download workspace',
         variant: 'destructive',
       })
     }
@@ -1154,19 +1155,19 @@ export function FullIDE({
   }
 
   // Helper: Recursively read all files from directory entries
-  const readDirectoryEntries = async (entry: any): Promise<Array<{ file: File; relativePath: string }>> => {
+  const readDirectoryEntries = async (entry: FileSystemEntry): Promise<Array<{ file: File; relativePath: string }>> => {
     const results: Array<{ file: File; relativePath: string }> = []
 
     if (entry.isFile) {
       // It's a file - read it
       const file = await new Promise<File>((resolve, reject) => {
-        entry.file(resolve, reject)
+        ;(entry as FileSystemFileEntry).file(resolve, reject)
       })
       results.push({ file, relativePath: entry.fullPath.replace(/^\//, '') })
     } else if (entry.isDirectory) {
       // It's a directory - read all entries recursively
-      const reader = entry.createReader()
-      const entries = await new Promise<any[]>((resolve, reject) => {
+      const reader = (entry as FileSystemDirectoryEntry).createReader()
+      const entries = await new Promise<FileSystemEntry[]>((resolve, reject) => {
         reader.readEntries(resolve, reject)
       })
 
@@ -1336,7 +1337,7 @@ export function FullIDE({
             failCount++
             console.error(`Failed to upload ${relativePath}:`, result.error)
           }
-        } catch (error: any) {
+        } catch (error) {
           failCount++
           console.error(`Failed to upload ${relativePath}:`, error)
         }
@@ -1363,11 +1364,11 @@ export function FullIDE({
           variant: 'destructive',
         })
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Upload error:', error)
       toast({
         title: 'Upload Error',
-        description: error.message || 'An error occurred during upload',
+        description: toErrorMessage(error) || 'An error occurred during upload',
         variant: 'destructive',
       })
     } finally {
@@ -1442,10 +1443,10 @@ export function FullIDE({
           variant: 'destructive',
         })
       }
-    } catch (error: any) {
+    } catch (error) {
       // Don't show error if execution was aborted by user (native fetch
       // AbortError previously; axios raises a CanceledError instead)
-      if (axios.isCancel(error) || error.name === 'AbortError') {
+      if (axios.isCancel(error) || (error instanceof Error && error.name === 'AbortError')) {
         setResult({
           output: '',
           error: 'Execution cancelled by user',
@@ -1455,7 +1456,7 @@ export function FullIDE({
       } else {
         const message = axios.isAxiosError(error) && error.response
           ? `HTTP ${error.response.status}`
-          : error.message || 'Execution failed'
+          : toErrorMessage(error) || 'Execution failed'
         setResult({
           output: '',
           error: message,
@@ -1665,7 +1666,7 @@ export function FullIDE({
             failCount++
             console.error(`Failed to upload ${file.name}:`, result.error)
           }
-        } catch (error: any) {
+        } catch (error) {
           failCount++
           console.error(`Failed to upload ${file.name}:`, error)
         }
@@ -1840,7 +1841,7 @@ export function FullIDE({
               failCount++
               console.error(`Failed to upload ${relativePath}:`, result.error)
             }
-          } catch (error: any) {
+          } catch (error) {
             failCount++
             console.error(`Failed to upload ${relativePath}:`, error)
           }
@@ -1867,11 +1868,11 @@ export function FullIDE({
             variant: 'destructive',
           })
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error('Upload error:', error)
         toast({
           title: 'Upload Error',
-          description: error.message || 'An error occurred during upload',
+          description: toErrorMessage(error) || 'An error occurred during upload',
           variant: 'destructive',
         })
       } finally {
@@ -1958,7 +1959,7 @@ export function FullIDE({
         }).catch(error => {
           toast({
             title: 'Error',
-            description: error.message || 'Failed to save file',
+            description: toErrorMessage(error) || 'Failed to save file',
             variant: 'destructive',
           })
         }).finally(() => {
