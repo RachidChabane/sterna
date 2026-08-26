@@ -74,7 +74,10 @@ class SyncResultSerializer(serializers.Serializer):
     bytes_synced = serializers.IntegerField()
     files_deleted = serializers.IntegerField(required=False, default=0)
     files_skipped = serializers.IntegerField(required=False, default=0)
-    errors = serializers.ListField(child=serializers.CharField(), required=False, default=[])
+    # Field name shadows Serializer.errors (a ReturnDict property on the base
+    # class); DRF's metaclass extracts declared fields out of the class body
+    # before that property resolves, so this works correctly at runtime.
+    errors = serializers.ListField(child=serializers.CharField(), required=False, default=[])  # type: ignore[assignment]
     duration_ms = serializers.IntegerField()
 
 
@@ -246,8 +249,10 @@ class GalleryAssetSerializer(AssetSerializer):
 
     def get_conversation_id(self, obj: Asset) -> str | None:
         """Get the parent conversation ID for navigation."""
-        if obj.chat and obj.chat.conversation_id:
-            return str(obj.chat.conversation_id)
+        # conversation_id is Chat's runtime shadow attribute for its
+        # conversation FK (conversations.models.Chat, outside this app).
+        if obj.chat and obj.chat.conversation_id:  # type: ignore[attr-defined]
+            return str(obj.chat.conversation_id)  # type: ignore[attr-defined]
         return None
 
     def get_generation_model_display_name(self, obj: Asset) -> str | None:
@@ -314,7 +319,10 @@ class AssetShareLinkSerializer(serializers.ModelSerializer):
     asset_filename = serializers.CharField(source='asset.filename', read_only=True)
     thumbnail_url = serializers.SerializerMethodField()
     is_expired = serializers.BooleanField(read_only=True)
-    is_valid = serializers.BooleanField(read_only=True)
+    # Field name shadows BaseSerializer.is_valid() (a method on the base
+    # class); DRF's metaclass extracts declared fields out of the class body
+    # before that method resolves, so this works correctly at runtime.
+    is_valid = serializers.BooleanField(read_only=True)  # type: ignore[assignment]
 
     class Meta:
         model = AssetShareLink

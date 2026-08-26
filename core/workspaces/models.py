@@ -6,8 +6,16 @@ and Cloudflare R2 (large files), enabling quick sandbox destruction while
 persisting user data across sessions.
 """
 import uuid
+from typing import TYPE_CHECKING, Optional
+
 from django.db import models
 from django.conf import settings
+
+if TYPE_CHECKING:
+    from django.db.models.fields.related_descriptors import RelatedManager
+
+    from authentication.models import User
+    from conversations.models import Chat, Message
 
 
 class Workspace(models.Model):
@@ -16,27 +24,32 @@ class Workspace(models.Model):
     One workspace per user per chat. Each chat within a conversation
     has its own isolated workspace files (sandbox dir: workspace/chat-<chat_id>/).
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    if TYPE_CHECKING:
+        files: RelatedManager["WorkspaceFile"]
+        user_id: uuid.UUID
+        chat_id: uuid.UUID
+
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='workspaces'
     )
-    chat = models.ForeignKey(
+    chat: "models.ForeignKey[Chat, Chat]" = models.ForeignKey(
         'conversations.Chat',
         on_delete=models.CASCADE,
         related_name='workspaces'
     )
-    name = models.CharField(max_length=255, blank=True)
+    name: models.CharField = models.CharField(max_length=255, blank=True)
 
     # Stats
-    total_size_bytes = models.BigIntegerField(default=0)
-    file_count = models.IntegerField(default=0)
+    total_size_bytes: models.BigIntegerField = models.BigIntegerField(default=0)
+    file_count: models.IntegerField = models.IntegerField(default=0)
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    last_accessed_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
+    last_accessed_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ('user', 'chat')
@@ -73,39 +86,39 @@ class WorkspaceFile(models.Model):
         (STORAGE_R2, 'R2 (Cloudflare)'),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    workspace = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace: "models.ForeignKey[Workspace, Workspace]" = models.ForeignKey(
         Workspace,
         on_delete=models.CASCADE,
         related_name='files'
     )
 
     # File info
-    path = models.CharField(max_length=1024)  # relative: "src/main.py"
-    filename = models.CharField(max_length=255)
-    mime_type = models.CharField(max_length=127, blank=True, null=True)
-    size_bytes = models.BigIntegerField()
+    path: models.CharField = models.CharField(max_length=1024)  # relative: "src/main.py"
+    filename: models.CharField = models.CharField(max_length=255)
+    mime_type: models.CharField = models.CharField(max_length=127, blank=True, null=True)
+    size_bytes: models.BigIntegerField = models.BigIntegerField()
 
     # Storage strategy
-    storage_type = models.CharField(
+    storage_type: models.CharField = models.CharField(
         max_length=20,
         choices=STORAGE_CHOICES,
         default=STORAGE_INLINE
     )
 
     # Inline storage (small files)
-    content = models.BinaryField(blank=True, null=True)
+    content: models.BinaryField = models.BinaryField(blank=True, null=True)
 
     # R2 storage (large files)
-    r2_bucket = models.CharField(max_length=63, blank=True, null=True)
-    r2_key = models.CharField(max_length=1024, blank=True, null=True)
+    r2_bucket: models.CharField = models.CharField(max_length=63, blank=True, null=True)
+    r2_key: models.CharField = models.CharField(max_length=1024, blank=True, null=True)
 
     # Integrity
-    sha256_hash = models.CharField(max_length=64, db_index=True)
+    sha256_hash: models.CharField = models.CharField(max_length=64, db_index=True)
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ('workspace', 'path')
@@ -138,20 +151,23 @@ class SyncState(models.Model):
         (DIRECTION_RESTORE, 'Restore'),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    workspace = models.OneToOneField(
+    if TYPE_CHECKING:
+        workspace_id: uuid.UUID
+
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace: "models.OneToOneField[Workspace, Workspace]" = models.OneToOneField(
         Workspace,
         on_delete=models.CASCADE,
         related_name='sync_state'
     )
 
     # Sync info
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default=STATUS_IDLE
     )
-    direction = models.CharField(
+    direction: models.CharField = models.CharField(
         max_length=10,
         choices=DIRECTION_CHOICES,
         blank=True,
@@ -159,18 +175,18 @@ class SyncState(models.Model):
     )
 
     # Progress
-    files_total = models.IntegerField(default=0)
-    files_synced = models.IntegerField(default=0)
-    bytes_total = models.BigIntegerField(default=0)
-    bytes_synced = models.BigIntegerField(default=0)
+    files_total: models.IntegerField = models.IntegerField(default=0)
+    files_synced: models.IntegerField = models.IntegerField(default=0)
+    bytes_total: models.BigIntegerField = models.BigIntegerField(default=0)
+    bytes_synced: models.BigIntegerField = models.BigIntegerField(default=0)
 
     # Timestamps
-    started_at = models.DateTimeField(blank=True, null=True)
-    completed_at = models.DateTimeField(blank=True, null=True)
+    started_at: models.DateTimeField = models.DateTimeField(blank=True, null=True)
+    completed_at: models.DateTimeField = models.DateTimeField(blank=True, null=True)
 
     # Error tracking
-    error_message = models.TextField(blank=True, null=True)
-    retry_count = models.IntegerField(default=0)
+    error_message: models.TextField = models.TextField(blank=True, null=True)
+    retry_count: models.IntegerField = models.IntegerField(default=0)
 
     class Meta:
         verbose_name = 'Sync State'
@@ -223,20 +239,23 @@ class Asset(models.Model):
         (STORAGE_R2, 'R2 (Cloudflare)'),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    if TYPE_CHECKING:
+        thumbnail_id: Optional[uuid.UUID]
+
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Owner and context
-    user = models.ForeignKey(
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='assets'
     )
-    chat = models.ForeignKey(
+    chat: "models.ForeignKey[Chat, Chat]" = models.ForeignKey(
         'conversations.Chat',
         on_delete=models.CASCADE,
         related_name='assets'
     )
-    message = models.ForeignKey(
+    message: "models.ForeignKey[Optional[Message], Optional[Message]]" = models.ForeignKey(
         'conversations.Message',
         on_delete=models.SET_NULL,
         null=True,
@@ -246,28 +265,28 @@ class Asset(models.Model):
     )
 
     # Asset info
-    asset_type = models.CharField(
+    asset_type: models.CharField = models.CharField(
         max_length=20,
         choices=TYPE_CHOICES,
         default=TYPE_IMAGE
     )
-    filename = models.CharField(max_length=255)
-    mime_type = models.CharField(max_length=127)
-    size_bytes = models.BigIntegerField()
+    filename: models.CharField = models.CharField(max_length=255)
+    mime_type: models.CharField = models.CharField(max_length=127)
+    size_bytes: models.BigIntegerField = models.BigIntegerField()
 
     # Storage strategy
-    storage_type = models.CharField(
+    storage_type: models.CharField = models.CharField(
         max_length=20,
         choices=STORAGE_CHOICES,
         default=STORAGE_R2  # Assets typically go to R2 (images are large)
     )
 
     # Inline storage (small assets like tiny thumbnails)
-    content = models.BinaryField(blank=True, null=True)
+    content: models.BinaryField = models.BinaryField(blank=True, null=True)
 
     # R2 storage
-    r2_bucket = models.CharField(max_length=63, blank=True, null=True)
-    r2_key = models.CharField(
+    r2_bucket: models.CharField = models.CharField(max_length=63, blank=True, null=True)
+    r2_key: models.CharField = models.CharField(
         max_length=1024,
         blank=True,
         null=True,
@@ -275,12 +294,12 @@ class Asset(models.Model):
     )
 
     # Media metadata
-    width = models.IntegerField(null=True, blank=True, help_text="Image/video width in pixels")
-    height = models.IntegerField(null=True, blank=True, help_text="Image/video height in pixels")
-    duration_seconds = models.FloatField(null=True, blank=True, help_text="Video/audio duration")
+    width: models.IntegerField = models.IntegerField(null=True, blank=True, help_text="Image/video width in pixels")
+    height: models.IntegerField = models.IntegerField(null=True, blank=True, help_text="Image/video height in pixels")
+    duration_seconds: models.FloatField = models.FloatField(null=True, blank=True, help_text="Video/audio duration")
 
     # Thumbnail reference (for videos/large images)
-    thumbnail = models.ForeignKey(
+    thumbnail: "models.ForeignKey[Optional[Asset], Optional[Asset]]" = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
         null=True,
@@ -290,15 +309,15 @@ class Asset(models.Model):
     )
 
     # Integrity
-    sha256_hash = models.CharField(max_length=64, db_index=True)
+    sha256_hash: models.CharField = models.CharField(max_length=64, db_index=True)
 
     # Generation metadata (for AI-generated assets)
-    generation_prompt = models.TextField(
+    generation_prompt: models.TextField = models.TextField(
         blank=True,
         null=True,
         help_text="Prompt used to generate this asset (if AI-generated)"
     )
-    generation_model = models.CharField(
+    generation_model: models.CharField = models.CharField(
         max_length=255,
         blank=True,
         null=True,
@@ -306,8 +325,8 @@ class Asset(models.Model):
     )
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         indexes = [
@@ -346,20 +365,23 @@ class AssetShareLink(models.Model):
     """
     import secrets
 
-    id = models.UUIDField(
+    if TYPE_CHECKING:
+        asset_id: uuid.UUID
+
+    id: models.UUIDField = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False
     )
 
     # Core relationships
-    asset = models.ForeignKey(
+    asset: "models.ForeignKey[Asset, Asset]" = models.ForeignKey(
         'Asset',
         on_delete=models.CASCADE,
         related_name='share_links',
         help_text="The asset being shared"
     )
-    created_by = models.ForeignKey(
+    created_by: "models.ForeignKey[User, User]" = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='asset_share_links',
@@ -367,7 +389,7 @@ class AssetShareLink(models.Model):
     )
 
     # Share token (cryptographically secure)
-    token = models.CharField(
+    token: models.CharField = models.CharField(
         max_length=64,
         unique=True,
         db_index=True,
@@ -375,12 +397,12 @@ class AssetShareLink(models.Model):
     )
 
     # Lifecycle management
-    is_active = models.BooleanField(
+    is_active: models.BooleanField = models.BooleanField(
         default=True,
         db_index=True,
         help_text="Whether the link is active (soft delete)"
     )
-    expires_at = models.DateTimeField(
+    expires_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         db_index=True,
@@ -388,18 +410,18 @@ class AssetShareLink(models.Model):
     )
 
     # Analytics
-    view_count = models.PositiveIntegerField(
+    view_count: models.PositiveIntegerField = models.PositiveIntegerField(
         default=0,
         help_text="Number of times this link has been accessed"
     )
-    last_viewed_at = models.DateTimeField(
+    last_viewed_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="Last time someone viewed this shared asset"
     )
 
     # Optional title override (for social sharing)
-    custom_title = models.CharField(
+    custom_title: models.CharField = models.CharField(
         max_length=255,
         blank=True,
         null=True,
@@ -413,11 +435,11 @@ class AssetShareLink(models.Model):
         ('top-right', 'Top Right'),
         ('top-left', 'Top Left'),
     ]
-    watermark_enabled = models.BooleanField(
+    watermark_enabled: models.BooleanField = models.BooleanField(
         default=True,
         help_text="Whether to apply watermark to shared images"
     )
-    watermark_position = models.CharField(
+    watermark_position: models.CharField = models.CharField(
         max_length=20,
         choices=WATERMARK_POSITIONS,
         default='bottom-right',
@@ -425,8 +447,8 @@ class AssetShareLink(models.Model):
     )
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         indexes = [
@@ -480,7 +502,7 @@ class FileVersionContent(models.Model):
     - Small content (<256KB): stored inline in PostgreSQL
     - Large content (>=256KB): stored in Cloudflare R2
     """
-    sha256_hash = models.CharField(max_length=64, primary_key=True)
+    sha256_hash: models.CharField = models.CharField(max_length=64, primary_key=True)
 
     # Tiered storage (reuse existing pattern)
     STORAGE_INLINE = 'inline'
@@ -489,18 +511,18 @@ class FileVersionContent(models.Model):
         (STORAGE_INLINE, 'Inline (PostgreSQL)'),
         (STORAGE_R2, 'R2 (Cloudflare)'),
     ]
-    storage_type = models.CharField(
+    storage_type: models.CharField = models.CharField(
         max_length=10,
         choices=STORAGE_CHOICES,
         default=STORAGE_INLINE
     )
-    content = models.BinaryField(blank=True, null=True)  # For inline storage
-    r2_key = models.CharField(max_length=1024, blank=True)  # For R2 storage
+    content: models.BinaryField = models.BinaryField(blank=True, null=True)  # For inline storage
+    r2_key: models.CharField = models.CharField(max_length=1024, blank=True)  # For R2 storage
 
     # Metadata
-    size_bytes = models.BigIntegerField()
-    reference_count = models.PositiveIntegerField(default=1)
-    created_at = models.DateTimeField(auto_now_add=True)
+    size_bytes: models.BigIntegerField = models.BigIntegerField()
+    reference_count: models.PositiveIntegerField = models.PositiveIntegerField(default=1)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'workspaces_file_version_content'
@@ -523,14 +545,17 @@ class FileVersion(models.Model):
 
     Content is stored via FileVersionContent for deduplication.
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    workspace = models.ForeignKey(
+    if TYPE_CHECKING:
+        content_ref_id: str
+
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace: "models.ForeignKey[Workspace, Workspace]" = models.ForeignKey(
         Workspace,
         on_delete=models.CASCADE,
         related_name='file_versions'
     )
-    path = models.CharField(max_length=1024, db_index=True)
-    version_number = models.PositiveIntegerField()
+    path: models.CharField = models.CharField(max_length=1024, db_index=True)
+    version_number: models.PositiveIntegerField = models.PositiveIntegerField()
 
     # What caused this version
     class SourceType(models.TextChoices):
@@ -541,19 +566,19 @@ class FileVersion(models.Model):
         RESTORE = 'restore', 'Restore'
         INITIAL = 'initial', 'Initial'
 
-    source_type = models.CharField(max_length=20, choices=SourceType.choices)
-    source_message = models.ForeignKey(
+    source_type: models.CharField = models.CharField(max_length=20, choices=SourceType.choices)
+    source_message: "models.ForeignKey[Optional[Message], Optional[Message]]" = models.ForeignKey(
         'conversations.Message',
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name='file_versions'
     )
-    source_job_id = models.CharField(max_length=50, blank=True)
-    source_tool_name = models.CharField(max_length=50, blank=True)
+    source_job_id: models.CharField = models.CharField(max_length=50, blank=True)
+    source_tool_name: models.CharField = models.CharField(max_length=50, blank=True)
 
     # Reference to deduplicated content
-    content_ref = models.ForeignKey(
+    content_ref: "models.ForeignKey[FileVersionContent, FileVersionContent]" = models.ForeignKey(
         FileVersionContent,
         on_delete=models.PROTECT,
         to_field='sha256_hash',
@@ -562,14 +587,14 @@ class FileVersion(models.Model):
     )
 
     # Denormalized for quick access (avoid joins)
-    size_bytes = models.BigIntegerField()
-    is_deleted = models.BooleanField(default=False)
-    is_binary = models.BooleanField(default=False)
-    mime_type = models.CharField(max_length=127, blank=True)
+    size_bytes: models.BigIntegerField = models.BigIntegerField()
+    is_deleted: models.BooleanField = models.BooleanField(default=False)
+    is_binary: models.BooleanField = models.BooleanField(default=False)
+    mime_type: models.CharField = models.CharField(max_length=127, blank=True)
 
     # Audit
-    created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    created_by: "models.ForeignKey[Optional[User], Optional[User]]" = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
         blank=True,

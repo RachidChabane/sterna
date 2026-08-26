@@ -3,7 +3,7 @@ Document processor for text extraction and chunking.
 """
 
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ..config import config
 from .extractors import ExtractorRegistry
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class DocumentProcessor:
     """Handles document parsing and chunking."""
 
-    def __init__(self, storage_provider: StorageProvider = None):
+    def __init__(self, storage_provider: Optional[StorageProvider] = None):
         self.storage = storage_provider or R2StorageProvider()
 
     def extract_text(self, document) -> Tuple[str, Dict]:

@@ -36,9 +36,9 @@ import logging
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-import boto3
-from botocore.config import Config
-from botocore.exceptions import ClientError, NoCredentialsError
+import boto3  # type: ignore[import-untyped]
+from botocore.config import Config  # type: ignore[import-untyped]
+from botocore.exceptions import ClientError, NoCredentialsError  # type: ignore[import-untyped]
 from django.conf import settings
 
 from workspaces.models import WorkspaceFile

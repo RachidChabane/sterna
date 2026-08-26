@@ -23,6 +23,7 @@ class WorkspaceAdmin(admin.ModelAdmin):
     readonly_fields = ('id', 'created_at', 'updated_at', 'last_accessed_at')
     inlines = [SyncStateInline, WorkspaceFileInline]
 
+    @admin.display(description='Total Size')
     def total_size_display(self, obj):
         """Display total size in human-readable format."""
         size = obj.total_size_bytes
@@ -31,7 +32,6 @@ class WorkspaceAdmin(admin.ModelAdmin):
                 return f"{size:.1f} {unit}"
             size /= 1024
         return f"{size:.1f} TB"
-    total_size_display.short_description = 'Total Size'
 
 
 @admin.register(WorkspaceFile)
@@ -41,6 +41,7 @@ class WorkspaceFileAdmin(admin.ModelAdmin):
     search_fields = ('path', 'filename', 'workspace__id')
     readonly_fields = ('id', 'sha256_hash', 'created_at', 'updated_at')
 
+    @admin.display(description='Size')
     def size_display(self, obj):
         """Display size in human-readable format."""
         size = obj.size_bytes
@@ -49,7 +50,6 @@ class WorkspaceFileAdmin(admin.ModelAdmin):
                 return f"{size:.1f} {unit}"
             size /= 1024
         return f"{size:.1f} GB"
-    size_display.short_description = 'Size'
 
 
 @admin.register(SyncState)

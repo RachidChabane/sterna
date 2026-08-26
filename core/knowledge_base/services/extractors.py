@@ -43,7 +43,7 @@ class PDFExtractor(DocumentExtractor):
         except Exception as e:
             logger.warning(f"pypdf failed, trying unstructured: {e}")
             try:
-                from unstructured.partition.pdf import partition_pdf
+                from unstructured.partition.pdf import partition_pdf  # type: ignore[import-not-found]
                 elements = partition_pdf(file=io.BytesIO(content))
                 return ExtractionResult(
                     text='\n\n'.join(str(el) for el in elements),
@@ -78,7 +78,7 @@ class HTMLExtractor(DocumentExtractor):
     """Extract text from HTML documents."""
 
     def extract(self, content: bytes) -> ExtractionResult:
-        from bs4 import BeautifulSoup
+        from bs4 import BeautifulSoup  # type: ignore[import-untyped]
         soup = BeautifulSoup(content, 'html.parser')
         # Remove script and style elements
         for script in soup(['script', 'style']):

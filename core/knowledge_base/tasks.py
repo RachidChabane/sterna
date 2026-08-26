@@ -4,7 +4,7 @@ Celery tasks for asynchronous document processing.
 
 import logging
 from decimal import Decimal
-from celery import shared_task
+from celery import shared_task  # type: ignore[import-untyped]
 from django.db import transaction
 from django.utils import timezone
 
@@ -127,8 +127,11 @@ def process_document_task(self, document_id: str):
             document.processed_at = timezone.now()
             document.save(update_fields=['chunk_count', 'status', 'processed_at'])
 
-            # Update user stats
-            settings = document.user.knowledge_base_settings
+            # Update user stats. `knowledge_base_settings` is the reverse
+            # OneToOne accessor Django adds to User at runtime from
+            # KnowledgeBaseSettings.user (declared in this app); the
+            # authentication.User stub has no static knowledge of it.
+            settings = document.user.knowledge_base_settings  # type: ignore[attr-defined]
             settings.update_stats(chunks_delta=len(chunk_objects))
 
         # Log embedding usage for billing (outside transaction for reliability)

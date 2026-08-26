@@ -3,40 +3,45 @@ Knowledge Base models for document storage, chunking, and vector search.
 """
 
 import uuid
+from typing import TYPE_CHECKING
+
 from django.db import models
-from pgvector.django import VectorField, HnswIndex
+from pgvector.django import VectorField, HnswIndex  # type: ignore[import-untyped]
 
 from authentication.models import User
 from .config import config
 
+if TYPE_CHECKING:
+    from django.db.models.fields.related_descriptors import RelatedManager
+
 
 class KnowledgeBaseSettings(models.Model):
     """Per-user knowledge base configuration."""
-    user = models.OneToOneField(
+    user: "models.OneToOneField[User, User]" = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
         related_name='knowledge_base_settings'
     )
-    is_enabled = models.BooleanField(default=True)
+    is_enabled: models.BooleanField = models.BooleanField(default=True)
 
     # User-tunable settings (defaults from config)
-    similarity_threshold = models.FloatField(
+    similarity_threshold: models.FloatField = models.FloatField(
         default=config.default_similarity_threshold
     )
-    max_chunks_per_query = models.PositiveIntegerField(
+    max_chunks_per_query: models.PositiveIntegerField = models.PositiveIntegerField(
         default=config.default_max_chunks_per_query
     )
-    storage_limit_mb = models.PositiveIntegerField(
+    storage_limit_mb: models.PositiveIntegerField = models.PositiveIntegerField(
         default=config.default_storage_limit_mb
     )
 
     # Stats (denormalized for performance)
-    total_documents = models.PositiveIntegerField(default=0)
-    total_chunks = models.PositiveIntegerField(default=0)
-    total_storage_bytes = models.BigIntegerField(default=0)
+    total_documents: models.PositiveIntegerField = models.PositiveIntegerField(default=0)
+    total_chunks: models.PositiveIntegerField = models.PositiveIntegerField(default=0)
+    total_storage_bytes: models.BigIntegerField = models.BigIntegerField(default=0)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "Knowledge Base Settings"
@@ -91,54 +96,57 @@ class StorageType(models.TextChoices):
 
 class KnowledgeDocument(models.Model):
     """Represents an uploaded document in the knowledge base."""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    if TYPE_CHECKING:
+        chunks: "RelatedManager[KnowledgeChunk]"
+
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='knowledge_documents'
     )
 
     # Document metadata
-    filename = models.CharField(max_length=500)
-    original_filename = models.CharField(max_length=500)
-    document_type = models.CharField(max_length=20, choices=DocumentType.choices)
-    mime_type = models.CharField(max_length=100)
-    file_size_bytes = models.BigIntegerField()
+    filename: models.CharField = models.CharField(max_length=500)
+    original_filename: models.CharField = models.CharField(max_length=500)
+    document_type: models.CharField = models.CharField(max_length=20, choices=DocumentType.choices)
+    mime_type: models.CharField = models.CharField(max_length=100)
+    file_size_bytes: models.BigIntegerField = models.BigIntegerField()
 
     # Content storage (tiered like workspaces)
-    storage_type = models.CharField(
+    storage_type: models.CharField = models.CharField(
         max_length=20,
         choices=StorageType.choices,
         default=StorageType.INLINE
     )
-    content = models.BinaryField(blank=True, null=True)
-    r2_bucket = models.CharField(max_length=255, blank=True)
-    r2_key = models.CharField(max_length=500, blank=True)
+    content: models.BinaryField = models.BinaryField(blank=True, null=True)
+    r2_bucket: models.CharField = models.CharField(max_length=255, blank=True)
+    r2_key: models.CharField = models.CharField(max_length=500, blank=True)
 
     # Processing metadata
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=DocumentStatus.choices,
         default=DocumentStatus.PENDING
     )
-    error_message = models.TextField(blank=True)
+    error_message: models.TextField = models.TextField(blank=True)
 
     # Parsed content
-    extracted_text = models.TextField(blank=True)
-    page_count = models.PositiveIntegerField(null=True)
-    word_count = models.PositiveIntegerField(null=True)
-    chunk_count = models.PositiveIntegerField(default=0)
+    extracted_text: models.TextField = models.TextField(blank=True)
+    page_count: models.PositiveIntegerField = models.PositiveIntegerField(null=True)
+    word_count: models.PositiveIntegerField = models.PositiveIntegerField(null=True)
+    chunk_count: models.PositiveIntegerField = models.PositiveIntegerField(default=0)
 
     # Duplicate detection
-    content_hash = models.CharField(max_length=64, db_index=True)
+    content_hash: models.CharField = models.CharField(max_length=64, db_index=True)
 
     # Timestamps
-    uploaded_at = models.DateTimeField(auto_now_add=True)
-    processed_at = models.DateTimeField(null=True)
-    last_queried_at = models.DateTimeField(null=True)
+    uploaded_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    processed_at: models.DateTimeField = models.DateTimeField(null=True)
+    last_queried_at: models.DateTimeField = models.DateTimeField(null=True)
 
     # Tags for organization
-    tags = models.JSONField(default=list)
+    tags: models.JSONField = models.JSONField(default=list)
 
     class Meta:
         indexes = [
@@ -154,35 +162,38 @@ class KnowledgeDocument(models.Model):
 
 class KnowledgeChunk(models.Model):
     """Individual text chunk with embedding vector."""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    document = models.ForeignKey(
+    if TYPE_CHECKING:
+        document_id: uuid.UUID
+
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    document: "models.ForeignKey[KnowledgeDocument, KnowledgeDocument]" = models.ForeignKey(
         KnowledgeDocument,
         on_delete=models.CASCADE,
         related_name='chunks'
     )
-    user = models.ForeignKey(
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='knowledge_chunks'
     )
 
     # Chunk content
-    content = models.TextField()
-    chunk_index = models.PositiveIntegerField()
+    content: models.TextField = models.TextField()
+    chunk_index: models.PositiveIntegerField = models.PositiveIntegerField()
 
     # Position in source document
-    start_char = models.PositiveIntegerField(null=True)
-    end_char = models.PositiveIntegerField(null=True)
-    page_number = models.PositiveIntegerField(null=True)
+    start_char: models.PositiveIntegerField = models.PositiveIntegerField(null=True)
+    end_char: models.PositiveIntegerField = models.PositiveIntegerField(null=True)
+    page_number: models.PositiveIntegerField = models.PositiveIntegerField(null=True)
 
     # Embedding vector (dimensions from config)
     embedding = VectorField(dimensions=config.embedding_dimensions, null=True)
-    embedding_model = models.CharField(max_length=100)
+    embedding_model: models.CharField = models.CharField(max_length=100)
 
     # Token count for cost estimation
-    token_count = models.PositiveIntegerField(default=0)
+    token_count: models.PositiveIntegerField = models.PositiveIntegerField(default=0)
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
@@ -204,26 +215,26 @@ class KnowledgeChunk(models.Model):
 
 class KnowledgeQueryLog(models.Model):
     """Logs knowledge base queries for analytics and billing."""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='knowledge_query_logs'
     )
 
     # Query details
-    query_text = models.TextField()
-    query_embedding_model = models.CharField(max_length=100)
+    query_text: models.TextField = models.TextField()
+    query_embedding_model: models.CharField = models.CharField(max_length=100)
 
     # Results
-    chunks_searched = models.PositiveIntegerField()
-    chunks_returned = models.PositiveIntegerField()
-    top_similarity_score = models.FloatField(null=True)
+    chunks_searched: models.PositiveIntegerField = models.PositiveIntegerField()
+    chunks_returned: models.PositiveIntegerField = models.PositiveIntegerField()
+    top_similarity_score: models.FloatField = models.FloatField(null=True)
 
     # Source tracking
-    conversation_id = models.UUIDField(null=True)
-    chat_id = models.UUIDField(null=True)
-    invocation_type = models.CharField(
+    conversation_id: models.UUIDField = models.UUIDField(null=True)
+    chat_id: models.UUIDField = models.UUIDField(null=True)
+    invocation_type: models.CharField = models.CharField(
         max_length=20,
         choices=[
             ('auto', 'Automatic'),
@@ -233,16 +244,16 @@ class KnowledgeQueryLog(models.Model):
     )
 
     # Cost tracking
-    embedding_cost_usd = models.DecimalField(
+    embedding_cost_usd: models.DecimalField = models.DecimalField(
         max_digits=10,
         decimal_places=6,
         default=0
     )
 
     # Performance
-    latency_ms = models.PositiveIntegerField()
+    latency_ms: models.PositiveIntegerField = models.PositiveIntegerField()
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
