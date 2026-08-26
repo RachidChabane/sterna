@@ -1203,7 +1203,7 @@ class HTTPToolExecutor:
 
         Flow:
         1. Call orchestrator to run coding agent in plan mode
-        2. Orchestrator returns plan_content (read from /workspace/plans/plan.md)
+        2. Orchestrator returns plan_content, read from the plan the run wrote
         3. Parse plan and save to DB via ORM
         """
         task = args.get("task", "")
@@ -1227,14 +1227,8 @@ class HTTPToolExecutor:
             model_metadata = self.get_model_metadata()
 
             # Fetch user's active sub-agents and model preferences
-            sub_agents, sub_agent_descs = _fetch_sub_agents_sync(user_id)
+            sub_agents, _ = _fetch_sub_agents_sync(user_id)
             user_model_prefs = _fetch_user_model_preferences_sync(user_id)
-            if sub_agent_descs:
-                agent_list = ", ".join(
-                    f"{a['name']} ({a['description'][:80]})" for a in sub_agent_descs
-                )
-                task = f"{task}\n\nAvailable sub-agents you can delegate to via the Task tool: {agent_list}"
-
             # Execute coding agent in plan mode
             result = _run_async(execute_coding_agent(
                 user_id=user_id,
@@ -1272,7 +1266,7 @@ class HTTPToolExecutor:
             if not plan_content:
                 return {
                     "success": False,
-                    "error": "Agent completed but no plan was produced. Check if plans/plan.md was written.",
+                    "error": "Agent completed but no plan was produced.",
                 }
 
             conversation = Conversation.objects.get(id=conversation_id)
@@ -1514,21 +1508,15 @@ class HTTPToolExecutor:
                 f"Review and edit the following implementation plan.\n\n"
                 f"**Edit Instructions:** {instructions}\n\n"
                 f"**Current Plan:**\n\n{plan.plan_content}\n\n"
-                f"Apply the requested changes and write the updated plan to plans/plan.md "
+                f"Apply the requested changes and save the updated plan where these instructions say to, "
                 f"using the same structured format (# Implementation Plan: ..., ## Summary, "
                 f"## Steps with ### Step N: ..., **Files:** etc). "
                 f"You may re-explore the codebase if needed to improve the plan."
             )
 
             # Fetch user's active sub-agents and model preferences
-            sub_agents, sub_agent_descs = _fetch_sub_agents_sync(user_id)
+            sub_agents, _ = _fetch_sub_agents_sync(user_id)
             user_model_prefs = _fetch_user_model_preferences_sync(user_id)
-            if sub_agent_descs:
-                agent_list = ", ".join(
-                    f"{a['name']} ({a['description'][:80]})" for a in sub_agent_descs
-                )
-                task = f"{task}\n\nAvailable sub-agents you can delegate to via the Task tool: {agent_list}"
-
             # Delegate to coding agent in plan mode
             result = _run_async(execute_coding_agent(
                 user_id=user_id,

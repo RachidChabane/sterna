@@ -29,6 +29,12 @@ from opencode_output_adapter import OpencodeOutputAdapter
 
 OPENCODE = "opencode"
 
+#: The modes a job runs in. Planning explores and delivers a plan;
+#: implementing follows one that was approved; anything else is a task
+#: the agent carries out directly.
+PLAN_MODE = "plan"
+IMPLEMENT_MODE = "implement"
+
 SUPPORTED_HARNESSES = (OPENCODE,)
 
 #: Environment variable naming the harness for jobs that do not pick one.

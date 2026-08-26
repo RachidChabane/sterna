@@ -34,9 +34,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
+from coding_harness import PLAN_MODE
 from opencode_output_adapter import opencode_tool_name
-
-PLAN_MODE = "plan"
 
 PLAN_AGENT = "plan"
 BUILD_AGENT = "build"
@@ -49,6 +48,9 @@ ASK_USER_PERMISSION = f"{ASK_USER_SERVER}_{ASK_USER_TOOL}"
 
 #: Session title, supplied to skip opencode's title-generation call.
 SESSION_TITLE = "sterna-coding-agent"
+
+#: What a planning run is told to call the plan it writes.
+PLAN_FILE_NAME = "plan.md"
 
 #: OpenRouter's OpenAI-compatible endpoint, which opencode's provider
 #: adapter speaks natively.
@@ -188,6 +190,16 @@ def plans_dir_for(ephemeral_home: str) -> str:
     unwritable while a planning run holds the workspace read-only.
     """
     return f"{ephemeral_home}/.local/share/opencode/plans"
+
+
+def plan_path_for(ephemeral_home: str) -> str:
+    """The file a planning run is told to write its plan to.
+
+    The wrapper delivers whatever ``.md`` file in the plans directory
+    was written last, so the name matters only to the prompt that names
+    it — but the prompt has to name one for the agent to write to.
+    """
+    return f"{plans_dir_for(ephemeral_home)}/{PLAN_FILE_NAME}"
 
 
 def build_permission_profile(mode: str, plans_dir: str) -> Dict[str, Any]:

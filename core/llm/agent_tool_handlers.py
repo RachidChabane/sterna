@@ -1245,14 +1245,8 @@ async def plan_implementation(
         }
 
         # Fetch user's active sub-agents and model preferences
-        sub_agents, sub_agent_descs = await _fetch_user_sub_agents(context)
+        sub_agents, _ = await _fetch_user_sub_agents(context)
         user_model_prefs = await _fetch_user_model_preferences(context)
-        if sub_agent_descs:
-            agent_list = ", ".join(
-                f"{a['name']} ({a['description'][:80]})" for a in sub_agent_descs
-            )
-            task = f"{task}\n\nAvailable sub-agents you can delegate to via the Task tool: {agent_list}"
-
         result = await run_and_settle(
             context, model, context.chat_id or "",
             execute_coding_agent(
@@ -1605,21 +1599,15 @@ async def edit_plan(
             f"Review and edit the following implementation plan.\n\n"
             f"**Edit Instructions:** {instructions}\n\n"
             f"**Current Plan:**\n\n{plan.plan_content}\n\n"
-            f"Apply the requested changes and save the updated plan using ExitPlanMode. "
+            f"Apply the requested changes and save the updated plan where these instructions say to. "
             f"Use the same structured format (# Implementation Plan: ..., ## Summary, "
             f"### Step N: ..., **Files:** etc). "
             f"You may re-explore the codebase if needed to improve the plan."
         )
 
         # Fetch user's active sub-agents and model preferences
-        sub_agents, sub_agent_descs = await _fetch_user_sub_agents(context)
+        sub_agents, _ = await _fetch_user_sub_agents(context)
         user_model_prefs = await _fetch_user_model_preferences(context)
-        if sub_agent_descs:
-            agent_list = ", ".join(
-                f"{a['name']} ({a['description'][:80]})" for a in sub_agent_descs
-            )
-            task = f"{task}\n\nAvailable sub-agents you can delegate to via the Task tool: {agent_list}"
-
         result = await run_and_settle(
             context, model, context.chat_id or "",
             execute_coding_agent(

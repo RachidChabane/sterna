@@ -21,9 +21,17 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 
 from workspace_client import get_workspace_client
+import coding_agent_prompts
 import opencode_harness
 from budget_guard import over_budget, terminate_command
-from coding_harness import AgentOutputAdapter, create_adapter, parse_run_output, resolve_harness
+from coding_harness import (
+    IMPLEMENT_MODE,
+    PLAN_MODE,
+    AgentOutputAdapter,
+    create_adapter,
+    parse_run_output,
+    resolve_harness,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -779,7 +787,7 @@ class CodingAgentRunner:
 
             # Load plan content if in implement mode
             plan_content = None
-            if mode == "implement" and plan_id:
+            if mode == IMPLEMENT_MODE and plan_id:
                 plan_content = await self._load_plan_content(plan_id, conversation_id)
 
             # Create config file
@@ -834,7 +842,7 @@ class CodingAgentRunner:
             # "Task completed" when there is none, so this is always set
             # on a successful run but is only ever a real plan when one
             # was written.
-            if mode == "plan" and result.get("success"):
+            if mode == PLAN_MODE and result.get("success"):
                 result["plan_content"] = result.get("summary")
 
             # Parse result
@@ -1043,28 +1051,26 @@ class CodingAgentRunner:
         if check.exit_code == 0 and check.output:
             original_content = check.output.decode("utf-8", errors="replace")
 
-        if mode == "plan":
+        if mode == PLAN_MODE:
             claude_md = """# PLANNING MODE — READ ONLY
 
 **You are in PLANNING mode. The workspace is READ-ONLY.**
 
 ## Absolute Rules
-- Do NOT use Write, Edit, or NotebookEdit tools — they will fail with permission errors.
-- Do NOT use Bash to create, modify, or delete files (no `cat >`, `sed -i`, `touch`, `mkdir`, `echo >`, `tee`, etc.).
-- Do NOT use TodoWrite or any tool that writes to disk.
+- Do NOT use `write`, `edit` or `patch` on a file in the workspace — they will fail with permission errors.
+- Do NOT use `bash` to create, modify, or delete files (no `cat >`, `sed -i`, `touch`, `mkdir`, `echo >`, `tee`, etc.).
 - Do NOT create, modify, or delete ANY files anywhere in the workspace.
 
 ## What You CAN Do
-- **Read** files with Read, Glob, Grep tools.
-- **Run read-only Bash** commands: `find`, `git log`, `git diff`, `tree`, `wc`, `ls`, `cat`, `head`, `tail`, `grep`.
-- **Spawn explore sub-agents** via Task tool for parallel codebase exploration.
-- **Save your plan** using ExitPlanMode when done.
+- **Read** files with `read`, and find them with `glob` and `grep`.
+- **Run read-only `bash`** commands: `find`, `git log`, `git diff`, `tree`, `wc`, `ls`, `cat`, `head`, `tail`, `grep`.
+- **Save your plan** with `write`, to the path the task names.
 
 ## Your Goal
 Explore the codebase thoroughly, then produce a detailed implementation plan.
-Save the plan with ExitPlanMode — this is the ONLY way to deliver your output.
+Writing that plan to the path the task names is the ONLY way to deliver your output.
 """
-        elif mode == "implement":
+        elif mode == IMPLEMENT_MODE:
             claude_md = """# IMPLEMENTATION MODE
 
 You are executing a pre-approved implementation plan. Follow the plan steps in order.
@@ -1133,78 +1139,6 @@ Do NOT use `npm install -g` (global installs fail on the read-only filesystem).
                 user="sandboxuser",
             )
         logger.debug("[CodingAgent] Restored original CLAUDE.md")
-
-    def _build_planning_prompt(self, task: str, workspace_path: str) -> str:
-        """Build the system prompt for planning mode.
-
-        In planning mode, the agent explores the codebase and creates a
-        detailed implementation plan instead of directly making changes.
-        Uses sub-agents for exploration and ExitPlanMode to save the plan.
-        """
-        return f"""You are a planning agent. Your goal is to deeply explore the codebase and produce a thorough implementation plan.
-
-## Task
-{task}
-
-## Exploration Strategy
-- Use Task tool to spawn **explore sub-agents** for parallel codebase exploration. This is critical for large codebases.
-- Each sub-agent can search for specific patterns, read related files, or investigate a subsystem.
-- Use Bash to run commands like `find`, `wc -l`, `git log`, `tree`, etc. to understand project structure.
-- Use Read, Glob, and Grep directly for quick targeted lookups.
-- Explore thoroughly before writing the plan — the more you understand, the better the plan.
-
-## Rules
-- Do NOT modify, create, edit, or delete any source code files. This is PLANNING ONLY.
-- Do NOT implement any changes — only produce a plan.
-- When done exploring, save your plan using **ExitPlanMode**.
-
-## Plan Format
-Your plan MUST use this exact markdown structure:
-
-# Implementation Plan: <clear title>
-
-## Summary
-<2-3 sentence summary of what will be implemented>
-
-## Files to Modify
-- path/to/file1.py - <what changes>
-- path/to/file2.ts - <what changes>
-
-### Step 1: <step title>
-<detailed description of what to do>
-**Files:** file1.py, file2.py
-
-### Step 2: <step title>
-<detailed description of what to do>
-**Files:** file3.py
-
-(continue for all steps)
-
-## Testing Plan
-<how to verify the implementation works>
-"""
-
-    def _build_implementation_prompt(
-        self,
-        task: str,
-        plan_content: str,
-        workspace_path: str
-    ) -> str:
-        """Build the system prompt for implementation mode.
-
-        In implementation mode, the agent follows a pre-approved plan
-        step by step, marking progress as it goes.
-        """
-        return f"""MODE: IMPLEMENTATION
-
-Follow the approved plan step by step. Mark completed steps with ✅ in the plan file.
-
-## Task
-{task}
-
-## Plan
-{plan_content}
-"""
 
     async def _run_agent(
         self,
@@ -1319,39 +1253,13 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
                 "NEXT_TELEMETRY_DISABLED": "1",  # Prevent next build from spawning background telemetry (causes hangs)
             }
 
-            # SECURITY: Prepend workspace enforcement instructions
-            # This ensures the coding agent only operates within the designated workspace
-            workspace_instruction = f"""CRITICAL WORKSPACE RESTRICTION:
-You are working in the directory: {workspace_path}
-ALL file operations MUST be within this directory. You MUST NOT:
-- Write, create, or modify files outside {workspace_path}
-- Use /tmp/, /home/, /etc/, /root/, or any absolute path outside the workspace
-- Use relative paths that escape the workspace (like ../)
-
-Use relative paths from the current directory, or paths starting with {workspace_path}/
-
-Package installation: `pip install <package>` and `npm install` both work.
-Do NOT use `npm install -g` (global installs fail on the read-only filesystem).
-
-You have access to the ask_user MCP tool to ask the user questions. Use it when:
-- You need clarification that would meaningfully change your approach
-- You're choosing between multiple valid strategies and user preference matters
-- The task is ambiguous and guessing wrong would waste significant effort
-
-Do NOT use ask_user for:
-- Routine confirmations ("Should I proceed?", "Is this OK?")
-- Questions you can answer with your own judgment
-- Permission to perform operations the user already requested
-
----
-"""
-            # Build task with mode-specific instructions
-            if mode == "plan":
-                full_task = workspace_instruction + self._build_planning_prompt(task, workspace_path)
-            elif mode == "implement" and plan_content:
-                full_task = workspace_instruction + self._build_implementation_prompt(task, plan_content, workspace_path)
-            else:
-                full_task = workspace_instruction + "TASK:\n" + task
+            full_task = coding_agent_prompts.build_task_prompt(
+                mode=mode,
+                task=task,
+                plan_content=plan_content,
+                workspace_path=workspace_path,
+                plan_path=opencode_harness.plan_path_for(ephemeral_home),
+            )
 
             # Write control files to job_dir (not workspace) so they are
             # invisible to the end user and don't pollute the project tree.
@@ -1381,7 +1289,7 @@ Do NOT use ask_user for:
             # plan-agent permission profile (`opencode_harness.build_permission_profile`),
             # which denies `edit` but cannot stop `bash` from writing a file
             # a permission rule does not separately deny.
-            if mode == "plan":
+            if mode == PLAN_MODE:
                 logger.info(f"[CodingAgent] Plan mode: making workspace read-only: {workspace_path}")
                 chmod_result = container.exec_run(
                     ["sh", "-c", f"chmod -R a-w {workspace_path}"],
@@ -1407,7 +1315,7 @@ Do NOT use ask_user for:
                 )
             finally:
                 # PLAN MODE: Always restore workspace write permissions after execution
-                if mode == "plan":
+                if mode == PLAN_MODE:
                     logger.info("[CodingAgent] Plan mode: restoring workspace write permissions")
                     container.exec_run(
                         ["sh", "-c", f"chmod -R u+w {workspace_path}"],
