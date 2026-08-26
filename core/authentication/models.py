@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 import hashlib
 import uuid
+from typing import TYPE_CHECKING, Optional
 
 from mcp.fields import EncryptedTextField
 
@@ -43,10 +44,10 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     """Custom user model with email-based authentication."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    email = models.EmailField(_("email address"), unique=True, db_index=True)
-    full_name = models.CharField(_("full name"), max_length=255, blank=True)
-    avatar_url = models.URLField(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email: models.EmailField = models.EmailField(_("email address"), unique=True, db_index=True)
+    full_name: models.CharField = models.CharField(_("full name"), max_length=255, blank=True)
+    avatar_url: models.URLField = models.URLField(
         _("avatar URL"),
         max_length=500,
         blank=True,
@@ -54,7 +55,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text=_("Profile picture URL from OAuth provider"),
     )
 
-    is_staff = models.BooleanField(
+    is_staff: models.BooleanField = models.BooleanField(
         _("staff status"),
         default=False,
         help_text=_("Designates whether the user can log into this admin site."),
@@ -64,15 +65,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         default=True,
         help_text=_("Designates whether this user should be treated as active."),
     )
-    is_verified = models.BooleanField(
+    is_verified: models.BooleanField = models.BooleanField(
         _("email verified"),
         default=False,
         help_text=_("Designates whether the user has verified their email address."),
     )
 
-    date_joined = models.DateTimeField(_("date joined"), default=timezone.now)
+    date_joined: models.DateTimeField = models.DateTimeField(_("date joined"), default=timezone.now)
     last_login = models.DateTimeField(_("last login"), blank=True, null=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     # OpenRouter API key (encrypted at rest for security)
     openrouter_api_key = EncryptedTextField(
@@ -81,7 +82,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text=_("User's personal OpenRouter API key (encrypted at rest)"),
     )
     # Key hash for OpenRouter API management lookups (not the actual key)
-    openrouter_key_hash = models.CharField(
+    openrouter_key_hash: models.CharField = models.CharField(
         max_length=64,
         blank=True,
         null=True,
@@ -89,7 +90,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text=_("Hash identifier from OpenRouter for key management API"),
     )
     # Track when key was provisioned
-    openrouter_key_provisioned_at = models.DateTimeField(
+    openrouter_key_provisioned_at: models.DateTimeField = models.DateTimeField(
         blank=True,
         null=True,
         help_text=_("When the OpenRouter key was provisioned"),
@@ -111,7 +112,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Stripe linkage (task 11). Filled async by ensure_stripe_customer
     # task after signup. Indexed because the webhook handler (task 13)
     # looks up users by this column to apply subscription updates.
-    stripe_customer_id = models.CharField(
+    stripe_customer_id: models.CharField = models.CharField(
         _("Stripe customer ID"),
         max_length=255,
         blank=True,
@@ -126,7 +127,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         ("google/gemini-2.5-flash-image", "Nano Banana (Fast)"),
         ("google/gemini-3-pro-image-preview", "Nano Banana Pro (Quality)"),
     ]
-    preferred_image_model = models.CharField(
+    preferred_image_model: models.CharField = models.CharField(
         max_length=255,
         choices=IMAGE_MODEL_CHOICES,
         default="google/gemini-2.5-flash-image",
@@ -137,7 +138,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Using canonical model IDs: provider/model-name
     # Valid models are fetched from VideoModelCatalog database table
     # Validation happens in VideoSettingsView.patch()
-    preferred_video_model = models.CharField(
+    preferred_video_model: models.CharField = models.CharField(
         max_length=255,
         blank=True,
         default="runway/veo3.1-fast",  # Fast and cost-effective text-to-video
@@ -209,14 +210,14 @@ class User(AbstractBaseUser, PermissionsMixin):
 class PasswordResetToken(models.Model):
     """Model for password reset tokens."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="reset_tokens"
     )
-    token = models.CharField(max_length=255, unique=True)
-    is_used = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
+    token: models.CharField = models.CharField(max_length=255, unique=True)
+    is_used: models.BooleanField = models.BooleanField(default=False)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    expires_at: models.DateTimeField = models.DateTimeField()
 
     class Meta:
         db_table = "auth_password_reset_token"
@@ -234,14 +235,14 @@ class PasswordResetToken(models.Model):
 class EmailVerificationToken(models.Model):
     """Model for email verification tokens."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="verification_tokens"
     )
-    token = models.CharField(max_length=255, unique=True)
-    is_used = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
+    token: models.CharField = models.CharField(max_length=255, unique=True)
+    is_used: models.BooleanField = models.BooleanField(default=False)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    expires_at: models.DateTimeField = models.DateTimeField()
 
     class Meta:
         db_table = "auth_email_verification_token"
@@ -267,26 +268,31 @@ class RefreshToken(models.Model):
     (standard rotation reuse detection). See ``JWTManager``.
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    if TYPE_CHECKING:
+        # Shadow attribute Django generates for the `user` ForeignKey;
+        # not otherwise visible to mypy without the django-stubs plugin.
+        user_id: uuid.UUID
+
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="refresh_tokens"
     )
-    token = models.TextField(
+    token: models.TextField = models.TextField(
         unique=True, help_text=_("SHA-256 hex digest of the raw refresh JWT")
     )
-    family = models.UUIDField(
+    family: models.UUIDField = models.UUIDField(
         default=uuid.uuid4,
         editable=False,
         db_index=True,
         help_text=_("Rotation-chain id; reuse detection revokes the whole family"),
     )
-    is_revoked = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
-    last_used = models.DateTimeField(null=True, blank=True)
-    user_agent = models.TextField(blank=True)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    metadata = models.JSONField(
+    is_revoked: models.BooleanField = models.BooleanField(default=False)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    expires_at: models.DateTimeField = models.DateTimeField()
+    last_used: models.DateTimeField = models.DateTimeField(null=True, blank=True)
+    user_agent: models.TextField = models.TextField(blank=True)
+    ip_address: models.GenericIPAddressField = models.GenericIPAddressField(null=True, blank=True)
+    metadata: models.JSONField = models.JSONField(
         default=dict,
         blank=True,
         help_text=_("Additional metadata (provider info, etc.)"),
@@ -319,27 +325,27 @@ class SocialAccount(models.Model):
         ("github", "GitHub"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="social_accounts"
     )
-    provider = models.CharField(max_length=50, choices=PROVIDER_CHOICES)
-    provider_user_id = models.CharField(
+    provider: models.CharField = models.CharField(max_length=50, choices=PROVIDER_CHOICES)
+    provider_user_id: models.CharField = models.CharField(
         max_length=255, help_text=_("Unique ID from the OAuth provider (google_id, github_id)")
     )
-    email = models.EmailField(help_text=_("Email used with this provider"))
-    username = models.CharField(
+    email: models.EmailField = models.EmailField(help_text=_("Email used with this provider"))
+    username: models.CharField = models.CharField(
         max_length=255, blank=True, help_text=_("Username from provider (GitHub, etc.)")
     )
-    avatar_url = models.URLField(max_length=500, blank=True)
-    extra_data = models.JSONField(
+    avatar_url: models.URLField = models.URLField(max_length=500, blank=True)
+    extra_data: models.JSONField = models.JSONField(
         default=dict,
         blank=True,
         help_text=_("Additional provider-specific data"),
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    last_login = models.DateTimeField(
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
+    last_login: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text=_("Last time this provider was used to login"),
@@ -369,13 +375,13 @@ class ConsentRecord(models.Model):
     or login.
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session_id = models.CharField(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session_id: models.CharField = models.CharField(
         max_length=255,
         db_index=True,
         help_text=_("Client-minted UUIDv4 identifying the browser session"),
     )
-    user = models.ForeignKey(
+    user: "models.ForeignKey[Optional[User], Optional[User]]" = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name="consent_records",
@@ -383,20 +389,20 @@ class ConsentRecord(models.Model):
         blank=True,
         help_text=_("Set when the visitor signs up or logs in; NULL for anonymous visitors"),
     )
-    categories = models.JSONField(
+    categories: models.JSONField = models.JSONField(
         default=dict,
         help_text=_(
             'Map of category → enabled. e.g. '
             '{"essential": true, "analytics": false, "marketing": false}'
         ),
     )
-    version = models.CharField(
+    version: models.CharField = models.CharField(
         max_length=32,
         help_text=_("Cookie policy version the consent was given against"),
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    ip_anonymized = models.CharField(
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
+    ip_anonymized: models.CharField = models.CharField(
         max_length=64,
         blank=True,
         help_text=_("IPv4 with last octet zeroed, or IPv6 with last 80 bits zeroed"),
@@ -429,22 +435,22 @@ class DataExportRequest(models.Model):
         FAILED = "failed", _("Failed")
         EXPIRED = "expired", _("Expired")
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="data_export_requests"
     )
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING,
         db_index=True,
     )
-    requested_at = models.DateTimeField(default=timezone.now)
-    ready_at = models.DateTimeField(null=True, blank=True)
-    failed_reason = models.TextField(blank=True)
-    download_url = models.TextField(blank=True)
-    download_url_expires_at = models.DateTimeField(null=True, blank=True)
-    r2_key = models.CharField(max_length=500, blank=True)
+    requested_at: models.DateTimeField = models.DateTimeField(default=timezone.now)
+    ready_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)
+    failed_reason: models.TextField = models.TextField(blank=True)
+    download_url: models.TextField = models.TextField(blank=True)
+    download_url_expires_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)
+    r2_key: models.CharField = models.CharField(max_length=500, blank=True)
 
     class Meta:
         db_table = "auth_data_export_request"
@@ -470,27 +476,27 @@ class AccountDeletionRequest(models.Model):
         COMPLETED = "completed", _("Completed")
         FAILED = "failed", _("Failed")
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[Optional[User], Optional[User]]" = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="account_deletion_requests",
     )
-    user_email_snapshot = models.EmailField()
-    status = models.CharField(
+    user_email_snapshot: models.EmailField = models.EmailField()
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING,
         db_index=True,
     )
-    requested_at = models.DateTimeField(default=timezone.now)
-    scheduled_for = models.DateTimeField(db_index=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    cancel_token_jti = models.CharField(max_length=64, unique=True)
-    canceled_at = models.DateTimeField(null=True, blank=True)
-    failure_reason = models.TextField(blank=True)
+    requested_at: models.DateTimeField = models.DateTimeField(default=timezone.now)
+    scheduled_for: models.DateTimeField = models.DateTimeField(db_index=True)
+    completed_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)
+    cancel_token_jti: models.CharField = models.CharField(max_length=64, unique=True)
+    canceled_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)
+    failure_reason: models.TextField = models.TextField(blank=True)
 
     class Meta:
         db_table = "auth_account_deletion_request"
@@ -516,18 +522,18 @@ class BillingSummary(models.Model):
     be recovered without the pepper.
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    anonymized_user_token = models.CharField(max_length=64, db_index=True)
-    month = models.DateField(db_index=True)
-    total_charged_usd = models.DecimalField(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    anonymized_user_token: models.CharField = models.CharField(max_length=64, db_index=True)
+    month: models.DateField = models.DateField(db_index=True)
+    total_charged_usd: models.DecimalField = models.DecimalField(
         max_digits=12, decimal_places=4, default=0
     )
-    tax_collected_usd = models.DecimalField(
+    tax_collected_usd: models.DecimalField = models.DecimalField(
         max_digits=12, decimal_places=4, default=0
     )
-    country_code = models.CharField(max_length=2, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    country_code: models.CharField = models.CharField(max_length=2, blank=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "billing_summary"

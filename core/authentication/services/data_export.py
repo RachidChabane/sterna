@@ -67,7 +67,7 @@ def export_chats(user) -> dict:
     rows = [
         {
             "id": str(ch.id),
-            "conversation_id": str(ch.conversation_id),
+            "conversation_id": str(ch.conversation_id),  # type: ignore[attr-defined]
             "model_id": ch.model_id,
             "model_provider": ch.model_provider,
             "parameters": ch.parameters,
@@ -90,7 +90,7 @@ def export_messages(user) -> dict:
     for m in qs:
         rows.append({
             "id": str(m.id),
-            "chat_id": str(m.chat_id),
+            "chat_id": str(m.chat_id),  # type: ignore[attr-defined]
             "role": m.role,
             "content": _serializable(m.content),
             "sequence": m.sequence,
@@ -115,7 +115,7 @@ def export_sparks(user) -> dict:
             "title": s.title,
             "framework": s.framework,
             "version": s.version,
-            "parent_id": str(s.parent_id) if s.parent_id else None,
+            "parent_id": str(s.parent_id) if s.parent_id else None,  # type: ignore[attr-defined]
             "storage_type": s.storage_type,
             "code_inline": (
                 s.code if s.storage_type == Spark.StorageType.INLINE else None

@@ -440,7 +440,7 @@ class OpenAITTSClient:
 
         char_start_times = []
         char_durations = []
-        current_time = 0
+        current_time: float = 0
 
         for weight in char_weights:
             duration = (weight / total_weight) * audio_duration_ms
@@ -466,6 +466,13 @@ class OpenAITTSClient:
 
         logger.info(f"OpenAI TTS: Generating speech for voice {voice_id} ({len(text)} chars)")
 
+        http_client = self._http_client
+        if http_client is None:
+            logger.error("OpenAI TTS: HTTP client not initialized")
+            if self.on_error:
+                await self.on_error(voice_id, "TTS client not initialized")
+            return
+
         # Pre-check quota before making API call
         try:
             await self._check_tts_quota(estimated_chars=len(text), model_id=model)
@@ -477,7 +484,7 @@ class OpenAITTSClient:
 
         try:
             # First generate audio to get actual duration for timing estimation
-            response = await self._http_client.post(
+            response = await http_client.post(
                 self.OPENAI_TTS_URL,
                 json={
                     "model": model,
@@ -556,6 +563,11 @@ class OpenAITTSClient:
 
         logger.info(f"OpenAI TTS direct: Generating speech for voice {voice_id} ({len(text)} chars)")
 
+        http_client = self._http_client
+        if http_client is None:
+            logger.error("OpenAI TTS direct: HTTP client not initialized")
+            return None
+
         # Pre-check quota before making API call
         try:
             await self._check_tts_quota(estimated_chars=len(text), model_id=model)
@@ -564,7 +576,7 @@ class OpenAITTSClient:
             return None
 
         try:
-            response = await self._http_client.post(
+            response = await http_client.post(
                 self.OPENAI_TTS_URL,
                 json={
                     "model": model,

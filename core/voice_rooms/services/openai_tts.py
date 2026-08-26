@@ -6,7 +6,7 @@ Voices: alloy, echo, fable, onyx, nova, shimmer
 """
 
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 from django.conf import settings
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 # OpenAI TTS voice metadata
-OPENAI_VOICES = [
+OPENAI_VOICES: List[Dict[str, Any]] = [
     {
         "voice_id": "alloy",
         "name": "Alloy",
@@ -58,7 +58,7 @@ OPENAI_VOICES = [
 ]
 
 # OpenAI TTS models
-OPENAI_MODELS = [
+OPENAI_MODELS: List[Dict[str, Any]] = [
     {
         "model_id": "tts-1",
         "name": "TTS-1",
@@ -134,6 +134,11 @@ class OpenAITTSProvider(TTSProvider):
         if not self._http_client:
             await self.initialize()
 
+        http_client = self._http_client
+        if http_client is None:
+            logger.error("OpenAI TTS: HTTP client failed to initialize")
+            return None
+
         if not self.api_key:
             logger.error("OpenAI API key not configured")
             return None
@@ -158,7 +163,7 @@ class OpenAITTSProvider(TTSProvider):
         try:
             logger.info(f"OpenAI TTS: Generating speech with voice={voice_id}, model={model_id}, speed={speed}")
 
-            response = await self._http_client.post(
+            response = await http_client.post(
                 self.API_URL,
                 json=request_body,
             )
@@ -247,7 +252,7 @@ class OpenAITTSProvider(TTSProvider):
             )
             op = BillableOperation(
                 service=ServiceType.OPENAI_TTS,
-                feature=self._feature,
+                feature=FeatureType(self._feature),
                 model_id=model_id,
                 character_count=char_count,
                 cost_usd=cost,

@@ -10,7 +10,7 @@ import logging
 import zipfile
 from datetime import timedelta
 
-from celery import shared_task
+from celery import shared_task  # type: ignore[import-untyped]
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -239,6 +239,10 @@ def hard_delete_account() -> dict:
     failed = 0
     for req in pending:
         user = req.user
+        if user is None:
+            # The queryset filters user__isnull=False; this branch is
+            # unreachable in practice and only narrows the type for mypy.
+            continue
         user_email = user.email
         full_name = user.full_name
         user_id_str = str(user.id)
@@ -295,11 +299,16 @@ def hard_delete_account() -> dict:
 def _aggregate_billing_to_summary(user, anonymize_fn) -> None:
     """Aggregate UsageLog rows into anonymized BillingSummary records."""
     from collections import defaultdict
+    from datetime import date
+    from typing import DefaultDict, Dict, Tuple
+
     from authentication.models import BillingSummary
     from usage_quota.models import UsageLog
 
     token = anonymize_fn(user.id)
-    sums = defaultdict(lambda: {"total": 0.0, "tax": 0.0})
+    sums: DefaultDict[Tuple[date, str], Dict[str, float]] = defaultdict(
+        lambda: {"total": 0.0, "tax": 0.0}
+    )
     qs = UsageLog.objects.filter(user=user).only("timestamp", "cost_usd")
     for log in qs.iterator(chunk_size=2000):
         month = log.timestamp.date().replace(day=1)

@@ -5,7 +5,7 @@ Analyzes chat conversations to extract insights, metrics, and patterns.
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ class ConversationAnalyzer:
     }
 
     def analyze_chat_group(
-        self, chat_group_data: Dict[str, Any], user_preferences: Dict[str, Any] = None
+        self, chat_group_data: Dict[str, Any], user_preferences: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Analyze a ChatGroup and extract comprehensive insights.
@@ -139,7 +139,7 @@ class ConversationAnalyzer:
         if max(type_scores.values()) == 0:
             return "general_assistance"
 
-        return max(type_scores, key=type_scores.get)
+        return max(type_scores, key=type_scores.__getitem__)
 
     def _get_models_used(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

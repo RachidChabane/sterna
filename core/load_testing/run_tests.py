@@ -94,7 +94,7 @@ class LoadTestRunner:
         if not stats_file.exists():
             return {}
 
-        stats = {
+        stats: Dict[str, Any] = {
             "endpoints": {},
             "total_requests": 0,
             "total_failures": 0,

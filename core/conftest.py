@@ -12,7 +12,7 @@ Root conftest.py — patches PG-only constructs so the test suite runs on SQLite
 
 def pytest_configure(config):
     try:
-        from pgvector.django import VectorField, HnswIndex
+        from pgvector.django import VectorField, HnswIndex  # type: ignore[import-untyped]
         from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 
         # --- VectorField: use BLOB column type on SQLite ---

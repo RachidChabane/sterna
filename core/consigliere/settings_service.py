@@ -7,7 +7,7 @@ Consigliere as a standalone microservice.
 
 import os
 from pathlib import Path
-import environ
+import environ  # type: ignore[import-untyped]
 from datetime import timedelta
 
 from .config import NetworkConfig

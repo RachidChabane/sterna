@@ -36,7 +36,7 @@ class TestWorkerLoggingNotHijacked:
         assert app.conf.worker_hijack_root_logger is False
 
     def test_setup_logging_receiver_connected(self):
-        from celery.signals import setup_logging
+        from celery.signals import setup_logging  # type: ignore[import-untyped]
 
         receivers = [
             getattr(r, "__name__", None)

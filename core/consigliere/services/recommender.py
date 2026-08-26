@@ -88,7 +88,7 @@ class ModelRecommender:
         current_model = self._get_model_info(current_model_id, available_models)
 
         # Score all models
-        scored_models = []
+        scored_models: List[Dict[str, Any]] = []
         for model in available_models:
             if model["model_id"] == current_model_id:
                 continue  # Skip current model

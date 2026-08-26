@@ -78,6 +78,20 @@ class TTSProvider(ABC):
     PROVIDER_ID: str = "base"
     PROVIDER_NAME: str = "Base Provider"
 
+    def __init__(
+        self,
+        user: Any = None,
+        session_id: Optional[str] = None,
+        feature: Any = None,
+    ) -> None:
+        """Common constructor signature implemented by concrete providers.
+
+        user, session_id, feature: forwarded to the provider for billing
+        attribution. Never called directly — every concrete provider
+        supplies its own ``__init__``; this exists so the factory can
+        construct providers through the ``TTSProvider`` static type.
+        """
+
     @abstractmethod
     async def initialize(self) -> None:
         """Initialize the provider (e.g., create HTTP clients)."""

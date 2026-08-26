@@ -527,7 +527,7 @@ class ReportGenerator:
         previous_results: Dict[str, Any],
     ) -> str:
         """Generate comparison report between two test runs."""
-        comparison = {
+        comparison: Dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
             "current": current_results,
             "previous": previous_results,

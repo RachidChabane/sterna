@@ -7,6 +7,7 @@ import os
 from django.core.exceptions import ImproperlyConfigured
 
 from .base import *  # noqa: F401,F403 — inherit INSTALLED_APPS, MIDDLEWARE, ROOT_URLCONF, AUTH_USER_MODEL, etc.
+from .base import STRIPE_API_KEY  # explicit import: mypy can't see this name through the star import above
 
 # Preventive guard: never let a test run see a live Stripe key.
 if STRIPE_API_KEY.startswith("sk_live_"):

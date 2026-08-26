@@ -11,6 +11,7 @@ EmailTemplate model in the codebase as of task 28. Re-evaluate when
 one ships.
 """
 import logging
+from typing import List, Tuple
 
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
@@ -18,7 +19,7 @@ from django.core.management.base import BaseCommand, CommandError
 logger = logging.getLogger(__name__)
 
 # (name, child_args, required, supports_dry_run)
-REQUIRED_STEPS = [
+REQUIRED_STEPS: List[Tuple[str, List[str], bool, bool]] = [
     ("sync_stripe_prices", [], True, True),
     ("setup_usage_quota", [], True, False),
     ("seed_preconfigured_servers", [], True, True),

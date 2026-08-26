@@ -5,7 +5,8 @@ Base settings for Sterna project.
 import os
 from datetime import timedelta
 from pathlib import Path
-import environ
+from typing import Any, Dict
+import environ  # type: ignore[import-untyped]
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -268,7 +269,7 @@ SPECTACULAR_SETTINGS = {
     'SCHEMA_PATH_PREFIX': '/api',
 }
 
-REST_FRAMEWORK = {
+REST_FRAMEWORK: Dict[str, Any] = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "authentication.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",

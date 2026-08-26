@@ -5,7 +5,7 @@ based on the TTS model being used. Supports both ElevenLabs and OpenAI.
 """
 
 import logging
-from typing import Callable, Optional, Awaitable, Protocol, Dict, List
+from typing import Any, Callable, Optional, Awaitable, Protocol, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class TTSClientProtocol(Protocol):
     async def connect_voice(
         self,
         voice_id: str,
-        voice_settings: Optional[object] = None,
+        voice_settings: Any = None,
         model: Optional[str] = None,
     ) -> bool:
         """Connect/register a voice for TTS."""

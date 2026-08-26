@@ -5,10 +5,13 @@ Stores voice room configurations, agents, sessions, and conversation history.
 """
 
 import uuid
-from django.db import models
-from django.contrib.auth import get_user_model
+from typing import TYPE_CHECKING, Optional
 
-User = get_user_model()
+from django.conf import settings
+from django.db import models
+
+if TYPE_CHECKING:
+    from authentication.models import User
 
 
 class VoiceRoom(models.Model):
@@ -18,43 +21,43 @@ class VoiceRoom(models.Model):
     Each room can have multiple agents with different models, voices, and personas.
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        User,
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="voice_rooms"
     )
 
     # Room configuration
-    name = models.CharField(
+    name: models.CharField = models.CharField(
         max_length=255,
         help_text="Display name for the room"
     )
-    description = models.TextField(
+    description: models.TextField = models.TextField(
         blank=True,
         help_text="Optional description of the room's purpose"
     )
-    user_name = models.CharField(
+    user_name: models.CharField = models.CharField(
         max_length=100,
         blank=True,
         help_text="User's display name for agents to address them"
     )
-    language = models.CharField(
+    language: models.CharField = models.CharField(
         max_length=10,
         default="auto",
         help_text="Language code or 'auto' for auto-detection"
     )
-    max_response_tokens = models.IntegerField(
+    max_response_tokens: models.IntegerField = models.IntegerField(
         default=500,
         help_text="Maximum tokens per agent response"
     )
 
     # Status
-    is_active = models.BooleanField(default=True)
+    is_active: models.BooleanField = models.BooleanField(default=True)
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-updated_at"]
@@ -74,53 +77,53 @@ class VoiceRoomAgent(models.Model):
     Each agent has a specific LLM, voice, and persona defined by system prompt.
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    room = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    room: "models.ForeignKey[VoiceRoom, VoiceRoom]" = models.ForeignKey(
         VoiceRoom,
         on_delete=models.CASCADE,
         related_name="agents"
     )
 
     # Agent configuration
-    display_name = models.CharField(
+    display_name: models.CharField = models.CharField(
         max_length=100,
         help_text="Name shown for this agent (e.g., 'The Skeptic', 'The Optimist')"
     )
-    model_id = models.CharField(
+    model_id: models.CharField = models.CharField(
         max_length=255,
         help_text="OpenRouter model ID (e.g., 'anthropic/claude-3-sonnet')"
     )
-    system_prompt = models.TextField(
+    system_prompt: models.TextField = models.TextField(
         help_text="System prompt defining the agent's persona and behavior"
     )
 
     # Voice configuration (ElevenLabs)
-    voice_id = models.CharField(
+    voice_id: models.CharField = models.CharField(
         max_length=100,
         help_text="ElevenLabs voice ID"
     )
-    voice_name = models.CharField(
+    voice_name: models.CharField = models.CharField(
         max_length=100,
         help_text="Display name for the voice"
     )
-    voice_settings = models.JSONField(
+    voice_settings: models.JSONField = models.JSONField(
         default=dict,
         blank=True,
         help_text="Voice settings: stability, similarity_boost, style, use_speaker_boost, speed"
     )
 
     # Speaking order
-    order = models.IntegerField(
+    order: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Order in which this agent speaks (lower = earlier)"
     )
 
     # Status
-    is_active = models.BooleanField(default=True)
+    is_active: models.BooleanField = models.BooleanField(default=True)
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["order", "created_at"]
@@ -149,26 +152,26 @@ class VoiceRoomSession(models.Model):
         ("ended", "Ended"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    room = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    room: "models.ForeignKey[VoiceRoom, VoiceRoom]" = models.ForeignKey(
         VoiceRoom,
         on_delete=models.CASCADE,
         related_name="sessions"
     )
 
     # Session state
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default="idle"
     )
-    current_speaker = models.CharField(
+    current_speaker: models.CharField = models.CharField(
         max_length=100,
         blank=True,
         null=True,
         help_text="ID of current speaker (agent_id or 'user')"
     )
-    detected_language = models.CharField(
+    detected_language: models.CharField = models.CharField(
         max_length=10,
         blank=True,
         null=True,
@@ -176,22 +179,22 @@ class VoiceRoomSession(models.Model):
     )
 
     # Metrics
-    total_duration_ms = models.IntegerField(
+    total_duration_ms: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Total session duration in milliseconds"
     )
-    total_user_speaking_ms = models.IntegerField(
+    total_user_speaking_ms: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Total user speaking time in milliseconds"
     )
-    total_agent_speaking_ms = models.IntegerField(
+    total_agent_speaking_ms: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Total agent speaking time in milliseconds"
     )
 
     # Timestamps
-    started_at = models.DateTimeField(auto_now_add=True)
-    ended_at = models.DateTimeField(null=True, blank=True)
+    started_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    ended_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-started_at"]
@@ -216,13 +219,13 @@ class VoiceRoomMessage(models.Model):
         ("assistant", "Assistant"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session: "models.ForeignKey[VoiceRoomSession, VoiceRoomSession]" = models.ForeignKey(
         VoiceRoomSession,
         on_delete=models.CASCADE,
         related_name="messages"
     )
-    agent = models.ForeignKey(
+    agent: "models.ForeignKey[Optional[VoiceRoomAgent], Optional[VoiceRoomAgent]]" = models.ForeignKey(
         VoiceRoomAgent,
         on_delete=models.SET_NULL,
         null=True,
@@ -232,51 +235,51 @@ class VoiceRoomMessage(models.Model):
     )
 
     # Message content
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
-    content = models.TextField(help_text="Text content of the message")
+    role: models.CharField = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    content: models.TextField = models.TextField(help_text="Text content of the message")
 
     # Speech timing
-    audio_duration_ms = models.IntegerField(
+    audio_duration_ms: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Duration of the audio in milliseconds"
     )
-    stt_latency_ms = models.IntegerField(
+    stt_latency_ms: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Speech-to-text processing latency"
     )
-    llm_latency_ms = models.IntegerField(
+    llm_latency_ms: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="LLM response generation latency"
     )
-    tts_latency_ms = models.IntegerField(
+    tts_latency_ms: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Text-to-speech processing latency"
     )
 
     # LLM metadata (for assistant messages)
-    model_id = models.CharField(
+    model_id: models.CharField = models.CharField(
         max_length=255,
         null=True,
         blank=True,
         help_text="OpenRouter model ID used"
     )
-    prompt_tokens = models.IntegerField(
+    prompt_tokens: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Number of prompt tokens"
     )
-    completion_tokens = models.IntegerField(
+    completion_tokens: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Number of completion tokens"
     )
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at"]

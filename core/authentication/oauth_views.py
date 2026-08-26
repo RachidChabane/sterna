@@ -8,8 +8,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from google.auth.transport import requests
-from google.oauth2 import id_token
+from google.auth.transport import requests  # type: ignore[import-untyped]
+from google.oauth2 import id_token  # type: ignore[import-untyped]
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.cache import cache

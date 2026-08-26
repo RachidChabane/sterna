@@ -269,7 +269,7 @@ class VoiceRoomOrchestrator:
                 if voice_id:
                     # Build voice settings from agent config
                     agent_voice_settings = agent.get("voice_settings", {})
-                    voice_settings = None
+                    voice_settings: Any = None
 
                     # Get TTS model from agent settings (with fallback to global setting)
                     tts_model = agent_voice_settings.get("tts_model", settings.ELEVENLABS_MODEL)
@@ -878,8 +878,8 @@ class VoiceRoomOrchestrator:
         if punctuated_words:
             logger.info(f"[ALIGNMENT] Punctuation weights: {punctuated_words[:5]}")
 
-        words = []
-        current_time = 0
+        words: List[Dict[str, Any]] = []
+        current_time: float = 0
 
         for word, weight in zip(text_words, word_weights):
             word_duration = (weight / total_weight) * audio_duration_ms
@@ -1162,7 +1162,7 @@ class VoiceRoomOrchestrator:
             if self._interrupted:
                 self._interrupted = False
 
-    async def _generate_agent_response(
+    async def _generate_agent_response(  # type: ignore[return]
         self, agent: Dict, is_last_agent: bool = False, allow_redirect: bool = True
     ) -> Optional[str]:
         """
@@ -1233,7 +1233,7 @@ class VoiceRoomOrchestrator:
             buffer_threshold = 50
             redirect_to_agent = None
 
-            async for chunk_data in self.llm_client.stream_completion(
+            async for chunk_data in self.llm_client.stream_completion(  # type: ignore[union-attr]
                 model=model_id,
                 messages=messages,
                 max_tokens=self.max_response_tokens,
@@ -1281,7 +1281,7 @@ class VoiceRoomOrchestrator:
                     filtered_text = filter_thinking_tags(text_buffer)
                     logger.info(f"[TTS] Filtered buffer ({len(filtered_text)} chars): {filtered_text[:200] if filtered_text else '(empty)'}...")
                     if filtered_text.strip():
-                        await self.tts_client.send_text(voice_id, filtered_text)
+                        await self.tts_client.send_text(voice_id, filtered_text)  # type: ignore[union-attr]
                     else:
                         logger.info("[TTS] Skipping empty filtered text")
                     text_buffer = ""
@@ -1316,7 +1316,7 @@ class VoiceRoomOrchestrator:
                 filtered_text = filter_thinking_tags(text_buffer)
                 logger.info(f"[TTS] Final filtered buffer ({len(filtered_text)} chars): {filtered_text[:200] if filtered_text else '(empty)'}...")
                 if filtered_text.strip():
-                    await self.tts_client.send_text(voice_id, filtered_text)
+                    await self.tts_client.send_text(voice_id, filtered_text)  # type: ignore[union-attr]
                 else:
                     logger.info("[TTS] Skipping empty final filtered text")
 
@@ -1340,10 +1340,10 @@ class VoiceRoomOrchestrator:
 
             # Flush TTS and wait for audio generation to complete
             if voice_id:
-                await self.tts_client.flush(voice_id)
+                await self.tts_client.flush(voice_id)  # type: ignore[union-attr]
                 # Wait for all audio chunks to be generated
                 logger.info(f"Waiting for TTS generation to complete for agent {agent_name}")
-                completed = await self.tts_client.wait_for_completion(voice_id, timeout=TTS_GENERATION_TIMEOUT_SEC)
+                completed = await self.tts_client.wait_for_completion(voice_id, timeout=TTS_GENERATION_TIMEOUT_SEC)  # type: ignore[union-attr]
                 logger.info(f"TTS generation {'complete' if completed else 'TIMED OUT'} for agent {agent_name}")
 
                 # Signal client that all audio has been sent for this agent
@@ -1474,7 +1474,7 @@ class VoiceRoomOrchestrator:
             full_response = ""
             redirect_to_agent = None
 
-            async for chunk_data in self.llm_client.stream_completion(
+            async for chunk_data in self.llm_client.stream_completion(  # type: ignore[union-attr]
                 model=model_id,
                 messages=messages,
                 max_tokens=self.max_response_tokens,
@@ -1517,7 +1517,7 @@ class VoiceRoomOrchestrator:
 
             if voice_id and filtered_text.strip():
                 logger.info(f"[PIPELINE] Generating TTS for {agent_name} ({len(filtered_text)} chars)")
-                audio_b64 = await self.tts_client.generate_audio_direct(voice_id, filtered_text)
+                audio_b64 = await self.tts_client.generate_audio_direct(voice_id, filtered_text)  # type: ignore[union-attr]
                 if audio_b64:
                     logger.info(f"[PIPELINE] TTS complete for {agent_name}")
                 else:
@@ -1674,7 +1674,7 @@ class VoiceRoomOrchestrator:
             try:
                 next_pregenerated = await pregen_task
                 if next_pregenerated:
-                    logger.info(f"[PIPELINE] Pre-generation complete for {next_agent_to_pregenerate.get('display_name')}")
+                    logger.info(f"[PIPELINE] Pre-generation complete for {next_agent_to_pregenerate.get('display_name') if next_agent_to_pregenerate else 'Agent'}")
             except Exception as e:
                 logger.error(f"[PIPELINE] Pre-generation task error: {e}")
                 next_pregenerated = None
@@ -1800,7 +1800,7 @@ EXPRESSIVE VOICE (TTS v3 only - use [brackets] not *asterisks*):
                 if msg.get("agent_id") == agent["id"]:
                     messages.append({"role": "assistant", "content": msg["content"]})
                 else:
-                    other_agent = self.agents_by_id.get(msg.get("agent_id"), {})
+                    other_agent = self.agents_by_id.get(msg.get("agent_id") or "", {})
                     other_name = other_agent.get("display_name", "Another AI")
                     messages.append({"role": "user", "content": f"[{other_name}]: {msg['content']}"})
 

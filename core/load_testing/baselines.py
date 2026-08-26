@@ -120,7 +120,7 @@ class BaselineTracker:
         baseline = self.baselines[endpoint]
 
         # Compare against baseline
-        comparison = {
+        comparison: Dict[str, Any] = {
             "endpoint": endpoint,
             "baseline": baseline,
             "current": {
@@ -168,7 +168,7 @@ class BaselineTracker:
 
     def generate_summary(self) -> Dict[str, Any]:
         """Generate summary of all metrics and comparisons."""
-        summary = {
+        summary: Dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
             "endpoints": {},
             "overall_passed": True,
@@ -302,7 +302,7 @@ class BaselineTracker:
 
     def export_metrics(self, output_file: str):
         """Export collected metrics to file."""
-        export_data = {
+        export_data: Dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
             "baselines": self.baselines,
             "metrics": {},
