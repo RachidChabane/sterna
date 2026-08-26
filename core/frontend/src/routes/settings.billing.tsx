@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { billingApi } from '@/api/billing'
 import type { BillingStatus, Invoice } from '@/api/types'
+import { getApiErrorData } from '@/utils/errorMessages'
 
 const INVOICES_PER_PAGE = 12
 
@@ -69,9 +70,9 @@ function SettingsBilling() {
     try {
       const { url } = await billingApi.createPortalSession()
       window.location.href = url
-    } catch (err: any) {
+    } catch (err) {
       setOpening(false)
-      const code = err?.response?.data?.error
+      const code = getApiErrorData(err)?.error
       if (code === 'no_subscription') {
         toast('You need a paid plan first.', {
           description: 'Upgrade from the pricing page to manage billing.',

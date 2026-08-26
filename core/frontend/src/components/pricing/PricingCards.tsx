@@ -8,6 +8,7 @@ import { subscriptionApi } from '@/api/subscription'
 import type { SubscriptionPlan } from '@/api/types'
 import { useAuthStore } from '@/store/authStore'
 import { TIERS, yearlyTotal, type TierSlug } from '@/lib/pricingData'
+import { getApiErrorData } from '@/utils/errorMessages'
 
 interface PricingCardsProps {
   billing: 'monthly' | 'yearly'
@@ -81,9 +82,9 @@ export function PricingCards({ billing }: PricingCardsProps) {
         billing_cycle: billing,
       })
       window.location.href = url
-    } catch (err: any) {
+    } catch (err) {
       setUpgrading(null)
-      const code = err?.response?.data?.error
+      const code = getApiErrorData(err)?.error
       if (code === 'use_portal') {
         // Paid→paid plan changes are handled by the Customer Portal
         // (the backend refuses a second Checkout with 409 USE_PORTAL).

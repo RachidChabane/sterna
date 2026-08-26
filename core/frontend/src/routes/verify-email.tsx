@@ -5,6 +5,7 @@ import { AuthShell } from '@/components/auth/AuthShell'
 import { Button } from '@/components/ui/button'
 import { authApi } from '@/api/endpoints'
 import { useToast } from '@/hooks/use-toast'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 
 type VerifyStatus = 'loading' | 'success' | 'error' | 'pending'
 
@@ -51,13 +52,9 @@ function VerifyEmailPage() {
         if (cancelled) return
         setStatus('success')
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         if (cancelled) return
-        const message =
-          err.response?.data?.detail ||
-          err.response?.data?.message ||
-          'We could not verify your email. The link may have expired.'
-        setErrorMessage(message)
+        setErrorMessage(getApiErrorMessage(err, 'We could not verify your email. The link may have expired.'))
         setStatus('error')
       })
 
@@ -85,13 +82,10 @@ function VerifyEmailPage() {
         title: 'Verification email sent',
         description: 'Check your inbox for the link.',
       })
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: 'Could not resend',
-        description:
-          err.response?.data?.detail ||
-          err.response?.data?.message ||
-          'Try again in a moment.',
+        description: getApiErrorMessage(err, 'Try again in a moment.'),
         variant: 'destructive',
       })
     } finally {

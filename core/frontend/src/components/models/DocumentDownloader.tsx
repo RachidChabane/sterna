@@ -387,7 +387,7 @@ function PDFPreview({ url, compact = false }: { url: string; compact?: boolean }
         setPdf(pdfDoc)
         setPageCount(pdfDoc.numPages)
         setCurrentPage(1)
-      } catch (err: any) {
+      } catch (err) {
         if (!cancelled) {
           console.error('[PDFPreview] Load failed:', err)
           setError('Failed to load PDF')
@@ -440,8 +440,8 @@ function PDFPreview({ url, compact = false }: { url: string; compact?: boolean }
 
         await task.promise
         if (!cancelled) setIsLoading(false)
-      } catch (err: any) {
-        if (err?.name !== 'RenderingCancelledException' && !cancelled) {
+      } catch (err) {
+        if (!(err instanceof Error && err.name === 'RenderingCancelledException') && !cancelled) {
           console.error('[PDFPreview] Render failed:', err)
           setError('Failed to render page')
           setIsLoading(false)
@@ -563,7 +563,7 @@ function XlsxPreview({ downloadUrl, compact = false }: { downloadUrl: string; co
         const wb = XLSX.read(buffer, { type: 'array' })
         setWorkbook(wb)
         setActiveSheet(0)
-      } catch (err: any) {
+      } catch (err) {
         if (!cancelled) {
           console.error('[XlsxPreview] Load failed:', err)
           setError('Could not load preview')

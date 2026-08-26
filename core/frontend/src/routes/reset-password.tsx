@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { hasErrorResponse } from '@/utils/errorMessages'
 import { useState } from 'react'
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Lock, Loader2 } from 'lucide-react'
 import { AuthShell } from '@/components/auth/AuthShell'
@@ -90,12 +91,13 @@ function ResetPasswordPage() {
     try {
       await authApi.confirmPasswordReset(token, password, confirmPassword)
       setState('success')
-    } catch (err: any) {
+    } catch (err) {
+      const data = hasErrorResponse(err) ? (err.response?.data as Record<string, unknown> | undefined) : undefined
       const message =
-        err.response?.data?.detail ||
-        err.response?.data?.message ||
-        err.response?.data?.token?.[0] ||
-        err.response?.data?.password?.[0] ||
+        (typeof data?.detail === 'string' && data.detail) ||
+        (typeof data?.message === 'string' && data.message) ||
+        (Array.isArray(data?.token) && data.token[0]) ||
+        (Array.isArray(data?.password) && data.password[0]) ||
         'We could not reset your password. The link may have expired.'
       setSubmitError(message)
       setState('error')

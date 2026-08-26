@@ -199,7 +199,7 @@ describe('SignupForm', () => {
     await user.click(screen.getByLabelText(/terms of service/i))
     await user.click(screen.getByRole('button', { name: /create account/i }))
     await waitFor(() => expect(mockRegister).toHaveBeenCalled())
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/pricing' })
+    expect(mockNavigate).toHaveBeenCalledWith({ href: '/pricing' })
   })
 
   it('ignores a protocol-relative return_to and falls back to /verify-email', async () => {

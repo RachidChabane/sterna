@@ -43,7 +43,7 @@ import { useAuthStore } from '@/store/authStore'
 import { assetsAPI } from '@/api/assets'
 import { useToast } from '@/hooks/use-toast'
 import { formatLatencyFromSeconds } from '@/utils/latency'
-import type { Chat, Model, Message, Attachment, FileAttachment } from './types'
+import type { Chat, Model, Message, Attachment, FileAttachment, Filters, ToolExecutedHandler } from './types'
 import type { ModelCatalogEntry } from '@/types/models'
 
 export interface ChatGridCardProps {
@@ -53,12 +53,12 @@ export interface ChatGridCardProps {
   onUpdateMessages: (messages: Message[]) => void
   onRemove: () => void
   showRemove: boolean
-  onToolExecuted?: (toolCallId: string, toolName: string, result: any) => void
+  onToolExecuted?: ToolExecutedHandler
   showFilters?: boolean
   onToggleFilters?: () => void
   hasActiveFilters?: boolean
-  filters?: any
-  onFiltersChange?: (filters: any) => void
+  filters?: Filters
+  onFiltersChange?: (filters: Filters) => void
   providers?: string[]
   recentModelIds?: string[]
   conversationId: string

@@ -14,6 +14,7 @@ import { PremiumMenuIcon } from '@/components/ui/premium-menu-icon'
 import { useNavigationStore } from '@/store/navigationStore'
 import { useMCPStore } from '@/store/mcpStore'
 import { cn } from '@/lib/utils'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 
 export const Route = createFileRoute('/connectors')({
   component: () => (
@@ -201,12 +202,9 @@ function MCPPage() {
 
         // Step 4: Redirect to OAuth provider
         window.location.href = authResponse.data.authorization_url
-      } catch (error: any) {
+      } catch (error) {
         console.error('Failed to start OAuth flow:', error)
-        const errorMessage = error.response?.data?.detail ||
-          error.response?.data?.error ||
-          error.message ||
-          'Failed to start authorization'
+        const errorMessage = getApiErrorMessage(error, 'Failed to start authorization')
         toast.error(errorMessage)
         setIsConnecting(false)
 

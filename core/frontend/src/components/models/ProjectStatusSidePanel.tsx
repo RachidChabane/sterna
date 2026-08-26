@@ -36,7 +36,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useProjectPanelStore, type AgentPlan, type ClonedRepo } from '@/store/projectPanelStore'
 import { useConversationStore } from '@/store/conversationStore'
-import { codeSessionApi, transformRepoStatus, type GitHubRepo, type GitHubIssue } from '@/api/codeSession'
+import { codeSessionApi, transformRepoStatus, type GitHubRepo, type GitHubIssue, type GitHubCommit } from '@/api/codeSession'
 import { conversationsAPI } from '@/api/conversations'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -50,6 +50,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useChatMessageDispatch } from '@/hooks/useChatMessageDispatch'
 import { getDefaultModelParameters } from '@/config/modelParameters'
+import { getApiErrorMessage, hasErrorResponse } from '@/utils/errorMessages'
 
 interface ProjectStatusSidePanelProps {
   conversationId: string
@@ -209,8 +210,8 @@ function RepoSelector({ conversationId, chatId, onCloneSuccess }: { conversation
       if (targetConversationId !== conversationId) {
         navigate({ to: '/chats', search: { conversation: targetConversationId } })
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || err.message || 'Clone failed')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Clone failed'))
       setCloningRepoId(null)
     }
   }
@@ -336,7 +337,7 @@ function RepoSelector({ conversationId, chatId, onCloneSuccess }: { conversation
 
 // Branch section showing commits and Create PR button
 function BranchSection({ plan, clonedRepo }: { plan: AgentPlan; clonedRepo: ClonedRepo }) {
-  const [commits, setCommits] = useState<any[]>([])
+  const [commits, setCommits] = useState<GitHubCommit[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreatingPR, setIsCreatingPR] = useState(false)
   const { pullRequests, addPullRequest } = useProjectPanelStore()
@@ -360,8 +361,8 @@ function BranchSection({ plan, clonedRepo }: { plan: AgentPlan; clonedRepo: Clon
       const res = await codeSessionApi.createPRFromPlan(plan.id)
       addPullRequest(res.data)
       toast({ title: 'Pull request created', description: `PR #${res.data.pr_number}` })
-    } catch (err: any) {
-      toast({ title: 'Failed to create PR', description: err.response?.data?.error || err.message, variant: 'destructive' })
+    } catch (err) {
+      toast({ title: 'Failed to create PR', description: getApiErrorMessage(err, 'Failed to create PR'), variant: 'destructive' })
     } finally {
       setIsCreatingPR(false)
     }
@@ -406,7 +407,7 @@ function BranchSection({ plan, clonedRepo }: { plan: AgentPlan; clonedRepo: Clon
         </div>
       ) : commits.length > 0 ? (
         <div className="mt-2 space-y-1">
-          {commits.slice(0, 5).map((c: any) => (
+          {commits.slice(0, 5).map((c) => (
             <div key={c.sha} className="flex items-center gap-2 text-xs">
               <span className="font-mono text-muted-foreground shrink-0">{c.sha?.slice(0, 7)}</span>
               <span className="truncate">{c.commit?.message?.split('\n')[0]}</span>
@@ -451,11 +452,9 @@ function RepoHeader({ conversationId, onChangeRepo }: { conversationId: string; 
         })
         toast({ title: 'Workspace refreshed' })
       }
-    } catch (err: any) {
-      const code = err.response?.data?.code
-      const description = code === 'github_not_connected'
-        ? 'Connect your GitHub account to refresh this workspace.'
-        : err.response?.data?.error
+    } catch (err) {
+      const errData = hasErrorResponse(err) ? err.response?.data as { code?: string; error?: string } | undefined : undefined
+      const description = errData?.code === 'github_not_connected' ? 'Connect your GitHub account to refresh this workspace.' : errData?.error
       toast({ title: 'Refresh failed', description, variant: 'destructive' })
     } finally {
       setIsRefreshing(false)
@@ -724,8 +723,8 @@ function PlanDetail({ plan: summaryPlan, onBack }: { plan: AgentPlan; onBack: ()
       useProjectPanelStore.getState().removePlan(plan.id)
       toast({ title: 'Plan deleted' })
       onBack()
-    } catch (err: any) {
-      toast({ title: 'Delete failed', description: err.response?.data?.error || err.message, variant: 'destructive' })
+    } catch (err) {
+      toast({ title: 'Delete failed', description: getApiErrorMessage(err, 'Delete failed'), variant: 'destructive' })
     } finally {
       setIsDeleting(false)
     }
@@ -935,8 +934,8 @@ function PlansContent({ chatId }: { chatId?: string }) {
       addPlan(res.data)
       toast({ title: 'Plan imported', description: res.data.title })
       setShowImportModal(false)
-    } catch (err: any) {
-      toast({ title: 'Import failed', description: err.response?.data?.error || err.message, variant: 'destructive' })
+    } catch (err) {
+      toast({ title: 'Import failed', description: getApiErrorMessage(err, 'Import failed'), variant: 'destructive' })
     } finally {
       setIsImporting(null)
     }

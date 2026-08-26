@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/store/authStore'
 import { useToast } from '@/hooks/use-toast'
 import { api } from '@/api/client'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 import { Camera, Loader2 } from 'lucide-react'
 
 // Character limits
@@ -117,13 +118,13 @@ export function ProfileEditModal({ open, onOpenChange }: ProfileEditModalProps) 
         title: 'Avatar updated',
         description: 'Your profile picture has been updated.',
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to upload avatar:', error)
       // Revert preview on error
       setAvatarPreview(null)
       toast({
         title: 'Upload failed',
-        description: error.response?.data?.error || 'Failed to upload avatar. Please try again.',
+        description: getApiErrorMessage(error, 'Failed to upload avatar. Please try again.'),
         variant: 'destructive',
       })
     } finally {
@@ -172,11 +173,11 @@ export function ProfileEditModal({ open, onOpenChange }: ProfileEditModalProps) 
       })
 
       onOpenChange(false)
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to update profile:', error)
       toast({
         title: 'Update failed',
-        description: error.response?.data?.detail || 'Failed to update profile. Please try again.',
+        description: getApiErrorMessage(error, 'Failed to update profile. Please try again.'),
         variant: 'destructive',
       })
     } finally {

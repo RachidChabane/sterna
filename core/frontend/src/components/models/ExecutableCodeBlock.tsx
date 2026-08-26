@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useAuthStore } from '@/store/authStore'
 import { useChatPanelContextSafe } from './ChatPanelContext'
 import axios from 'axios'
+import { toErrorMessage } from '@/utils/errorMessages'
 import { getAccessToken, orchestratorClient } from '@/api/client'
 import { useSettingsStore } from '@/store/settingsStore'
 import { getCodeTheme } from '@/constants/codeThemes'
@@ -160,10 +161,10 @@ export function ExecutableCodeBlock({ code, language, className }: ExecutableCod
       }, { signal: abortController.signal })
 
       setResult(response.data)
-    } catch (error: any) {
+    } catch (error) {
       // Don't show error if execution was aborted by user (native fetch
       // AbortError previously; axios raises a CanceledError instead)
-      if (axios.isCancel(error) || error.name === 'AbortError') {
+      if (axios.isCancel(error) || (error instanceof Error && error.name === 'AbortError')) {
         setResult({
           output: '',
           error: 'Execution cancelled by user',
@@ -174,7 +175,7 @@ export function ExecutableCodeBlock({ code, language, className }: ExecutableCod
       } else {
         const message = axios.isAxiosError(error) && error.response
           ? `HTTP ${error.response.status}`
-          : error.message || 'Execution failed'
+          : toErrorMessage(error) || 'Execution failed'
         setResult({
           output: '',
           error: message,

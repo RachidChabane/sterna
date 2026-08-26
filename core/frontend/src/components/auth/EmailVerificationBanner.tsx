@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
 import { authApi } from '@/api/endpoints'
 import { useToast } from '@/hooks/use-toast'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 
 const STORAGE_KEY = 'auth:verify-banner:dismissed'
 const RESEND_COOLDOWN_MS = 60_000
@@ -45,13 +46,10 @@ export function EmailVerificationBanner() {
         title: 'Verification email sent',
         description: 'Check your inbox for the link.',
       })
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: 'Could not resend',
-        description:
-          err.response?.data?.detail ||
-          err.response?.data?.message ||
-          'Try again in a moment.',
+        description: getApiErrorMessage(err, 'Try again in a moment.'),
         variant: 'destructive',
       })
     } finally {

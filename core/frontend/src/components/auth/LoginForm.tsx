@@ -11,6 +11,7 @@ import { GoogleIcon } from '@/components/icons/GoogleIcon'
 import { useToast } from '@/hooks/use-toast'
 import { authApi } from '@/api/endpoints'
 import { setTokens } from '@/api/client'
+import { getApiErrorMessage, hasErrorResponse } from '@/utils/errorMessages'
 
 const MAX_EMAIL_LENGTH = 254
 const MAX_PASSWORD_LENGTH = 128
@@ -94,18 +95,15 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         description: 'You have successfully signed in.',
       })
       navigateAfterAuth()
-    } catch (err: any) {
-      const data = err.response?.data
+    } catch (err) {
+      const data = hasErrorResponse(err) ? (err.response?.data as Record<string, unknown> | undefined) : undefined
       if (data && typeof data === 'object') {
         const next: Record<string, string> = {}
         if (Array.isArray(data.email)) next.email = data.email[0]
         if (Array.isArray(data.password)) next.password = data.password[0]
         if (Object.keys(next).length) setFieldErrors(next)
       }
-      const message =
-        err.response?.data?.detail ||
-        err.response?.data?.message ||
-        'Please check your credentials and try again.'
+      const message = getApiErrorMessage(err, 'Please check your credentials and try again.')
       toast({
         title: 'Sign in failed',
         description: message,
@@ -149,7 +147,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     return () => clearInterval(pollInterval)
   }, [])
 
-  const handleGoogleCallback = async (response: any) => {
+  const handleGoogleCallback = async (response: { credential?: string }) => {
     if (!response.credential) {
       toast({
         title: 'Google authentication failed',
@@ -179,13 +177,11 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         description: 'Successfully signed in with Google.',
       })
       navigateAfterAuth()
-    } catch (err: any) {
+    } catch (err) {
       console.error('Google auth error:', err)
       toast({
         title: 'Authentication failed',
-        description:
-          err.response?.data?.error ||
-          'Could not authenticate with Google. Please try again.',
+        description: getApiErrorMessage(err, 'Could not authenticate with Google. Please try again.'),
         variant: 'destructive',
       })
     }

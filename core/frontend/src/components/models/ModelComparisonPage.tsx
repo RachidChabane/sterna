@@ -17,7 +17,7 @@ import { ConfirmDeleteModal } from '@/components/shared'
 import { ConsigliereModal } from '@/components/consigliere/ConsigliereModal'
 import { SuggestedQuestionsCarousel } from './SuggestedQuestionsCarousel'
 import { CostEstimationDisplay } from './CostEstimationDisplay'
-import { llmApi } from '@/api/llm'
+import { llmApi, type ModelCostEstimate, type ChatFeatureFlags } from '@/api/llm'
 import { revokeImagePreview } from '@/utils/imageUtils'
 import { buildConversationResponsesText, buildConversationMetadata, buildChatResponsesText, buildChatMetadata, generateFilename, extractTextFromContent } from '@/utils/chatUtils'
 import { buildTextFromTextAttachments } from '@/utils/tokenEstimate'
@@ -41,8 +41,9 @@ import { PREFERENCE_KEYS } from '@/hooks/usePreferencesLoader'
 import { useActiveConversationStore } from '@/store/activeConversationStore'
 import { assetsAPI, assetToReference, getAssetTypeFromMime } from '@/api/assets'
 import { conversationsAPI } from '@/api/conversations'
+import { getApiErrorMessage, hasErrorResponse } from '@/utils/errorMessages'
 import { sparksAPI } from '@/api/sparks'
-import type { Model, Message, ModelParameters, Chat, ChatGroup, Attachment } from './types'
+import type { Model, Message, ModelParameters, Chat, ChatGroup, Attachment, AttachmentLike, ToolExecutedHandler, FileAttachment, ImageAttachment } from './types'
 import type { ModelCatalogEntry } from '@/types/models'
 import { toModelCatalogEntry } from './modelCatalog'
 
@@ -81,7 +82,7 @@ export default function ModelComparisonPage() {
 
   // Carry pending first-message data through SPA navigation (no page reload needed).
   // handleFirstMessage writes this; the URL effect reads it after loadConversation resolves.
-  const pendingFirstMessageRef = useRef<{ content: string; attachments: any[]; chatId: string } | null>(null)
+  const pendingFirstMessageRef = useRef<{ content: string; attachments: AttachmentLike[]; chatId: string } | null>(null)
 
   const [activeGroupId, setActiveGroupId] = useState<string>('')
 
@@ -185,7 +186,7 @@ export default function ModelComparisonPage() {
           const persistedGroupId = await preferencesSync.get(PREFERENCE_KEYS.MODELS_ACTIVE_CHAT_GROUP)
 
           // Check if the persisted group still exists
-          if (persistedGroupId && chatGroups.some(g => g.id === persistedGroupId)) {
+          if (typeof persistedGroupId === 'string' && chatGroups.some(g => g.id === persistedGroupId)) {
             setActiveGroupId(persistedGroupId)
             // Load full conversation data (chatGroups only has summaries with empty chats)
             const fullGroup = await loadConversation(persistedGroupId)
@@ -481,7 +482,7 @@ export default function ModelComparisonPage() {
   // Input management hook
   // Only check active chats (non-disabled and with a model) for capabilities (memoized)
   const activeChats = useMemo(() => {
-    return chats.filter(c => c.model !== null && !(c as any).disabled)
+    return chats.filter(c => c.model !== null && !c.disabled)
   }, [chats])
 
   // Find first model with each capability (even if disabled) (memoized)
@@ -498,8 +499,8 @@ export default function ModelComparisonPage() {
   const hasActivePDFSupport = useMemo(() => hasPDFSupport(activeChats), [hasPDFSupport, activeChats])
   const firstVisionModelName = useMemo(() => firstVisionChat?.model?.name, [firstVisionChat])
   const firstPDFModelName = useMemo(() => firstPDFChat?.model?.name, [firstPDFChat])
-  const isFirstVisionModelDisabled = useMemo(() => firstVisionChat ? !!(firstVisionChat as any).disabled : false, [firstVisionChat])
-  const isFirstPDFModelDisabled = useMemo(() => firstPDFChat ? !!(firstPDFChat as any).disabled : false, [firstPDFChat])
+  const isFirstVisionModelDisabled = useMemo(() => firstVisionChat ? !!firstVisionChat.disabled : false, [firstVisionChat])
+  const isFirstPDFModelDisabled = useMemo(() => firstPDFChat ? !!firstPDFChat.disabled : false, [firstPDFChat])
 
   const comparisonInput = useComparisonInput({
     userMessageHistory,
@@ -558,12 +559,12 @@ export default function ModelComparisonPage() {
 
   // Listen for pending message event from new conversation creation
   useEffect(() => {
-    const handlePendingMessage = (event: CustomEvent<{ content: string; attachments: Attachment[]; chatId: string }>) => {
+    const handlePendingMessage = (event: CustomEvent<{ content: string; attachments: AttachmentLike[]; chatId: string }>) => {
       const { content, attachments: pendingAttachments, chatId } = event.detail
 
       // Reconstruct file-like objects from serialized attachments
       // The UI expects file.name, file.type, file.size but serialized attachments have fileName, fileType, fileSize
-      const reconstructedAttachments = pendingAttachments.map((att: any) => ({
+      const reconstructedAttachments = pendingAttachments.map((att) => ({
         ...att,
         // Reconstruct file object for UI display (not a real File, but has the properties UI needs)
         file: att.file || {
@@ -1057,10 +1058,9 @@ export default function ModelComparisonPage() {
     }
   }
 
-
   // Shared input entry point (synced): just call composeAndSend for all enabled chats (memoized)
   const sendMessage = useCallback((content: string) => {
-    const enabledIds = chats.filter(c => c.model !== null && !(c as any).disabled).map(c => c.id)
+    const enabledIds = chats.filter(c => c.model !== null && !c.disabled).map(c => c.id)
     if (enabledIds.length === 0) {
       const hasModelsSelected = chats.some(c => c.model !== null)
       const allDisabled = hasModelsSelected && enabledIds.length === 0
@@ -1082,7 +1082,7 @@ export default function ModelComparisonPage() {
       fileName: att.file.name,
       fileType: att.file.type,
       fileSize: att.file.size,
-    } as any))
+    }))
 
     // Fire-and-forget the compose/send so UI clears immediately
     void composeAndSend(enabledIds, content, currentAttachments)
@@ -1126,7 +1126,7 @@ export default function ModelComparisonPage() {
                 if (step.type === 'tool_executions' && step.executions) {
                   return {
                     ...step,
-                    executions: step.executions.map((e: any) =>
+                    executions: step.executions.map((e) =>
                       e.isExecuting
                         ? { ...e, isExecuting: false, success: false, result: { success: false, error: 'Cancelled by user' } }
                         : e
@@ -1164,7 +1164,7 @@ export default function ModelComparisonPage() {
   const modelSelectHandlers = useRef(new Map<string, (model: Model) => void>())
   const updateMessagesHandlers = useRef(new Map<string, (messages: Message[]) => void>())
   const removeHandlers = useRef(new Map<string, () => void>())
-  const estimateCostHandlers = useRef(new Map<string, (text: string, atts?: Attachment[]) => Promise<any>>())
+  const estimateCostHandlers = useRef(new Map<string, (text: string, atts?: Attachment[]) => Promise<Omit<ModelCostEstimate, 'model_id'> | null>>())
 
   // Track previous function references to detect changes synchronously
   // IMPORTANT: This must clear the cache DURING render, not in an effect
@@ -1204,7 +1204,7 @@ export default function ModelComparisonPage() {
 
   // Broadcast handler for multi-chat mode: sends to ALL enabled chats
   const sendToAllChatsHandler = useCallback(async (content: string, localAttachments?: Attachment[]) => {
-    const enabledIds = chats.filter(c => c.model !== null && !(c as any).disabled).map(c => c.id)
+    const enabledIds = chats.filter(c => c.model !== null && !c.disabled).map(c => c.id)
     if (enabledIds.length === 0) {
       toast({
         title: 'No model selected',
@@ -1252,11 +1252,11 @@ export default function ModelComparisonPage() {
     try {
       const filesText = buildTextFromTextAttachments(localAttachments)
       const filesMeta = (localAttachments || [])
-        .filter(a => a.type === 'file')
-        .map((f: any) => ({ filename: f.file?.name || 'file', mime: f.file?.type || undefined, size: f.file?.size || undefined }))
+        .filter((a): a is FileAttachment => a.type === 'file')
+        .map((f) => ({ filename: f.file?.name || 'file', mime: f.file?.type || undefined, size: f.file?.size || undefined }))
       const imagesMeta = (localAttachments || [])
-        .filter(a => a.type === 'image')
-        .map((img: any) => ({ mime: img.file?.type || undefined, size: img.file?.size || undefined }))
+        .filter((a): a is ImageAttachment => a.type === 'image')
+        .map((img) => ({ mime: img.file?.type || undefined, size: img.file?.size || undefined }))
       const response = await llmApi.estimateBatchCost({
         model_ids: [chat.model.model_id],
         prompt_text: text + filesText,
@@ -1279,7 +1279,7 @@ export default function ModelComparisonPage() {
       const data = {
         ...response.data,
         total_cost: typeof response.data.total_cost === 'string' ? parseFloat(response.data.total_cost) : response.data.total_cost,
-        costs: response.data.costs.map((c: any) => ({ ...c, cost: typeof c.cost === 'string' ? parseFloat(c.cost) : c.cost })),
+        costs: response.data.costs.map((c) => ({ ...c, cost: typeof c.cost === 'string' ? parseFloat(c.cost) : c.cost })),
       }
       if (data.costs && data.costs.length > 0) {
         return {
@@ -1361,11 +1361,11 @@ export default function ModelComparisonPage() {
     return cancelChatHandlers.current.get(chatId)!
   }, [cancelChat])
 
-  const toolExecutedHandlers = useRef(new Map<string, (toolCallId: string, toolName: string, result: any) => void>())
+  const toolExecutedHandlers = useRef(new Map<string, ToolExecutedHandler>())
 
   const getToolExecutedHandler = useCallback((chatId: string) => {
     if (!toolExecutedHandlers.current.has(chatId)) {
-      toolExecutedHandlers.current.set(chatId, (toolCallId: string, toolName: string, result: any) => {
+      toolExecutedHandlers.current.set(chatId, (toolCallId: string, toolName: string, result: Record<string, unknown> | undefined) => {
         // Get current chat using ref to avoid stale closure issues in multi-chat parallel scenarios
         const currentChat = chatsRef.current.find(c => c.id === chatId)
         if (!currentChat) return
@@ -1375,7 +1375,7 @@ export default function ModelComparisonPage() {
         const toolMessage: Message = {
           role: 'tool',
           tool_call_id: toolCallId,
-          content: JSON.stringify(result.content),  // Send the raw tool result to the model
+          content: JSON.stringify(result?.content),  // Send the raw tool result to the model
           timestamp: new Date(),
         }
 
@@ -1421,7 +1421,7 @@ export default function ModelComparisonPage() {
               if (step.type === 'tool_executions' && step.executions) {
                 return {
                   ...step,
-                  executions: step.executions.map((e: any) =>
+                  executions: step.executions.map((e) =>
                     e.isExecuting
                       ? { ...e, isExecuting: false, success: false, result: { success: false, error: 'Cancelled by user' } }
                       : e
@@ -1453,7 +1453,6 @@ export default function ModelComparisonPage() {
       updatedAt: new Date(),
     } : g))
   }, [activeGroupId, setChatGroups])
-
 
   const copyConversationResponses = () => {
     const text = buildConversationResponsesText(chats)
@@ -1499,8 +1498,10 @@ export default function ModelComparisonPage() {
     try {
       const result = await conversationsAPI.saveToKnowledgeBase(activeGroupId)
       toast({ title: 'Saved', description: `Saved to knowledge base: ${result.filename}` })
-    } catch (error: any) {
-      const errorData = error.response?.data
+    } catch (error) {
+      const errorData = hasErrorResponse(error)
+        ? error.response?.data as { existing_document_id?: string; error?: string } | undefined
+        : undefined
       if (errorData?.existing_document_id) {
         toast({ title: 'Already saved', description: errorData.error || 'This conversation is already in your knowledge base', variant: 'destructive' })
       } else if (errorData?.error) {
@@ -1526,8 +1527,10 @@ export default function ModelComparisonPage() {
       const result = await conversationsAPI.saveToKnowledgeBase(activeGroupId)
       const modelName = chat.model?.name || 'Chat'
       toast({ title: 'Saved', description: `${modelName} saved to knowledge base: ${result.filename}` })
-    } catch (error: any) {
-      const errorData = error.response?.data
+    } catch (error) {
+      const errorData = hasErrorResponse(error)
+        ? error.response?.data as { existing_document_id?: string; error?: string } | undefined
+        : undefined
       if (errorData?.existing_document_id) {
         toast({ title: 'Already saved', description: errorData.error || 'This conversation is already in your knowledge base', variant: 'destructive' })
       } else if (errorData?.error) {
@@ -1639,19 +1642,18 @@ export default function ModelComparisonPage() {
     })
   }
 
-
   // Ask backend to estimate costs (uses hook state management)
   const estimateCostsLocal = async (modelIds: string[], typedText: string, atts: Attachment[]) => {
     const filesText = buildTextFromTextAttachments(atts)
     const filesMeta = atts
-      .filter(a => a.type === 'file')
-      .map((f: any) => ({ filename: f.file?.name || 'file', mime: f.file?.type || undefined, size: f.file?.size || undefined }))
+      .filter((a): a is FileAttachment => a.type === 'file')
+      .map((f) => ({ filename: f.file?.name || 'file', mime: f.file?.type || undefined, size: f.file?.size || undefined }))
     const imagesMeta = atts
-      .filter(a => a.type === 'image')
-      .map((img: any) => ({ mime: img.file?.type || undefined, size: img.file?.size || undefined }))
+      .filter((a): a is ImageAttachment => a.type === 'image')
+      .map((img) => ({ mime: img.file?.type || undefined, size: img.file?.size || undefined }))
     // Per-model max_new_tokens and features from chats' parameters
     const maxNewByModel: Record<string, number> = {}
-    const featuresByModel: Record<string, any> = {}
+    const featuresByModel: Record<string, ChatFeatureFlags> = {}
 
     chats.forEach(c => {
       if (!c.model) return
@@ -1684,7 +1686,7 @@ export default function ModelComparisonPage() {
         if (c.parameters?.enable_file_tools) featuresByModel[modelId].enable_file_tools = true
         // Use longest system prompt for this model
         const sp = c.parameters?.system_prompt || ''
-        if (sp.length > featuresByModel[modelId].system_prompt.length) {
+        if (sp.length > (featuresByModel[modelId].system_prompt?.length ?? 0)) {
           featuresByModel[modelId].system_prompt = sp
         }
       }
@@ -1704,7 +1706,7 @@ export default function ModelComparisonPage() {
       const data = {
         ...response.data,
         total_cost: typeof response.data.total_cost === 'string' ? parseFloat(response.data.total_cost) : response.data.total_cost,
-        costs: response.data.costs.map((c: any) => ({ ...c, cost: typeof c.cost === 'string' ? parseFloat(c.cost) : c.cost })),
+        costs: response.data.costs.map((c) => ({ ...c, cost: typeof c.cost === 'string' ? parseFloat(c.cost) : c.cost })),
       }
       setEstimatedCosts(data)
       if (data.costs.length === 0) {
@@ -1714,10 +1716,8 @@ export default function ModelComparisonPage() {
           variant: 'destructive'
         })
       }
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error
-        || error.response?.data?.detail
-        || 'Failed to estimate costs. Please try again.'
+    } catch (error) {
+      const errorMessage = getApiErrorMessage(error, 'Failed to estimate costs. Please try again.')
       toast({
         title: 'Estimation failed',
         description: errorMessage,
@@ -2151,13 +2151,13 @@ export default function ModelComparisonPage() {
         // Upload attachments as assets BEFORE storing in sessionStorage
         // This is necessary because File objects don't survive JSON serialization
         const attachmentsToProcess = localAttachments || newConvoAttachments || []
-        const serializableAttachments: any[] = []
+        const serializableAttachments: AttachmentLike[] = []
 
         if (attachmentsToProcess.length > 0) {
-          
+
 
           // Upload each attachment in parallel
-          const uploadPromises = attachmentsToProcess.map(async (att) => {
+          const uploadPromises = attachmentsToProcess.map(async (att: AttachmentLike) => {
             try {
               // Only upload if we have a File object
               if (att.file instanceof File) {
@@ -2181,9 +2181,9 @@ export default function ModelComparisonPage() {
                     // For images, store the preview URL (will need to be replaced with assetUrl after load)
                     preview: att.type === 'image' ? result.asset.download_url : undefined,
                     // For text files, preserve textContent if available
-                    textContent: (att as any).textContent,
+                    textContent: att.textContent,
                     // Preserve base64 for immediate display/sending
-                    base64: (att as any).base64,
+                    base64: att.base64,
                   }
                 } else {
                   console.warn('[handleFirstMessage] Failed to upload attachment:', att.file.name, result.error)
@@ -2194,8 +2194,8 @@ export default function ModelComparisonPage() {
                     fileName: att.file.name,
                     fileType: att.file.type,
                     fileSize: att.file.size,
-                    textContent: (att as any).textContent,
-                    base64: (att as any).base64,
+                    textContent: att.textContent,
+                    base64: att.base64,
                     uploadFailed: true,
                   }
                 }
@@ -2204,13 +2204,13 @@ export default function ModelComparisonPage() {
                 return {
                   id: att.id,
                   type: att.type,
-                  fileName: (att as any).fileName || (att as any).file?.name,
-                  fileType: (att as any).fileType || (att as any).file?.type,
-                  fileSize: (att as any).fileSize || (att as any).file?.size,
-                  textContent: (att as any).textContent,
-                  base64: (att as any).base64,
-                  assetId: (att as any).assetId,
-                  assetUrl: (att as any).assetUrl,
+                  fileName: att.fileName || att.file?.name,
+                  fileType: att.fileType || att.file?.type,
+                  fileSize: att.fileSize || att.file?.size,
+                  textContent: att.textContent,
+                  base64: att.base64,
+                  assetId: att.assetId,
+                  assetUrl: att.assetUrl,
                 }
               }
             } catch (error) {

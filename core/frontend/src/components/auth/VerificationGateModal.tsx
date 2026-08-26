@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useVerificationGateStore } from '@/store/verificationGateStore'
 import { authApi } from '@/api/endpoints'
 import { useToast } from '@/hooks/use-toast'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 
 export function VerificationGateModal() {
   const isOpen = useVerificationGateStore((s) => s.isOpen)
@@ -31,13 +32,10 @@ export function VerificationGateModal() {
         description: 'Check your inbox for the link.',
       })
       close()
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: 'Could not resend',
-        description:
-          err.response?.data?.detail ||
-          err.response?.data?.message ||
-          'Try again in a moment.',
+        description: getApiErrorMessage(err, 'Try again in a moment.'),
         variant: 'destructive',
       })
     } finally {

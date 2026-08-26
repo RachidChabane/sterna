@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useNavigationStore } from '@/store/navigationStore'
 import { Globe, RefreshCw } from 'lucide-react'
 import { useAppsStore } from '@/store/appsStore'
+import { getApiErrorMessage, hasErrorResponse } from '@/utils/errorMessages'
 import { appsAPI, type AppListItem, type App } from '@/api/apps'
 import { useAuthStore } from '@/store/authStore'
 import { fetchPreviewToken, getPreviewUrl, checkProcessHealth } from '@/api/sandbox'
@@ -368,10 +369,10 @@ function AppDetailView({
       const result = await appsAPI.startPreview(app.id)
       setPreviewState(app.id, { running: true, port: result.port, loading: false })
       toast({ title: 'Dev server started' })
-    } catch (error: any) {
+    } catch (error) {
       setPreviewState(app.id, { loading: false })
-      const status = error?.response?.status
-      const raw = error?.response?.data?.error || error?.message || 'Unknown error'
+      const status = hasErrorResponse(error) ? error.response?.status : undefined
+      const raw = getApiErrorMessage(error, 'Unknown error')
       const msg = typeof raw === 'string' ? raw : JSON.stringify(raw)
       if (status === 409) {
         toast({ title: 'Port already in use', description: 'Stop the other preview first', variant: 'destructive' })

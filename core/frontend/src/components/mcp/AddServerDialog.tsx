@@ -50,6 +50,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { mcpApi, type MCPServerCreateRequest, type MCPConfigHelpResponse } from '@/api/mcp'
+import { toErrorMessage, hasErrorResponse } from '@/utils/errorMessages'
 
 interface EnvVar {
   key: string
@@ -284,7 +285,7 @@ export function AddServerDialog({
           setAuthType(detectedAuthType)
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to get config help:', error)
       setConfigHelp(null)
     } finally {
@@ -410,29 +411,25 @@ export function AddServerDialog({
       }
       handleClose()
       onServerCreated?.()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create server:', error)
 
       let errorMessage = 'Failed to create server'
-      const responseData = error.response?.data
-
-      if (responseData) {
-        if (typeof responseData === 'string') {
-          errorMessage = responseData
-        } else if (responseData.detail) {
-          errorMessage = responseData.detail
-        } else if (responseData.message) {
-          errorMessage = responseData.message
-        } else {
-          const fieldErrors = Object.entries(responseData)
-            .filter(([_, value]) => Array.isArray(value) || typeof value === 'string')
-            .map(([_, messages]) => Array.isArray(messages) ? (messages as string[]).join(', ') : messages as string)
-          if (fieldErrors.length > 0) {
-            errorMessage = fieldErrors.join('. ')
-          }
+      const responseData = hasErrorResponse(error) ? error.response?.data : undefined
+      if (typeof responseData === 'string') {
+        errorMessage = responseData
+      } else if (responseData && typeof responseData === 'object') {
+        const data = responseData as Record<string, unknown>
+        if (typeof data.detail === 'string') errorMessage = data.detail
+        else if (typeof data.message === 'string') errorMessage = data.message
+        else {
+          const fieldErrors = Object.entries(data)
+            .filter(([, v]) => Array.isArray(v) || typeof v === 'string')
+            .map(([, v]) => Array.isArray(v) ? (v as string[]).join(', ') : v as string)
+          if (fieldErrors.length > 0) errorMessage = fieldErrors.join('. ')
         }
-      } else if (error.message) {
-        errorMessage = error.message
+      } else {
+        errorMessage = toErrorMessage(error) || errorMessage
       }
 
       toast.error(errorMessage)

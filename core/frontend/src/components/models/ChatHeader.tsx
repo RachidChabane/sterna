@@ -10,6 +10,7 @@
  */
 
 import { Button } from '@/components/ui/button'
+import { hasErrorResponse } from '@/utils/errorMessages'
 import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
@@ -214,8 +215,10 @@ export const ChatHeader = memo(function ChatHeader({
         description: result.filename,
       })
       setShowSaveToKBDialog(false)
-    } catch (error: any) {
-      const errorData = error.response?.data
+    } catch (error) {
+      const errorData = hasErrorResponse(error)
+        ? error.response?.data as { existing_document_id?: string; error?: string } | undefined
+        : undefined
       if (errorData?.existing_document_id) {
         toast.error('Already saved', {
           description: errorData.error || 'This conversation is already in your knowledge base',
