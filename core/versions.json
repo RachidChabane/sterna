@@ -2,10 +2,10 @@
   "api-gateway": "6.2.2",
   "web": "6.2.5",
   "frontend": "6.2.5",
-  "orchestrator": "6.2.2",
-  "egress-proxy": "6.2.2",
+  "orchestrator": "6.2.3",
+  "egress-proxy": "6.2.3",
   "brave-search": "4.2.1",
   "user-preferences": "4.2.1",
   "google-maps": "4.2.1",
-  "sandbox-datascience": "6.2.2"
+  "sandbox-datascience": "6.2.3"
 }
