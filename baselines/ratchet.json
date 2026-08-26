@@ -46,7 +46,7 @@
       "core/frontend/src/components/sandbox/FullIDE.tsx": 745,
       "core/frontend/src/components/settings/SettingsModal.tsx": 1485,
       "core/frontend/src/components/sparks/SparksPage.tsx": 825,
-      "core/frontend/src/components/voice-rooms/CreateRoomModal.tsx": 929,
+      "core/frontend/src/components/voice-rooms/CreateRoomModal.tsx": 294,
       "core/frontend/src/components/voice-rooms/VoiceRoomPage.tsx": 1183,
       "core/frontend/src/hooks/useMentionAutocomplete.ts": 1072,
       "core/frontend/src/hooks/useMessageSending.ts": 970,
