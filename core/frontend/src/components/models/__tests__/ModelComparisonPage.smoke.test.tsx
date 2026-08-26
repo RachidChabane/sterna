@@ -301,6 +301,15 @@ describe('ModelComparisonPage — branch selection', () => {
     expect(await screen.findByTestId('stub-immersive-chat-view')).toHaveAttribute('data-chat-id', 'chat-solo')
   })
 
+  it('renders the multi-chat tab container for several chats in immersive mode', async () => {
+    searchParams.conversation = 'group-1'
+    setConversationsState({
+      chatGroups: [makeGroup([makeChat({ id: 'chat-a' }), makeChat({ id: 'chat-b' })])],
+    })
+    render(<ModelComparisonPage />)
+    expect(await screen.findByTestId('stub-chat-tab-container')).toHaveAttribute('data-chat-count', '2')
+  })
+
   it('renders the grid view for multiple chats outside immersive mode', async () => {
     searchParams.conversation = 'group-1'
     setConversationsState({

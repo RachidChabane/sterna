@@ -37,7 +37,7 @@
       "core/frontend/src/components/models/MessageInput.tsx": 1075,
       "core/frontend/src/components/models/MessageList.tsx": 1090,
       "core/frontend/src/components/models/MessageSteps.tsx": 1280,
-      "core/frontend/src/components/models/ModelComparisonPage.tsx": 2722,
+      "core/frontend/src/components/models/ModelComparisonPage.tsx": 2032,
       "core/frontend/src/components/models/ProjectStatusSidePanel.tsx": 1704,
       "core/frontend/src/components/models/SparkFullscreenDialog.tsx": 461,
       "core/frontend/src/components/models/VoiceConversationOverlay.tsx": 994,
