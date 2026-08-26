@@ -1,4 +1,4 @@
-import type { Chat, Message } from '@/components/models/types'
+import type { Chat, ChatGroup, Message } from '@/components/models/types'
 import type { CodingAgentQuestion, CodingAgentResult, CodingAgentStep } from '@/api/llm'
 import type { StreamCallbacksContext } from './context'
 import { CODING_AGENT_TOOLS } from '../constants'
@@ -30,7 +30,7 @@ export function buildCodingAgentCallbacks(ctx: StreamCallbacksContext) {
 
     // Update the message with Coding Agent steps (on the last tool_executions step for coding_agent)
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) => {
+      prevGroups.map((group: ChatGroup) => {
         if (group.id !== activeGroupId) return group
 
         return {
@@ -51,11 +51,11 @@ export function buildCodingAgentCallbacks(ctx: StreamCallbacksContext) {
 
                   // Update coding_agent tool execution in steps with the new step
                   const steps = m.steps || []
-                  const updatedSteps = steps.map((s: any) => {
+                  const updatedSteps = steps.map((s) => {
                     if (s.type === 'tool_executions') {
                       return {
                         ...s,
-                        executions: s.executions?.map((exec: any) => {
+                        executions: s.executions?.map((exec) => {
                           if (CODING_AGENT_TOOLS.has(exec.tool_call?.function?.name)) {
                             return {
                               ...exec,
@@ -107,7 +107,7 @@ export function buildCodingAgentCallbacks(ctx: StreamCallbacksContext) {
 
     // Update the message with Coding Agent result
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) => {
+      prevGroups.map((group: ChatGroup) => {
         if (group.id !== activeGroupId) return group
 
         return {
@@ -128,11 +128,11 @@ export function buildCodingAgentCallbacks(ctx: StreamCallbacksContext) {
 
                   // Update coding_agent tool execution in steps with the result
                   const steps = m.steps || []
-                  const updatedSteps = steps.map((s: any) => {
+                  const updatedSteps = steps.map((s) => {
                     if (s.type === 'tool_executions') {
                       return {
                         ...s,
-                        executions: s.executions?.map((exec: any) => {
+                        executions: s.executions?.map((exec) => {
                           if (CODING_AGENT_TOOLS.has(exec.tool_call?.function?.name)) {
                             // Use result.steps if available and has more content than accumulated steps
                             // This ensures we show the complete steps from the final result

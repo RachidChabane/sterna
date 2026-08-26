@@ -57,6 +57,13 @@ export interface MediaToolConfig {
   selectedQuality?: string
 }
 
+/** A single entry in the `/settings/images/` endpoint's `available_models` list. */
+interface ImageModelOption { id: string; name: string; provider?: string }
+interface ImageModelsResponse { available_models?: ImageModelOption[]; preferred_image_model?: string }
+/** A single entry in the `/settings/videos/` endpoint's `available_models` list. */
+interface VideoModelOption { id?: string; canonical_id?: string; model_id?: string; name?: string; display_name?: string; provider?: string; input_type?: string }
+interface VideoModelsResponse { available_models?: VideoModelOption[]; preferred_video_model?: string }
+
 // User-friendly display names for coding agent tools
 export const CODING_AGENT_DISPLAY_NAMES: Record<string, string> = {
   coding_agent: 'Coding Agent',
@@ -569,9 +576,9 @@ export function useMentionAutocomplete(
   const fetchImageModels = useCallback(async () => {
     setIsLoadingSecondary(true)
     try {
-      const response = await apiClient.get('/settings/images/')
+      const response = await apiClient.get<ImageModelsResponse>('/settings/images/')
       const data = response.data
-      const models = (data.available_models || []).map((m: any) => ({
+      const models = (data.available_models || []).map((m) => ({
         id: m.id,
         name: m.name,
         provider: m.provider || 'Google',
@@ -610,23 +617,23 @@ export function useMentionAutocomplete(
     setIsLoadingSecondary(true)
     const compatibleTypes = VIDEO_TOOL_COMPATIBLE_TYPES[toolName] || ['text']
     try {
-      const response = await apiClient.get('/settings/videos/')
+      const response = await apiClient.get<VideoModelsResponse>('/settings/videos/')
       const data = response.data
 
       // Map all models with their input_type
-      const allModels = (data.available_models || []).map((m: any) => ({
-        id: m.canonical_id || m.id || m.model_id,
-        name: m.name || m.display_name,
+      const allModels = (data.available_models || []).map((m) => ({
+        id: m.canonical_id || m.id || m.model_id || '',
+        name: m.name || m.display_name || '',
         provider: m.provider || '',
         inputType: m.input_type || 'text',
       }))
 
       // Filter to only models compatible with this tool's input type(s)
-      const filteredModels = allModels.filter((m: any) => compatibleTypes.includes(m.inputType))
+      const filteredModels = allModels.filter((m) => compatibleTypes.includes(m.inputType))
 
       // Pick preferred: user's preferred if compatible, else first filtered model
       const userPreferred = data.preferred_video_model || ''
-      const preferredModel = filteredModels.find((m: any) => m.id === userPreferred)?.id
+      const preferredModel = filteredModels.find((m) => m.id === userPreferred)?.id
         || filteredModels[0]?.id || ''
 
       // Build config based on tool type

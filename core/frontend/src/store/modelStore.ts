@@ -119,7 +119,7 @@ const useModelStore = create<ModelStore>()(
 
           // Build params object for API call
           // Always filter to only show models that support tool calls
-          const params: any = { page, supports_functions: true }
+          const params: NonNullable<Parameters<typeof openRouterApi.models>[0]> = { page, supports_functions: true }
           if (appliedFilters.search) params.search = appliedFilters.search
           if (appliedFilters.provider) params.provider = appliedFilters.provider
           if (appliedFilters.minContextLength) params.min_context_length = appliedFilters.minContextLength

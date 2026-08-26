@@ -3,9 +3,36 @@ import { renderHook, act } from '@testing-library/react'
 import { useMessageSending } from '@/hooks/useMessageSending'
 import { llmApi } from '@/api/llm'
 import { conversationsAPI } from '@/api/conversations'
+import type { APIMessage } from '@/api/conversations'
 import { useUsageQuotaStore } from '@/store/usageQuotaStore'
-import type { Chat, Message, Model } from '@/components/models/types'
+import type { Chat, ChatGroup, Message, Model } from '@/components/models/types'
 import { getDefaultModelParameters } from '@/config/modelParameters'
+
+/** The callbacks object useMessageSending hands to llmApi.completeStream. */
+type CompleteStreamCallbacks = Parameters<typeof llmApi.completeStream>[1]
+
+function makeApiMessage(overrides: Partial<APIMessage> = {}): APIMessage {
+  return {
+    id: 'persisted-msg-1',
+    chat: 'chat-1',
+    role: 'assistant',
+    content: { text: '' },
+    sequence: 0,
+    model_id: null,
+    model_provider: null,
+    prompt_tokens: null,
+    completion_tokens: null,
+    cost: null,
+    tool_calls: [],
+    tool_call_id: null,
+    steps: [],
+    metadata: {},
+    is_stopped: false,
+    sparks: [],
+    created_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
 
 vi.mock('@/api/llm', () => ({
   llmApi: {
@@ -56,20 +83,20 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
  * a bare value — a plain vi.fn() would just record unusable function references.
  */
 function makeChatGroupsHarness(initialChat: Chat) {
-  let groups: any[] = [{ id: 'group-1', chats: [initialChat], updatedAt: new Date() }]
-  const setChatGroups = vi.fn((updater: any) => {
+  let groups: ChatGroup[] = [{ id: 'group-1', chats: [initialChat], updatedAt: new Date() }]
+  const setChatGroups = vi.fn((updater: ChatGroup[] | ((prev: ChatGroup[]) => ChatGroup[])) => {
     groups = typeof updater === 'function' ? updater(groups) : updater
   })
   return {
     setChatGroups,
-    getChat: (): Chat => groups[0].chats.find((c: Chat) => c.id === initialChat.id),
+    getChat: (): Chat => groups[0].chats.find((c) => c.id === initialChat.id)!,
   }
 }
 
 /** Captures the callbacks object useMessageSending hands to llmApi.completeStream. */
 function mockCompleteStream() {
   let resolveStream: (() => void) | null = null
-  let captured: any = null
+  let captured: CompleteStreamCallbacks | null = null
   vi.mocked(llmApi.completeStream).mockImplementation((_payload, callbacks, _opts) => {
     captured = callbacks
     return new Promise<void>((resolve) => {
@@ -106,7 +133,7 @@ const baseMessages: Message[] = [{ role: 'user', content: 'Hello there', timesta
 describe('useMessageSending — sendToModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(conversationsAPI.createMessage).mockResolvedValue({ id: 'persisted-msg-1' } as any)
+    vi.mocked(conversationsAPI.createMessage).mockResolvedValue(makeApiMessage())
     vi.spyOn(useUsageQuotaStore.getState(), 'refreshAfterUsage').mockResolvedValue(undefined)
   })
 
@@ -281,7 +308,7 @@ describe('useMessageSending — sendToModel', () => {
   it('an AbortError persists partial content as stopped and does NOT show an error message', async () => {
     const chat = makeChat()
     const { hook, harness } = renderMessageSending(chat)
-    let capturedCallbacks: any = null
+    let capturedCallbacks: CompleteStreamCallbacks | null = null
     vi.mocked(llmApi.completeStream).mockImplementation(async (_payload, callbacks) => {
       capturedCallbacks = callbacks
       callbacks.onContent('partial before abort')

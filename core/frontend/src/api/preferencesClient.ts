@@ -151,7 +151,7 @@ export const preferencesApi = {
    * Bulk update multiple preferences
    */
   async bulkUpdatePreferences(
-    preferences: Record<string, any>
+    preferences: Record<string, unknown>
   ): Promise<PreferenceListResponse> {
     const response = await preferencesClient.put<PreferenceListResponse>('/preferences', {
       preferences,

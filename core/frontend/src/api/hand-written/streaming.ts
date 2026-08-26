@@ -58,7 +58,7 @@ export interface CompletionRequest {
     pdf?: {
       engine: string
     }
-    [key: string]: any  // Allow additional plugin configurations
+    [key: string]: unknown  // Allow additional plugin configurations
   }>
 
   // MCP Tools integration

@@ -4,8 +4,32 @@ import type { SetStateAction } from 'react'
 import { useMessageStreamLifecycle } from '../useMessageStreamLifecycle'
 import { llmApi, type CodingAgentQuestion } from '@/api/llm'
 import { conversationsAPI } from '@/api/conversations'
+import type { APIMessage } from '@/api/conversations'
 import type { StreamCallbacks } from '../streamCallbacks'
 import type { Chat, ChatGroup, Message, Model } from '@/components/models/types'
+
+function makeApiMessage(overrides: Partial<APIMessage> = {}): APIMessage {
+  return {
+    id: 'persisted-1',
+    chat: 'chat-1',
+    role: 'assistant',
+    content: { text: '' },
+    sequence: 0,
+    model_id: null,
+    model_provider: null,
+    prompt_tokens: null,
+    completion_tokens: null,
+    cost: null,
+    tool_calls: [],
+    tool_call_id: null,
+    steps: [],
+    metadata: {},
+    is_stopped: false,
+    sparks: [],
+    created_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
 
 vi.mock('@/api/llm', () => ({
   llmApi: {
@@ -84,7 +108,7 @@ const baseMessages: Message[] = [{ role: 'user', content: 'Hello there', timesta
 describe('useMessageStreamLifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(conversationsAPI.createMessage).mockResolvedValue({ id: 'persisted-1' } as any)
+    vi.mocked(conversationsAPI.createMessage).mockResolvedValue(makeApiMessage())
   })
 
   it('builds a streaming request payload from the model, messages, and streaming setting', async () => {

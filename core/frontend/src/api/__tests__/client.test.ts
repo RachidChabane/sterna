@@ -1,7 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { AxiosHeaders } from 'axios'
+import { makeAxiosResponse } from '@/test/axiosMocks'
 
 // silence the sonner dynamic import triggered by 402 handling in some tests
 vi.mock('sonner', () => ({ toast: vi.fn() }))
+
+/** Shape of the request config the 401-retry interceptor reads/mutates in these tests. */
+interface MockOriginalRequest {
+  headers: Record<string, string>
+  _retry: boolean
+}
+
+/** Shape of the rejected value the response interceptor's `rejected` handler receives. */
+interface MockAxiosError {
+  response: { status: number }
+  config: MockOriginalRequest
+}
 
 describe('api/client — token management', () => {
   beforeEach(() => {
@@ -37,8 +51,8 @@ describe('api/client — token management', () => {
     setTokens('token-abc', 'refresh-abc')
 
     const config = await apiClient.interceptors.request.handlers[0].fulfilled({
-      headers: {},
-    } as any)
+      headers: new AxiosHeaders(),
+    })
 
     expect(config.headers.Authorization).toBe('Bearer token-abc')
   })
@@ -47,8 +61,8 @@ describe('api/client — token management', () => {
     const { default: apiClient } = await import('@/api/client')
 
     const config = await apiClient.interceptors.request.handlers[0].fulfilled({
-      headers: {},
-    } as any)
+      headers: new AxiosHeaders(),
+    })
 
     expect(config.headers.Authorization).toBeUndefined()
   })
@@ -58,8 +72,8 @@ describe('api/client — token management', () => {
     localStorage.setItem('current_project_id', 'proj-1')
 
     const config = await apiClient.interceptors.request.handlers[0].fulfilled({
-      headers: {},
-    } as any)
+      headers: new AxiosHeaders(),
+    })
 
     expect(config.headers['X-Project-ID']).toBe('proj-1')
   })
@@ -94,13 +108,13 @@ describe('api/client — 401 handling', () => {
     const { default: apiClient, setTokens, getAccessToken } = await import('@/api/client')
     setTokens('old-access', 'old-refresh')
 
-    const refreshSpy = vi.spyOn(axios, 'post').mockResolvedValue({
-      data: { access: 'new-access', refresh: 'new-refresh' },
-    } as any)
+    const refreshSpy = vi
+      .spyOn(axios, 'post')
+      .mockResolvedValue(makeAxiosResponse({ access: 'new-access', refresh: 'new-refresh' }))
 
     const rejectedHandler = apiClient.interceptors.response.handlers[0].rejected
-    const originalRequest: any = { headers: {}, _retry: false }
-    const error: any = {
+    const originalRequest: MockOriginalRequest = { headers: {}, _retry: false }
+    const error: MockAxiosError = {
       response: { status: 401 },
       config: originalRequest,
     }
@@ -121,10 +135,10 @@ describe('api/client — 401 handling', () => {
     const { default: apiClient, setTokens, getRefreshToken } = await import('@/api/client')
     setTokens('old-access', 'stable-refresh')
 
-    vi.spyOn(axios, 'post').mockResolvedValue({ data: { access: 'new-access' } } as any)
+    vi.spyOn(axios, 'post').mockResolvedValue(makeAxiosResponse({ access: 'new-access' }))
 
     const rejectedHandler = apiClient.interceptors.response.handlers[0].rejected
-    const originalRequest: any = { headers: {}, _retry: false }
+    const originalRequest: MockOriginalRequest = { headers: {}, _retry: false }
     await rejectedHandler({ response: { status: 401 }, config: originalRequest }).catch(() => {})
 
     expect(getRefreshToken()).toBe('stable-refresh')
@@ -146,7 +160,7 @@ describe('api/client — 401 handling', () => {
     await vi.advanceTimersByTimeAsync(6000)
 
     const rejectedHandler = apiClient.interceptors.response.handlers[0].rejected
-    const originalRequest: any = { headers: {}, _retry: false }
+    const originalRequest: MockOriginalRequest = { headers: {}, _retry: false }
 
     await rejectedHandler({ response: { status: 401 }, config: originalRequest }).catch(() => {})
     await vi.advanceTimersByTimeAsync(200)
@@ -161,7 +175,7 @@ describe('api/client — 401 handling', () => {
     const refreshSpy = vi.spyOn(axios, 'post')
 
     const rejectedHandler = apiClient.interceptors.response.handlers[0].rejected
-    const originalRequest: any = { headers: {}, _retry: true }
+    const originalRequest: MockOriginalRequest = { headers: {}, _retry: true }
 
     await rejectedHandler({ response: { status: 401 }, config: originalRequest }).catch(() => {})
 
@@ -189,7 +203,7 @@ describe('api/client — 401 handling', () => {
     const openModalSpy = vi.spyOn(useAuthModalStore.getState(), 'openModal')
 
     const rejectedHandler = apiClient.interceptors.response.handlers[0].rejected
-    const originalRequest: any = { headers: {}, _retry: false }
+    const originalRequest: MockOriginalRequest = { headers: {}, _retry: false }
 
     await rejectedHandler({ response: { status: 401 }, config: originalRequest }).catch(() => {})
     await new Promise((r) => setTimeout(r, 150)) // handleUnauthorized's setTimeout(..., 100)
@@ -214,7 +228,7 @@ describe('api/client — 401 handling', () => {
     // so a failed refresh should redirect to /login instead of showing the
     // session-expired modal.
     const rejectedHandler = apiClient.interceptors.response.handlers[0].rejected
-    const originalRequest: any = { headers: {}, _retry: false }
+    const originalRequest: MockOriginalRequest = { headers: {}, _retry: false }
 
     await rejectedHandler({ response: { status: 401 }, config: originalRequest }).catch(() => {})
     // jsdom doesn't implement real navigation, so `window.location.href`

@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import useConversationStore from '@/store/conversationStore'
 import { conversationsAPI } from '@/api/conversations'
-import type { Conversation } from '@/store/conversationStore'
+import type { Conversation, ConversationSummary } from '@/store/conversationStore'
+import type { APIChat, APIConversation } from '@/api/conversations'
 import type { Chat, Message } from '@/components/models/types'
+import type { Model } from '@/api/llm'
+import { getDefaultModelParameters } from '@/config/modelParameters'
 
 // Keep the REAL converters (toFrontendConversation/toFrontendChat/toFrontendMessage) —
 // only stub the network-calling methods on conversationsAPI.
@@ -35,7 +38,7 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
     model: null,
     messages: [],
     isLoading: false,
-    parameters: {} as any,
+    parameters: getDefaultModelParameters(),
     ...overrides,
   } as Chat
 }
@@ -47,6 +50,82 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     chats: [makeChat()],
+    ...overrides,
+  }
+}
+
+function makeModel(overrides: Partial<Model> = {}): Model {
+  return {
+    id: 'model-1',
+    model_id: 'openai/gpt-4o',
+    name: 'GPT-4o',
+    provider: 'openai',
+    cost_per_1m_prompt: 1,
+    cost_per_1m_completion: 2,
+    max_tokens: 128000,
+    supports_streaming: true,
+    supports_functions: true,
+    supports_structured_outputs: true,
+    supports_reasoning: false,
+    supports_prompt_caching: true,
+    supports_stream_cancellation: true,
+    input_modalities: ['text'],
+    is_available: true,
+    ...overrides,
+  }
+}
+
+function makeApiChat(overrides: Partial<APIChat> = {}): APIChat {
+  return {
+    id: 'chat-2',
+    model_id: 'openai/gpt-4o',
+    model_provider: 'openai',
+    parameters: getDefaultModelParameters(),
+    position: 0,
+    is_disabled: false,
+    is_hidden: false,
+    message_count: 0,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
+function makeApiConversation(overrides: Partial<APIConversation> = {}): APIConversation {
+  return {
+    id: 'conv-1',
+    user: 'u1',
+    name: 'Test conversation',
+    is_custom_name: false,
+    is_archived: false,
+    is_pinned: false,
+    consigliere_session_id: null,
+    message_count: 0,
+    chat_count: 1,
+    model_id: null,
+    model_provider: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    last_message_at: null,
+    ...overrides,
+  }
+}
+
+function makeConversationSummary(overrides: Partial<ConversationSummary> = {}): ConversationSummary {
+  return {
+    id: 'conv-1',
+    name: 'Test conversation',
+    isCustomName: false,
+    isArchived: false,
+    isPinned: false,
+    messageCount: 0,
+    chatCount: 1,
+    modelId: null,
+    modelProvider: null,
+    chatModels: [],
+    createdAt: new Date('2026-01-01'),
+    updatedAt: new Date('2026-01-01'),
+    lastMessageAt: null,
     ...overrides,
   }
 }
@@ -141,7 +220,7 @@ describe('conversationStore', () => {
         is_stopped: false,
         sparks: [],
         created_at: '2026-01-01T00:00:00Z',
-      } as any)
+      })
 
       const result = await useConversationStore.getState().addMessage('conv-1', 'chat-1', {
         role: 'user',
@@ -177,7 +256,7 @@ describe('conversationStore', () => {
         is_stopped: false,
         sparks: [],
         created_at: '2026-01-01T00:00:00Z',
-      } as any)
+      })
 
       // Call with a DIFFERENT conversationId than the active one.
       const result = await useConversationStore.getState().addMessage('conv-OTHER', 'chat-1', {
@@ -198,20 +277,9 @@ describe('conversationStore', () => {
         activeConversation: makeConversation({ chats: [] }),
         activeConversationId: 'conv-1',
       })
-      vi.mocked(conversationsAPI.createChat).mockResolvedValue({
-        id: 'chat-2',
-        model_id: 'openai/gpt-4o',
-        model_provider: 'openai',
-        parameters: {} as any,
-        position: 0,
-        is_disabled: false,
-        is_hidden: false,
-        message_count: 0,
-        created_at: '2026-01-01T00:00:00Z',
-        updated_at: '2026-01-01T00:00:00Z',
-      } as any)
+      vi.mocked(conversationsAPI.createChat).mockResolvedValue(makeApiChat())
 
-      const model = { model_id: 'openai/gpt-4o', provider: 'openai', name: 'GPT-4o' } as any
+      const model = makeModel({ model_id: 'openai/gpt-4o', provider: 'openai', name: 'GPT-4o' })
       const chat = await useConversationStore.getState().addChat('conv-1', model)
 
       expect(chat.id).toBe('chat-2')
@@ -221,15 +289,15 @@ describe('conversationStore', () => {
 
   describe('updateChat — per-chat model override vs app-level model', () => {
     it('updates a chat model independently of other chats in the same conversation', async () => {
-      const chatA = makeChat({ id: 'chat-a', model: { model_id: 'openai/gpt-4o' } as any })
-      const chatB = makeChat({ id: 'chat-b', model: { model_id: 'anthropic/claude' } as any })
+      const chatA = makeChat({ id: 'chat-a', model: makeModel({ model_id: 'openai/gpt-4o' }) })
+      const chatB = makeChat({ id: 'chat-b', model: makeModel({ model_id: 'anthropic/claude' }) })
       useConversationStore.setState({
         activeConversation: makeConversation({ chats: [chatA, chatB] }),
         activeConversationId: 'conv-1',
       })
-      vi.mocked(conversationsAPI.updateChat).mockResolvedValue({} as any)
+      vi.mocked(conversationsAPI.updateChat).mockResolvedValue(makeApiChat())
 
-      const newModel = { model_id: 'google/gemini', provider: 'google' } as any
+      const newModel = makeModel({ model_id: 'google/gemini', provider: 'google' })
       await useConversationStore.getState().updateChat('conv-1', 'chat-a', { model: newModel })
 
       const chats = useConversationStore.getState().activeConversation!.chats
@@ -262,7 +330,7 @@ describe('conversationStore', () => {
         activeConversation: makeConversation(),
         activeConversationId: 'conv-1',
       })
-      const message: Message = { role: 'assistant', content: 'streaming...', timestamp: new Date() } as any
+      const message: Message = { role: 'assistant', content: 'streaming...', timestamp: new Date() }
 
       useConversationStore.getState().appendLocalMessage('chat-1', message)
 
@@ -271,7 +339,7 @@ describe('conversationStore', () => {
     })
 
     it('updateLocalMessage merges partial data into the matching message by message_id', () => {
-      const existing: Message = { role: 'assistant', content: 'partial', timestamp: new Date(), message_id: 'm1' } as any
+      const existing: Message = { role: 'assistant', content: 'partial', timestamp: new Date(), message_id: 'm1' }
       useConversationStore.setState({
         activeConversation: makeConversation({ chats: [makeChat({ messages: [existing] })] }),
         activeConversationId: 'conv-1',
@@ -287,7 +355,7 @@ describe('conversationStore', () => {
         activeConversation: makeConversation(),
         activeConversationId: 'SOME-OTHER-CONVERSATION',
       })
-      const message: Message = { role: 'assistant', content: 'x', timestamp: new Date() } as any
+      const message: Message = { role: 'assistant', content: 'x', timestamp: new Date() }
 
       useConversationStore.getState().appendLocalMessage('chat-1', message)
 
@@ -314,7 +382,7 @@ describe('conversationStore', () => {
   describe('title generation', () => {
     it('startGeneratingTitle sets the placeholder name in the conversation list', () => {
       useConversationStore.setState({
-        conversations: [{ id: 'conv-1', name: 'Old name' } as any],
+        conversations: [makeConversationSummary({ name: 'Old name' })],
       })
 
       useConversationStore.getState().startGeneratingTitle('conv-1', 'New Conversation')
@@ -328,9 +396,9 @@ describe('conversationStore', () => {
       useConversationStore.setState({
         generatingTitleForId: 'conv-1',
         generatingTitleText: 'Draft',
-        conversations: [{ id: 'conv-1', name: 'Draft' } as any],
+        conversations: [makeConversationSummary({ name: 'Draft' })],
       })
-      vi.mocked(conversationsAPI.updateConversation).mockResolvedValue({} as any)
+      vi.mocked(conversationsAPI.updateConversation).mockResolvedValue(makeApiConversation())
 
       await useConversationStore.getState().finishGeneratingTitle('Final Title')
 

@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { Model } from '@/components/models/types'
+import type { ChatGroup, Model } from '@/components/models/types'
 import { llmApi } from '@/api/llm'
 import { useActiveConversationStore } from '@/store/activeConversationStore'
 import type { SetChatGroups } from './types'
@@ -56,7 +56,7 @@ User message: "${userMessage.slice(0, 500)}"`
       if (title && title.length > 0 && title.length < 100) {
         // Update the conversation name in the chat groups
         setChatGroups(prevGroups =>
-          prevGroups.map((group: any) => {
+          prevGroups.map((group: ChatGroup) => {
             if (group.id !== activeGroupId) return group
             // Only update if not already custom named
             if (group.isCustomName) return group

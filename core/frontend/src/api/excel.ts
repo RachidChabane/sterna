@@ -7,10 +7,13 @@
 import axios from 'axios'
 import { getAccessToken, orchestratorClient } from './client'
 
+/** A single spreadsheet cell's value, as the backend's JSON-serialized `read`/`update` responses carry it. */
+type ExcelCellValue = string | number | boolean | null
+
 export interface ExcelData {
   success: boolean
   sheet_names: string[]
-  data: any[][]
+  data: ExcelCellValue[][]
   formulas: (string | null)[][]
   column_widths: Record<number, number>
   error?: string
@@ -18,8 +21,8 @@ export interface ExcelData {
 
 export interface UpdateCellResult {
   success: boolean
-  evaluated_value: any
-  updated_cells?: Record<string, any>
+  evaluated_value: ExcelCellValue
+  updated_cells?: Record<string, ExcelCellValue>
   error?: string
 }
 
@@ -32,7 +35,7 @@ export interface CellUpdate {
 
 export interface BatchUpdateResult {
   success: boolean
-  updated_cells: Record<string, any>
+  updated_cells: Record<string, ExcelCellValue>
   count: number
   error?: string
 }

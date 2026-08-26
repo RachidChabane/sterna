@@ -15,6 +15,14 @@ import {
   type APIMessage,
 } from '@/api/conversations'
 import type { Model } from '@/api/llm'
+import { getDefaultModelParameters } from '@/config/modelParameters'
+
+/** A persisted `tool_executions` step exactly as the backend's flexible JSON carries it. */
+interface PersistedToolExecutionsStep {
+  type: 'tool_executions'
+  isExecuting: boolean
+  executions: Array<{ isExecuting: boolean; tool_call: { id: string } }>
+}
 
 function makeApiMessage(overrides: Partial<APIMessage> = {}): APIMessage {
   return {
@@ -44,7 +52,7 @@ function makeApiChat(overrides: Partial<APIChat> = {}): APIChat {
     id: 'chat-1',
     model_id: 'openai/gpt-4o',
     model_provider: 'openai',
-    parameters: {} as any,
+    parameters: getDefaultModelParameters(),
     position: 0,
     is_disabled: false,
     is_hidden: false,
@@ -57,7 +65,7 @@ function makeApiChat(overrides: Partial<APIChat> = {}): APIChat {
 
 describe('toFrontendMessage', () => {
   it('extracts text from a plain string content', () => {
-    const msg = toFrontendMessage(makeApiMessage({ content: 'plain string' as any }))
+    const msg = toFrontendMessage(makeApiMessage({ content: 'plain string' }))
     expect(msg.content).toBe('plain string')
   })
 
@@ -68,7 +76,7 @@ describe('toFrontendMessage', () => {
 
   it('extracts text from a multipart array content', () => {
     const msg = toFrontendMessage(
-      makeApiMessage({ content: [{ type: 'text', text: 'multipart' }] as any })
+      makeApiMessage({ content: [{ type: 'text', text: 'multipart' }] })
     )
     expect(msg.content).toBe('multipart')
   })
@@ -79,7 +87,7 @@ describe('toFrontendMessage', () => {
         content: [
           { type: 'text', text: 'first' },
           { type: 'text', text: 'second' },
-        ] as any,
+        ],
       })
     )
     expect(msg.content).toBe('second')
@@ -99,7 +107,7 @@ describe('toFrontendMessage', () => {
             size_bytes: 1234,
             download_url: '/download/asset-1',
           },
-        ] as any,
+        ],
       })
     )
     expect(msg.attachments).toHaveLength(1)
@@ -122,7 +130,7 @@ describe('toFrontendMessage', () => {
             asset_type: 'generated',
             download_url: '/download/asset-2',
           },
-        ] as any,
+        ],
       })
     )
     expect(msg.attachments![0].type).toBe('file')
@@ -148,7 +156,7 @@ describe('toFrontendMessage', () => {
             asset_type: 'generated',
             download_url: '/d/a-audio',
           },
-        ] as any,
+        ],
       })
     )
     expect(msg.attachments!.map(a => a.type)).toEqual(['video', 'audio'])
@@ -176,32 +184,30 @@ describe('toFrontendMessage', () => {
   })
 
   it('sanitizes stale isExecuting flags on persisted tool_executions steps', () => {
-    const msg = toFrontendMessage(
-      makeApiMessage({
-        steps: [
-          {
-            type: 'tool_executions',
-            isExecuting: true,
-            executions: [{ isExecuting: true, tool_call: { id: 't1' } }],
-          } as any,
-        ],
-      })
-    )
-    const step = msg.steps![0] as any
+    const rawStep: PersistedToolExecutionsStep = {
+      type: 'tool_executions',
+      isExecuting: true,
+      executions: [{ isExecuting: true, tool_call: { id: 't1' } }],
+    }
+    const msg = toFrontendMessage(makeApiMessage({ steps: [rawStep] }))
+    const step = msg.steps![0]
+    if (step.type !== 'tool_executions') throw new Error('expected a tool_executions step')
     expect(step.isExecuting).toBe(false)
     expect(step.executions[0].isExecuting).toBe(false)
   })
 
   it('sanitizes stale isStreaming flags on persisted reasoning steps', () => {
     const msg = toFrontendMessage(
-      makeApiMessage({ steps: [{ type: 'reasoning', content: 'thinking', isStreaming: true } as any] })
+      makeApiMessage({ steps: [{ type: 'reasoning', content: 'thinking', isStreaming: true }] })
     )
-    expect((msg.steps![0] as any).isStreaming).toBe(false)
+    const step = msg.steps![0]
+    if (step.type !== 'reasoning') throw new Error('expected a reasoning step')
+    expect(step.isStreaming).toBe(false)
   })
 
   it('extracts web_sources from metadata', () => {
     const msg = toFrontendMessage(
-      makeApiMessage({ metadata: { web_sources: [{ url: 'https://x.test' }] } as any })
+      makeApiMessage({ metadata: { web_sources: [{ url: 'https://x.test' }] } })
     )
     expect(msg.web_sources).toEqual([{ url: 'https://x.test' }])
   })
@@ -210,7 +216,7 @@ describe('toFrontendMessage', () => {
     const msg = toFrontendMessage(
       makeApiMessage({
         sparks: [
-          { id: 's1', title: 'Chart', framework: 'react', code: 'x', version: 1 } as any,
+          { id: 's1', title: 'Chart', framework: 'react', code: 'x', version: 1 },
         ],
       })
     )
@@ -323,7 +329,7 @@ describe('toFrontendChat — the three-level model distinction', () => {
 
   it('maps chat-level sparks', () => {
     const apiChat = makeApiChat({
-      sparks: [{ id: 'sp1', title: 'Report', framework: 'markdown', code: '# hi', version: 1 } as any],
+      sparks: [{ id: 'sp1', title: 'Report', framework: 'markdown', code: '# hi', version: 1 }],
     })
     const chat = toFrontendChat(apiChat)
     expect(chat.sparks).toHaveLength(1)

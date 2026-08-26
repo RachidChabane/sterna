@@ -1,4 +1,5 @@
-import type { Chat, Message } from '@/components/models/types'
+import type { Chat, ChatGroup, Message } from '@/components/models/types'
+import type { WebSource } from '@/api/llm'
 import type { StreamCallbacksContext } from './context'
 import { getReasoningDelta } from '../streamingStepHelpers'
 
@@ -31,7 +32,7 @@ export function buildMessageContentCallbacks(ctx: StreamCallbacksContext) {
 
     // Update the message in real-time using steps structure
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) => {
+      prevGroups.map((group: ChatGroup) => {
         if (group.id !== activeGroupId) return group
 
         return {
@@ -132,7 +133,7 @@ export function buildMessageContentCallbacks(ctx: StreamCallbacksContext) {
 
     // Update the message with accumulated reasoning in real-time using steps structure
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) => {
+      prevGroups.map((group: ChatGroup) => {
         if (group.id !== activeGroupId) return group
 
         return {
@@ -174,9 +175,9 @@ export function buildMessageContentCallbacks(ctx: StreamCallbacksContext) {
                     // Check if there's a tool_executions step between the last reasoning and now.
                     // If not (just text), merge into the existing reasoning step to avoid
                     // a duplicate reasoning block appearing after the response.
-                    const existingReasoningIdx = steps.findIndex((s: any) => s.type === 'reasoning')
+                    const existingReasoningIdx = steps.findIndex((s) => s.type === 'reasoning')
                     const hasToolsBetween = existingReasoningIdx >= 0 &&
-                      steps.slice(existingReasoningIdx + 1).some((s: any) => s.type === 'tool_executions')
+                      steps.slice(existingReasoningIdx + 1).some((s) => s.type === 'tool_executions')
 
                     if (existingReasoningIdx >= 0 && !hasToolsBetween) {
                       // Merge: update the existing reasoning step with full accumulated content
@@ -243,13 +244,13 @@ export function buildMessageContentCallbacks(ctx: StreamCallbacksContext) {
     )
   },
 
-  onWebSources: (sources: any[]) => {
+  onWebSources: (sources: WebSource[]) => {
     // Accumulate web search sources
     acc.accumulatedWebSources = sources
 
     // Update the message with web search sources
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) => {
+      prevGroups.map((group: ChatGroup) => {
         if (group.id !== activeGroupId) return group
 
         return {
@@ -311,7 +312,7 @@ export function buildMessageContentCallbacks(ctx: StreamCallbacksContext) {
 
       // Update the message with accumulated images
       setChatGroups(prevGroups =>
-        prevGroups.map((group: any) => {
+        prevGroups.map((group: ChatGroup) => {
           if (group.id !== activeGroupId) return group
 
           return {

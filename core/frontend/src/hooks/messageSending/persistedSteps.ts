@@ -1,3 +1,7 @@
+import type { Message, ToolExecution } from '@/components/models/types'
+
+type PersistedSteps = NonNullable<Message['steps']>
+
 /**
  * Build the `steps` array persisted to the backend for an assistant message:
  * an optional leading reasoning step, then the tracked text/tool_executions
@@ -12,10 +16,10 @@
  */
 export function buildPersistedSteps(
   accumulatedReasoning: string,
-  accumulatedSteps: any[],
+  accumulatedSteps: PersistedSteps,
   options: { filterIncomplete: boolean },
-): any[] {
-  const persistedSteps: any[] = []
+): PersistedSteps {
+  const persistedSteps: PersistedSteps = []
 
   if (accumulatedReasoning) {
     persistedSteps.push({ type: 'reasoning', content: accumulatedReasoning, isStreaming: false })
@@ -28,7 +32,7 @@ export function buildPersistedSteps(
     }
     if (step.type !== 'tool_executions') continue
 
-    const decorate = (exec: any) => ({
+    const decorate = (exec: ToolExecution): ToolExecution => ({
       ...exec,
       isExecuting: false,
       // Ensure coding agent data persists
@@ -38,15 +42,15 @@ export function buildPersistedSteps(
 
     if (options.filterIncomplete) {
       const completedExecs = step.executions
-        ?.filter((exec: any) => !exec.isExecuting || exec.result)
+        .filter((exec) => !exec.isExecuting || exec.result)
         .map(decorate)
-      if (completedExecs?.length > 0) {
+      if (completedExecs.length > 0) {
         persistedSteps.push({ type: 'tool_executions', executions: completedExecs, isExecuting: false })
       }
     } else {
       persistedSteps.push({
         type: 'tool_executions',
-        executions: step.executions?.map(decorate),
+        executions: step.executions.map(decorate),
         isExecuting: false,
       })
     }

@@ -14,7 +14,29 @@ import { useNavigationStore } from '../store/navigationStore'
 import { useOnboardingStore } from '../store/onboardingStore'
 import { useUIStore } from '../store/uiStore'
 import { useSettingsStore, SETTINGS_PREFERENCE_KEYS } from '../store/settingsStore'
+import type {
+  TTSSettings,
+  ChatSettings,
+  AccessibilitySettings,
+  PrivacySettings,
+  InstructionsSettings,
+  STTSettings,
+  WatermarkSettings,
+} from '../store/settingsStore'
+import type { CodeThemeId } from '../constants/codeThemes'
 import { useThemeStore } from '../store/themeStore'
+
+/** The subset of settings-store state a single backend-preferences load can patch in one `setState()` call. */
+interface SettingsPatch {
+  tts?: TTSSettings
+  chat?: ChatSettings
+  accessibility?: AccessibilitySettings
+  privacy?: PrivacySettings
+  instructions?: InstructionsSettings
+  stt?: STTSettings
+  watermark?: WatermarkSettings
+  codeTheme?: CodeThemeId
+}
 
 /**
  * Preference key mapping
@@ -156,7 +178,7 @@ export const loadPreferencesFromBackend = async (): Promise<void> => {
     }
 
     // Settings - Load from backend using setState() to avoid triggering sync
-    const settingsState: Record<string, any> = {}
+    const settingsState: SettingsPatch = {}
 
     // TTS Settings
     if (backendPrefs[SETTINGS_PREFERENCE_KEYS.TTS_ENABLED] !== undefined) {
@@ -355,7 +377,7 @@ export const usePreferencesLoader = () => {
    * Populate all stores from backend preferences
    */
   const populateStoresFromBackend = async (
-    backendPrefs: Record<string, any>
+    backendPrefs: Record<string, unknown>
   ): Promise<void> => {
     // Models
     if (backendPrefs[PREFERENCE_KEYS.MODELS_FAVORITES]) {
@@ -382,13 +404,13 @@ export const usePreferencesLoader = () => {
 
     // UI
     if (backendPrefs[PREFERENCE_KEYS.UI_SIDEBAR_OPEN] !== undefined) {
-      uiStore.setSidebarOpen(backendPrefs[PREFERENCE_KEYS.UI_SIDEBAR_OPEN])
+      uiStore.setSidebarOpen(backendPrefs[PREFERENCE_KEYS.UI_SIDEBAR_OPEN] as boolean)
     }
 
     // Note: UI_SIDEBAR_COLLAPSED is only stored in localStorage, not synced to backend
 
     if (backendPrefs[PREFERENCE_KEYS.UI_NAVIGATION_ORDER]) {
-      navigationStore.setNavigationOrder(backendPrefs[PREFERENCE_KEYS.UI_NAVIGATION_ORDER])
+      navigationStore.setNavigationOrder(backendPrefs[PREFERENCE_KEYS.UI_NAVIGATION_ORDER] as string[])
     }
 
     // Theme - Load from backend and apply (skipSync=true to avoid re-syncing)
@@ -401,7 +423,7 @@ export const usePreferencesLoader = () => {
 
     // Onboarding
     if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_CURRENT_STEP] !== undefined) {
-      onboardingStore.setCurrentStep(backendPrefs[PREFERENCE_KEYS.ONBOARDING_CURRENT_STEP])
+      onboardingStore.setCurrentStep(backendPrefs[PREFERENCE_KEYS.ONBOARDING_CURRENT_STEP] as number)
     }
 
     if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_COMPLETED] !== undefined) {
@@ -417,13 +439,13 @@ export const usePreferencesLoader = () => {
 
     if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_API_KEY_CONFIGURED] !== undefined) {
       onboardingStore.setApiKeyConfigured(
-        backendPrefs[PREFERENCE_KEYS.ONBOARDING_API_KEY_CONFIGURED]
+        backendPrefs[PREFERENCE_KEYS.ONBOARDING_API_KEY_CONFIGURED] as boolean
       )
     }
 
     if (backendPrefs[PREFERENCE_KEYS.ONBOARDING_SAMPLE_EVALUATION_RUN] !== undefined) {
       onboardingStore.setSampleEvaluationRun(
-        backendPrefs[PREFERENCE_KEYS.ONBOARDING_SAMPLE_EVALUATION_RUN]
+        backendPrefs[PREFERENCE_KEYS.ONBOARDING_SAMPLE_EVALUATION_RUN] as boolean
       )
     }
   }
@@ -434,7 +456,7 @@ export const usePreferencesLoader = () => {
   const migrateLocalDataToBackend = async (): Promise<void> => {
     try {
       // Get current store states (which are from localStorage)
-      const localData: Record<string, any> = {}
+      const localData: Record<string, unknown> = {}
 
       // Check models store
       if (modelStore.favorites.length > 0) {

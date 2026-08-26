@@ -11,7 +11,7 @@ import type { Chat, ChatGroup, Message } from '@/components/models/types'
 // ============================================================================
 
 /** Lightweight, non-file metadata describing one attachment on a serialized message. */
-interface SerializedAttachmentMeta {
+export interface SerializedAttachmentMeta {
   type: 'image' | 'file'
   filename: string
   mime?: string
@@ -134,7 +134,7 @@ export interface ConversationAnalysis {
     speed?: string
     cost_efficiency?: string
   }
-  user_preferences: Record<string, any>
+  user_preferences: Record<string, unknown>
   recommended_from_conversation?: RecommendedModelFromConversation
   alternative_models: ModelRecommendation[]
   recommendations: ModelRecommendation[] // deprecated - use alternative_models

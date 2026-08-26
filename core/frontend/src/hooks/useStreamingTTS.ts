@@ -15,6 +15,21 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { fetchStream } from '@/api/transport'
 import { useSettingsStore } from '@/store/settingsStore'
+import type { TTSModel, TTSProviderId } from '@/types/voiceRoom'
+
+/** JSON body posted to `/api/voice-rooms/tts/`, built from the current TTS settings. */
+interface TTSRequestBody {
+  text: string
+  provider: TTSProviderId
+  voice_id: string
+  model_id: TTSModel
+  speed: number
+  stability?: number
+  similarity_boost?: number
+  style?: number
+  use_speaker_boost?: boolean
+  language_code?: string
+}
 
 interface UseStreamingTTSOptions {
   /** Minimum characters before speaking (to avoid tiny chunks) */
@@ -239,7 +254,7 @@ export function useStreamingTTS(options: UseStreamingTTSOptions = {}): UseStream
     setIsLoading(true)
 
     try {
-      const requestBody: Record<string, any> = {
+      const requestBody: TTSRequestBody = {
         text: cleanText,
         provider,
         voice_id: voiceId,

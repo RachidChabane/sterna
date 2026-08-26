@@ -130,7 +130,7 @@ describe('useMessageComposition', () => {
     })
 
     it('a tool continuation sends existing messages without appending a new user message', async () => {
-      const chat = makeChat({ messages: [{ role: 'assistant', content: 'tool result', timestamp: new Date() } as any] })
+      const chat = makeChat({ messages: [{ role: 'assistant', content: 'tool result', timestamp: new Date() }] })
       const { hook, harness, sendToModel } = renderComposition(chat)
 
       await act(async () => {

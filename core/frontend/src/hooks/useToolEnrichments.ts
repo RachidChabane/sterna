@@ -18,6 +18,7 @@ import {
   extractNearbyPlaces,
   extractDirections
 } from '@/utils/googleMapsExtractors'
+import type { MediaItem } from '@/components/models/BraveSearchMediaCarousel'
 
 interface ToolExecution {
   tool_call: {
@@ -28,7 +29,7 @@ interface ToolExecution {
       arguments: string
     }
   }
-  result: any
+  result: unknown
   success: boolean | null
   isExecuting?: boolean
 }
@@ -40,23 +41,108 @@ interface Step {
   executions?: ToolExecution[]
 }
 
-interface EnrichedResults {
-  infobox?: any
-  faq?: any
-  discussions: any[]
-  locations: any[]
-  news_results: any[]
-  videos_results?: any[]
-  web_results: any[]
-  directions?: any
+/** Brave Search infobox — mirrors InfoboxDisplay's `infobox` prop shape. */
+interface BraveInfobox {
+  title?: string
+  description?: string
+  long_desc?: string
+  images?: Array<{ url: string; title?: string }>
+  data?: Array<{ label: string; value: string }>
+  url?: string
+  ratings?: Array<{
+    ratingValue?: number
+    bestRating?: number
+    reviewCount?: number
+    profile?: string
+    is_tripadvisor?: boolean
+  }>
+  profiles?: Array<{ name: string; url: string; long_name?: string }>
+}
+
+/** Brave Search FAQ block — mirrors FAQDisplay's `faq` prop shape. */
+interface BraveFaq {
+  results?: Array<{ question: string; answer: string; url?: string }>
+}
+
+/** A Brave Search discussion result — mirrors DiscussionsDisplay's `discussions` item shape. */
+interface Discussion {
+  title: string
+  url: string
+  description?: string
+  forum?: { name: string; url: string }
+  num_comments?: number
+  score?: number
+  published_date?: string
+}
+
+/** A map location (Brave local search or Google Maps) — mirrors LocationsMap's `locations` item shape. */
+interface EnrichedLocation {
+  id?: string
+  title: string
+  address?: string
+  coordinates?: { latitude: number; longitude: number }
+  rating?: number
+  phone?: string
+  opening_hours?: string
+  url?: string
+  thumbnail?: string
+  image?: string
+  icon_category?: string
+}
+
+/** A Brave Search news article — mirrors NewsClusterDisplay's `news` item shape. */
+interface NewsArticle {
+  title: string
+  url: string
+  description?: string
+  thumbnail?: { src: string }
+  age?: string
+  source?: { name: string; favicon?: string }
+  published_date?: string
+}
+
+/** A Brave Search web result — mirrors WebResultsDisplay's `results` item shape. */
+interface WebResult {
+  title: string
+  url: string
+  description?: string
+  thumbnail?: { src: string }
+}
+
+/** Google Maps directions/route — mirrors DirectionsMap's `directions` prop shape. */
+interface DirectionsData {
+  summary: string
+  distance: string
+  duration: string
+  start_address: string
+  end_address: string
+  polyline: string
+  steps: Array<{ instruction: string; distance: string; duration: string }>
+}
+
+export interface EnrichedResults {
+  infobox?: BraveInfobox
+  faq?: BraveFaq
+  discussions: Discussion[]
+  locations: EnrichedLocation[]
+  news_results: NewsArticle[]
+  videos_results?: MediaItem[]
+  web_results: WebResult[]
+  directions?: DirectionsData
+}
+
+/** One Brave Search media carousel (images or videos) extracted from a step's tool executions. */
+export interface BraveMediaGroup {
+  items: MediaItem[]
+  title: string
 }
 
 /**
  * Extract Brave Search media (images/videos) from tool executions
  */
-export const useBraveSearchMedia = (steps: Step[]) => {
+export const useBraveSearchMedia = (steps: Step[]): BraveMediaGroup[] => {
   return useMemo(() => {
-    const allMedia: { items: any[]; title: string }[] = []
+    const allMedia: BraveMediaGroup[] = []
 
     steps.forEach((step) => {
       if (step.type === 'tool_executions' && step.executions) {
@@ -82,6 +168,18 @@ export const useBraveSearchMedia = (steps: Step[]) => {
 
     return allMedia
   }, [steps])
+}
+
+/**
+ * Google Maps extractors report a missing rating as `null`; the map UI's
+ * location shape only accepts `number | undefined`. Normalize at the boundary
+ * rather than widening the shared `EnrichedLocation` type to `null` (which
+ * the renderer doesn't accept either).
+ */
+function normalizeLocationRating<T extends { rating?: number | null }>(
+  location: T
+): Omit<T, 'rating'> & { rating?: number } {
+  return { ...location, rating: location.rating ?? undefined }
 }
 
 /**
@@ -143,7 +241,7 @@ export const useEnrichedResults = (steps: Step[]): EnrichedResults | null => {
             const locations = extractGeocodeLocations(execution)
             if (locations) {
               if (!enrichments) enrichments = { discussions: [], locations: [], news_results: [], web_results: [] }
-              enrichments.locations = [...(enrichments.locations || []), ...locations]
+              enrichments.locations = [...(enrichments.locations || []), ...locations.map(normalizeLocationRating)]
             }
           }
 
@@ -157,7 +255,7 @@ export const useEnrichedResults = (steps: Step[]): EnrichedResults | null => {
             const locations = extractNearbyPlaces(execution)
             if (locations) {
               if (!enrichments) enrichments = { discussions: [], locations: [], news_results: [], web_results: [] }
-              enrichments.locations = [...(enrichments.locations || []), ...locations]
+              enrichments.locations = [...(enrichments.locations || []), ...locations.map(normalizeLocationRating)]
             }
           }
 

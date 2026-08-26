@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import useModelStore from '@/store/modelStore'
 import { openRouterApi } from '@/api/endpoints'
 import type { ModelCatalogEntry } from '@/types/models'
+import { makeAxiosResponse } from '@/test/axiosMocks'
 
 vi.mock('@/api/endpoints', () => ({
   openRouterApi: {
@@ -74,9 +75,9 @@ describe('modelStore', () => {
   describe('fetchModels', () => {
     it('fetches page 1 and stores results', async () => {
       const model = makeModel()
-      vi.mocked(openRouterApi.models).mockResolvedValue({
-        data: { results: [model], count: 1, provider_counts: { openai: 1 } },
-      } as any)
+      vi.mocked(openRouterApi.models).mockResolvedValue(
+        makeAxiosResponse({ results: [model], count: 1, provider_counts: { openai: 1 } })
+      )
 
       await useModelStore.getState().fetchModels()
 
@@ -106,9 +107,9 @@ describe('modelStore', () => {
         lastFetchedPage: 1,
         currentFilters: {},
       })
-      vi.mocked(openRouterApi.models).mockResolvedValue({
-        data: { results: [], count: 0, provider_counts: {} },
-      } as any)
+      vi.mocked(openRouterApi.models).mockResolvedValue(
+        makeAxiosResponse({ results: [], count: 0, provider_counts: {} })
+      )
 
       await useModelStore.getState().fetchModels(1, {}, true)
 
@@ -210,9 +211,9 @@ describe('modelStore', () => {
     it('selects the Sterna auto-router entry when present in the catalog', async () => {
       const sterna = makeModel({ model_id: DEFAULT_MODEL_ID, name: 'Sterna' })
       const other = makeModel({ model_id: 'openai/gpt-4o' })
-      vi.mocked(openRouterApi.models).mockResolvedValue({
-        data: { results: [sterna, other], count: 2 },
-      } as any)
+      vi.mocked(openRouterApi.models).mockResolvedValue(
+        makeAxiosResponse({ results: [sterna, other], count: 2 })
+      )
 
       await useModelStore.getState().setDefaultModelIfNeeded()
 
@@ -221,9 +222,9 @@ describe('modelStore', () => {
 
     it('falls back to the first catalog entry when Sterna is missing', async () => {
       const other = makeModel({ model_id: 'openai/gpt-4o' })
-      vi.mocked(openRouterApi.models).mockResolvedValue({
-        data: { results: [other], count: 1 },
-      } as any)
+      vi.mocked(openRouterApi.models).mockResolvedValue(
+        makeAxiosResponse({ results: [other], count: 1 })
+      )
 
       await useModelStore.getState().setDefaultModelIfNeeded()
 
@@ -231,7 +232,7 @@ describe('modelStore', () => {
     })
 
     it('leaves currentModel null when the catalog is empty', async () => {
-      vi.mocked(openRouterApi.models).mockResolvedValue({ data: { results: [], count: 0 } } as any)
+      vi.mocked(openRouterApi.models).mockResolvedValue(makeAxiosResponse({ results: [], count: 0 }))
 
       await useModelStore.getState().setDefaultModelIfNeeded()
 
