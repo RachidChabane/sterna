@@ -1,6 +1,6 @@
 # Data Science with Sterna Sandbox
 
-Guide for using the full data science environment with AI models.
+Guide for using the sandbox's data science packages with AI models.
 
 ## Quick Start
 
@@ -10,7 +10,12 @@ No additional configuration needed! The models can already use all pre-installed
 
 ### ✅ What Models Can Do (Already Working)
 
-Models can execute Python code with access to 90+ libraries:
+Models can execute Python code against the packages pinned in
+`Dockerfile.sandbox-datascience` — pandas, numpy, and matplotlib for
+analysis and visualization, plus openpyxl, python-docx, and reportlab
+for document generation. See
+[SANDBOX_IMAGES.md](./SANDBOX_IMAGES.md) for the complete, current
+list.
 
 ```python
 # Example user request:
@@ -20,7 +25,6 @@ Models can execute Python code with access to 90+ libraries:
 execute_code(code="""
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 # Load data
 df = pd.read_csv('/workspace/data.csv')
@@ -30,9 +34,10 @@ print("Dataset shape:", df.shape)
 print("\nSummary statistics:")
 print(df.describe())
 
-# Correlation heatmap
+# Correlation heatmap (matplotlib only — no seaborn in the image)
 plt.figure(figsize=(10, 8))
-sns.heatmap(df.corr(), annot=True, cmap='coolwarm')
+plt.imshow(df.corr(), cmap='coolwarm')
+plt.colorbar()
 plt.title('Correlation Matrix')
 plt.savefig('/workspace/correlation_heatmap.png')
 print("\nVisualization saved to /workspace/correlation_heatmap.png")
@@ -60,67 +65,63 @@ The model receives the output and can:
 5. Saves visualizations
 6. Provides insights
 
-### 2. Machine Learning
+### 2. Excel Report Generation
 
-**User:** "Build a classification model to predict customer churn"
-
-**Model automatically:**
-1. Loads and explores data
-2. Preprocesses features
-3. Splits train/test sets
-4. Trains multiple models (RF, XGBoost, LightGBM)
-5. Evaluates performance
-6. Saves the best model
-7. Generates feature importance plots
-
-### 3. Image Processing
-
-**User:** "Resize and enhance these images"
+**User:** "Turn this CSV into a formatted Excel report"
 
 **Model automatically:**
-1. Uses PIL/opencv to load images
-2. Applies transformations
-3. Saves processed images
-4. Creates before/after comparisons
+1. Loads the CSV with pandas
+2. Computes summary statistics
+3. Writes a styled workbook with openpyxl (fills, fonts, column widths)
+4. Provides a summary
 
-### 4. PDF Analysis
+### 3. Word/PDF Document Generation
 
-**User:** "Extract tables from this PDF and convert to Excel"
+**User:** "Write this analysis up as a report"
 
 **Model automatically:**
-1. Uses pymupdf to extract tables
-2. Parses with pandas
-3. Saves to Excel with openpyxl
-4. Provides summary
+1. Runs the analysis with pandas/matplotlib
+2. Saves any charts as PNGs
+3. Assembles a document with python-docx or reportlab, embedding the
+   charts
+4. Provides a summary
+
+Machine learning workflows (scikit-learn, XGBoost, LightGBM), image
+processing (PIL, opencv), and PDF text/table extraction (pymupdf,
+pypdf) are **not available** in the current image — none of those
+packages are installed. A model asked to do one of these either runs
+`pip install --user <package>` (see [Limitations](#limitations)
+below for why `--user` specifically), or the task needs
+`Dockerfile.sandbox-datascience` extended and the image rebuilt
+first.
 
 ---
 
 ## Available Libraries
 
-See [SANDBOX_IMAGES.md](./SANDBOX_IMAGES.md) for the complete list of 90+ pre-installed libraries.
+See [SANDBOX_IMAGES.md](./SANDBOX_IMAGES.md) for the complete, current
+list of pre-installed packages — a short, pinned list, not a large
+stack.
 
 ### Key Categories:
-- **Data:** pandas, polars, duckdb
-- **ML:** scikit-learn, xgboost, lightgbm, catboost
-- **Viz:** matplotlib, seaborn, plotly, bokeh
-- **Files:** openpyxl, python-docx, pypdf, pymupdf
-- **Image:** pillow, opencv, scikit-image
-- **Stats:** scipy, statsmodels, pingouin
+- **Data:** pandas, numpy
+- **Viz:** matplotlib
+- **Files:** openpyxl, python-docx, reportlab
+- **Utilities:** requests, pyyaml, python-dotenv, tqdm, pydantic, ipython
 
 ---
 
-## System Prompt (Auto-Included)
+## Tool Description (What the Model Actually Sees)
 
-When `enable_file_tools=True`, models automatically receive this context:
+The `execute_code` tool's prompt snippet
+(`llm/agent_core/tools/execute_code.py`) tells the model:
 
-> Your code execution environment has a comprehensive data science stack pre-installed.
-> Available libraries include: numpy, pandas, polars, scikit-learn, xgboost, matplotlib,
-> seaborn, plotly, opencv, and many more.
->
-> You can use these libraries directly without installation. For visualizations, save plots
-> to files (e.g., plt.savefig('/workspace/plot.png')) as the environment has no display.
+> Python code execution with pandas, numpy, matplotlib available. Use
+> plt.savefig() not plt.show().
 
-This means models know exactly what's available!
+That is the model's only advance notice of what is installed — it is
+scoped to the three packages actually guaranteed, not to a larger
+stack.
 
 ---
 
@@ -166,24 +167,14 @@ async def analyze_dataframe(
 
 ### 1. Memory Management
 
-For large datasets (>500MB), increase sandbox memory:
+For large datasets, raise `SANDBOX_MEMORY_LIMIT` (env var read in
+`sandbox_executor.py`; `docker-compose.sandbox.yml` currently sets
+`2g`).
 
-```python
-# sandbox_executor.py
-mem_limit="2048m",  # 2GB for large datasets
-```
+### 2. Chunking
 
-### 2. Efficient Libraries
-
-Recommend to models:
-- **polars** > pandas (for large datasets)
-- **duckdb** > pandas (for SQL-like queries)
-- **orjson** > json (for large JSON files)
-- **fastparquet** > csv (for columnar data)
-
-### 3. Chunking
-
-For very large files, process in chunks:
+For very large files, process in chunks with pandas rather than
+loading the whole file:
 
 ```python
 # Process CSV in chunks
@@ -191,16 +182,26 @@ for chunk in pd.read_csv('large.csv', chunksize=10000):
     process(chunk)
 ```
 
+Faster alternatives to pandas for large-data or SQL-like workloads
+(polars, duckdb) are not installed in the current image — they would
+need to be added to `Dockerfile.sandbox-datascience`, or `pip
+install --user`ed at runtime, before a model could rely on them.
+
 ---
 
 ## Limitations
 
-### ❌ No Internet Access
-- Cannot `pip install` additional packages
-- Cannot download data from URLs
-- Cannot access external APIs
+### ⚠️ Whitelist-Only Egress, Not Open Internet
+- The container's root filesystem is read-only; only `/workspace` and
+  `/tmp` are writable tmpfs. `PYTHONUSERBASE=/workspace/.pip-packages`
+  redirects `pip install --user` there, so `--user` installs work
+  from PyPI (which is on the egress whitelist); a plain `pip install`
+  targets the read-only root and fails
+- Requests to arbitrary URLs/APIs are blocked unless the domain is on
+  `runtime/whitelist.txt` / `allowed-domains.txt`
 
-**Workaround:** Pre-install packages in Dockerfile or use file uploads
+**Workaround:** pre-install packages the task needs regularly into
+`Dockerfile.sandbox-datascience`, or add the domain to the whitelist.
 
 ### ❌ No Display
 - Cannot show interactive plots
@@ -208,12 +209,14 @@ for chunk in pd.read_csv('large.csv', chunksize=10000):
 
 **Workaround:** Save plots to files, models can read them back
 
-### ❌ Resource Limits
-- CPU: 1 core (configurable)
-- Memory: 1.5GB (configurable)
-- Disk: 2GB tmpfs
-
-**Workaround:** Increase limits in `sandbox_executor.py`
+### Resource Limits
+- CPU: 1 core (hardcoded `cpu_quota`/`cpu_period` in
+  `sandbox_executor.py`)
+- PIDs: 100 (hardcoded `pids_limit`)
+- Memory: set by `SANDBOX_MEMORY_LIMIT` (`2g` in
+  `docker-compose.sandbox.yml`)
+- Workspace: tmpfs, size set by `SANDBOX_WORKSPACE_SIZE` (default
+  `1024M`)
 
 ---
 
@@ -230,25 +233,20 @@ If missing, add to `Dockerfile.sandbox-datascience` and rebuild.
 
 ### Out of Memory
 
-Increase memory limit:
-```python
-mem_limit="2048m"  # or higher
-```
+Raise `SANDBOX_MEMORY_LIMIT` (see [Limitations](#limitations) above).
 
 ### Code Timeout
 
-Increase execution timeout in orchestrator:
-```python
-timeout=60  # seconds
-```
+File operations (`_exec_with_timeout` in `sandbox_executor.py`) are
+capped at `FILE_OPERATION_TIMEOUT` (30 seconds); a task that needs
+longer needs that constant raised, not a per-call parameter.
 
 ---
 
 ## Next Steps
 
-1. ✅ **No action needed** - Models can already use all libraries
-2. 📚 **Learn** - Check [SANDBOX_IMAGES.md](./SANDBOX_IMAGES.md) for full library list
-3. 🎨 **Customize** - Add domain-specific libraries to Dockerfile if needed
-4. 🔧 **Optimize** - Create custom tools for repeated workflows (optional)
-
-The data science environment is **production-ready** with existing tools!
+1. 📚 **Learn** - Check [SANDBOX_IMAGES.md](./SANDBOX_IMAGES.md) for
+   the current package list before assuming a library is available
+2. 🎨 **Customize** - Add domain-specific libraries to
+   `Dockerfile.sandbox-datascience` and rebuild the image
+3. 🔧 **Optimize** - Create custom tools for repeated workflows (optional)
