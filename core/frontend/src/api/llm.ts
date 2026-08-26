@@ -11,6 +11,7 @@
  * ./hand-written/streaming and are re-exported below.
  */
 import apiClient, { handleUnauthorized } from './client'
+import { fetchStream } from './transport'
 import type {
   CompletionMessage,
   CompletionRequest,
@@ -131,7 +132,6 @@ export const llmApi = {
     options?: { controller?: AbortController; uploadedFiles?: File[] }
   ) => {
     const baseURL = apiClient.defaults.baseURL || ''
-    const token = localStorage.getItem('access_token')
 
     // Set up timeout controller (2 minutes)
     const controller = options?.controller ?? new AbortController()
@@ -189,25 +189,37 @@ export const llmApi = {
 
         requestBody = formData
         // Don't set Content-Type - browser sets it automatically with boundary
-        requestHeaders = {
-          'Authorization': `Bearer ${token}`
-        }
+        requestHeaders = {}
       } else {
         // Use JSON for regular requests (no files)
         requestBody = JSON.stringify(data)
         requestHeaders = {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         }
       }
 
-      // Make the streaming request (V2: LangChain-based with proper tool calling loop)
-      const response = await fetch(`${baseURL}/llm/completions/stream-complete-v2/`, {
-        method: 'POST',
-        headers: requestHeaders,
-        body: requestBody,
-        signal: controller.signal
-      })
+      // Make the streaming request (V2: LangChain-based with proper tool calling loop).
+      // fetchStream attaches the bearer token and retries once via refresh
+      // on a 401; a thrown "Session expired" error means that retry itself
+      // couldn't recover (no/failed refresh), which already triggered the
+      // centralized session-expired modal — surface it through onError the
+      // same way the pre-retry 401 branch below does.
+      let response: Response
+      try {
+        response = await fetchStream(`${baseURL}/llm/completions/stream-complete-v2/`, {
+          method: 'POST',
+          headers: requestHeaders,
+          body: requestBody,
+          signal: controller.signal
+        })
+      } catch (err) {
+        clearTimeout(timeoutId)
+        if (err instanceof Error && err.message.startsWith('Session expired')) {
+          callbacks.onError('Session expired', 'Your session has expired. Please sign in again to continue.')
+          return
+        }
+        throw err
+      }
 
       // Clear timeout after successful connection
       clearTimeout(timeoutId)

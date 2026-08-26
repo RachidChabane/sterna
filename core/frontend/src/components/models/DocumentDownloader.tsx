@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast'
 import { parseCSV } from '@/utils/csv'
 import * as pdfjsLib from 'pdfjs-dist'
 import * as XLSX from 'xlsx'
+import { fetchStream } from '@/api/transport'
 
 // Configure PDF.js worker
 const PDFJS_VERSION = pdfjsLib.version
@@ -372,10 +373,7 @@ function PDFPreview({ url, compact = false }: { url: string; compact?: boolean }
 
     const loadPdf = async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        const resp = await fetch(url, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
+        const resp = await fetchStream(url)
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const pdfBytes = await resp.arrayBuffer()
 
@@ -557,10 +555,7 @@ function XlsxPreview({ downloadUrl, compact = false }: { downloadUrl: string; co
 
     const loadXlsx = async () => {
       try {
-        const token = localStorage.getItem('access_token')
-        const resp = await fetch(downloadUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
+        const resp = await fetchStream(downloadUrl)
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const buffer = await resp.arrayBuffer()
         if (cancelled) return
@@ -748,10 +743,7 @@ export const DocumentDownloader: React.FC<DocumentDownloaderProps> = ({
     if (downloadUrl) {
       // Fetch with auth token and trigger blob download
       try {
-        const token = localStorage.getItem('access_token')
-        const resp = await fetch(downloadUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
+        const resp = await fetchStream(downloadUrl)
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const blob = await resp.blob()
         const ext = framework === 'csv' ? '.csv' : framework === 'ics' ? '.ics' : framework === 'pdf' ? '.pdf' : framework === 'xlsx' ? '.xlsx' : '.docx'

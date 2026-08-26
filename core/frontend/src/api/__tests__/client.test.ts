@@ -229,3 +229,62 @@ describe('api/client — 401 handling', () => {
     expect(openModalSpy).not.toHaveBeenCalled()
   })
 })
+
+describe('api/client — FormData requests', () => {
+  // These go through the REAL xhr adapter (jsdom provides XMLHttpRequest,
+  // matching a real browser) rather than a stubbed `defaults.adapter`:
+  // axios's FormData Content-Type handling lives in resolveConfig(),
+  // which the built-in xhr/fetch adapters call internally — replacing
+  // `defaults.adapter` bypasses that code entirely and would validate
+  // nothing. Capturing XHR.setRequestHeader calls instead observes
+  // exactly what a real browser request would carry.
+  let setHeaderCalls: string[]
+  let originalSetHeader: typeof XMLHttpRequest.prototype.setRequestHeader
+  let originalSend: typeof XMLHttpRequest.prototype.send
+
+  beforeEach(() => {
+    vi.resetModules()
+    setHeaderCalls = []
+    originalSetHeader = XMLHttpRequest.prototype.setRequestHeader
+    originalSend = XMLHttpRequest.prototype.send
+    XMLHttpRequest.prototype.setRequestHeader = function (name: string, value: string) {
+      setHeaderCalls.push(`${name}: ${value}`)
+      return originalSetHeader.call(this, name, value)
+    }
+    // No server in this test — resolve the axios promise via a simulated
+    // network error instead of a real request/response round trip.
+    XMLHttpRequest.prototype.send = function () {
+      setTimeout(() => this.dispatchEvent(new Event('error')), 0)
+    }
+  })
+
+  afterEach(() => {
+    XMLHttpRequest.prototype.setRequestHeader = originalSetHeader
+    XMLHttpRequest.prototype.send = originalSend
+  })
+
+  it('un-sets the instance default JSON Content-Type for a FormData body via a per-call header override, leaving the browser to set the multipart boundary itself', async () => {
+    const { default: apiClient } = await import('@/api/client')
+    const formData = new FormData()
+    formData.append('audio', new Blob(['x']), 'recording.webm')
+
+    await apiClient
+      .post('/llm/transcribe/', formData, { headers: { 'Content-Type': undefined } })
+      .catch(() => {})
+
+    // No Content-Type set via the XHR API at all — that's correct: the
+    // browser sets `multipart/form-data; boundary=...` itself only when
+    // the caller hasn't called setRequestHeader('Content-Type', ...).
+    expect(setHeaderCalls.some((c) => c.startsWith('Content-Type:'))).toBe(false)
+  })
+
+  it('WITHOUT the override, the instance default JSON Content-Type is sent as-is and breaks multipart parsing (regression guard for the override above)', async () => {
+    const { default: apiClient } = await import('@/api/client')
+    const formData = new FormData()
+    formData.append('audio', new Blob(['x']), 'recording.webm')
+
+    await apiClient.post('/llm/transcribe/', formData).catch(() => {})
+
+    expect(setHeaderCalls).toContain('Content-Type: application/json')
+  })
+})

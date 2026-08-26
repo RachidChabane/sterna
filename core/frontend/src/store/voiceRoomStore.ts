@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import axios from 'axios'
+import apiClient, { LONG_RUNNING_TIMEOUT_MS } from '../api/client'
 import type {
   VoiceRoom,
   VoiceRoomState,
@@ -14,27 +16,15 @@ import type {
   TTSProviderId,
 } from '../types/voiceRoom'
 import { createUserScopedStorage } from '../lib/userScopedStorage'
-import { useAuthStore } from './authStore'
-import { useAuthModalStore } from './authModalStore'
-import { getAuthModalVariant } from '../lib/sessionDetection'
 import { generateUUID } from '../lib/utils'
 
-// Helper to handle 401 responses and open auth modal
-const handleAuthError = (response: Response): boolean => {
-  if (response.status === 401) {
-    
-    useAuthStore.setState({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false
-    })
-    const variant = getAuthModalVariant()
-    const returnUrl = window.location.pathname + window.location.search
-    useAuthModalStore.getState().openModal(variant, returnUrl)
-    return true
-  }
-  return false
-}
+// apiClient's response interceptor already shows the session-expired modal
+// (via handleUnauthorized in ../api/client) and retries once through the
+// refresh-token flow before giving up — this only needs to recognize an
+// unrecoverable 401 so the call sites below skip layering a generic
+// "failed to X" error state on top of that modal.
+const isUnauthorized = (error: unknown): boolean =>
+  axios.isAxiosError(error) && error.response?.status === 401
 
 interface VoiceRoomStore {
   // Room management state
@@ -174,7 +164,8 @@ interface GeneratedRoomConfig {
 }
 
 // Django backend handles all voice room features (rooms, agents, voices, WebSocket)
-const BACKEND_API_BASE = '/api/voice-rooms'
+// Path is relative to apiClient's `/api` baseURL.
+const BACKEND_API_BASE = '/voice-rooms'
 const MAX_RECENT_ROOMS = 5
 
 const useVoiceRoomStore = create<VoiceRoomStore>()(
@@ -228,19 +219,11 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
 
         set({ roomsLoading: true, roomsError: null })
         try {
-          const token = localStorage.getItem('access_token')
-          const response = await fetch(`${BACKEND_API_BASE}/rooms/`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          })
-          if (!response.ok) {
-            if (handleAuthError(response)) return
-            throw new Error('Failed to fetch rooms')
-          }
-          const rooms = await response.json()
+          const response = await apiClient.get(`${BACKEND_API_BASE}/rooms/`)
+          const rooms = response.data
           set({ rooms: rooms || [], roomsLoading: false, lastRoomsFetchTime: Date.now() })
         } catch (error) {
+          if (isUnauthorized(error)) return
           set({
             roomsError: error instanceof Error ? error.message : 'Failed to fetch rooms',
             roomsLoading: false,
@@ -251,23 +234,12 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
       // Create a new room (in Django backend)
       createRoom: async (request) => {
         try {
-          const token = localStorage.getItem('access_token')
-          const response = await fetch(`${BACKEND_API_BASE}/rooms/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify(request),
-          })
-          if (!response.ok) {
-            if (handleAuthError(response)) return null
-            throw new Error('Failed to create room')
-          }
-          const room = await response.json()
+          const response = await apiClient.post(`${BACKEND_API_BASE}/rooms/`, request)
+          const room = response.data
           set((state) => ({ rooms: [room, ...state.rooms] }))
           return room
         } catch (error) {
+          if (isUnauthorized(error)) return null
           set({
             roomsError: error instanceof Error ? error.message : 'Failed to create room',
           })
@@ -278,26 +250,15 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
       // Update an existing room (in Django backend)
       updateRoom: async (roomId, request) => {
         try {
-          const token = localStorage.getItem('access_token')
-          const response = await fetch(`${BACKEND_API_BASE}/rooms/${roomId}/`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify(request),
-          })
-          if (!response.ok) {
-            if (handleAuthError(response)) return null
-            throw new Error('Failed to update room')
-          }
-          const room = await response.json()
+          const response = await apiClient.put(`${BACKEND_API_BASE}/rooms/${roomId}/`, request)
+          const room = response.data
           set((state) => ({
             rooms: state.rooms.map((r) => (r.id === roomId ? room : r)),
             currentRoom: state.currentRoom?.id === roomId ? room : state.currentRoom,
           }))
           return room
         } catch (error) {
+          if (isUnauthorized(error)) return null
           set({
             roomsError: error instanceof Error ? error.message : 'Failed to update room',
           })
@@ -308,23 +269,14 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
       // Delete a room (in Django backend)
       deleteRoom: async (roomId) => {
         try {
-          const token = localStorage.getItem('access_token')
-          const response = await fetch(`${BACKEND_API_BASE}/rooms/${roomId}/`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          })
-          if (!response.ok) {
-            if (handleAuthError(response)) return false
-            throw new Error('Failed to delete room')
-          }
+          await apiClient.delete(`${BACKEND_API_BASE}/rooms/${roomId}/`)
           set((state) => ({
             rooms: state.rooms.filter((r) => r.id !== roomId),
             currentRoom: state.currentRoom?.id === roomId ? null : state.currentRoom,
           }))
           return true
         } catch (error) {
+          if (isUnauthorized(error)) return false
           set({
             roomsError: error instanceof Error ? error.message : 'Failed to delete room',
           })
@@ -345,15 +297,8 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
         if (state.ttsProvidersLoaded) return
 
         try {
-          const token = localStorage.getItem('access_token')
-          const response = await fetch(`${BACKEND_API_BASE}/tts-providers/`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          })
-          if (!response.ok) throw new Error('Failed to fetch TTS providers')
-          const ttsProviders = await response.json()
-          set({ ttsProviders, ttsProvidersLoaded: true })
+          const response = await apiClient.get(`${BACKEND_API_BASE}/tts-providers/`)
+          set({ ttsProviders: response.data, ttsProvidersLoaded: true })
         } catch (error) {
           console.error('Failed to fetch TTS providers:', error)
         }
@@ -363,18 +308,10 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
       fetchVoices: async (provider?: TTSProviderId) => {
         set({ voicesLoading: true })
         try {
-          const token = localStorage.getItem('access_token')
-          const url = provider
-            ? `${BACKEND_API_BASE}/voices/?provider=${provider}`
-            : `${BACKEND_API_BASE}/voices/`
-          const response = await fetch(url, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
+          const response = await apiClient.get(`${BACKEND_API_BASE}/voices/`, {
+            params: provider ? { provider } : undefined,
           })
-          if (!response.ok) throw new Error('Failed to fetch voices')
-          const voices = await response.json()
-          set({ voices, voicesLoading: false })
+          set({ voices: response.data, voicesLoading: false })
         } catch (error) {
           console.error('Failed to fetch voices:', error)
           set({ voicesLoading: false })
@@ -384,18 +321,10 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
       // Fetch recommended voices (from Django backend, supports provider filter)
       fetchRecommendedVoices: async (provider?: TTSProviderId) => {
         try {
-          const token = localStorage.getItem('access_token')
-          const url = provider
-            ? `${BACKEND_API_BASE}/voices/recommended/?provider=${provider}`
-            : `${BACKEND_API_BASE}/voices/recommended/`
-          const response = await fetch(url, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
+          const response = await apiClient.get(`${BACKEND_API_BASE}/voices/recommended/`, {
+            params: provider ? { provider } : undefined,
           })
-          if (!response.ok) throw new Error('Failed to fetch recommended voices')
-          const recommendedVoices = await response.json()
-          set({ recommendedVoices })
+          set({ recommendedVoices: response.data })
         } catch (error) {
           console.error('Failed to fetch recommended voices:', error)
         }
@@ -405,18 +334,10 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
       fetchTTSModels: async (provider?: TTSProviderId) => {
         set({ ttsModelsLoading: true, ttsModelsLoaded: false })
         try {
-          const token = localStorage.getItem('access_token')
-          const url = provider
-            ? `${BACKEND_API_BASE}/tts-models/?provider=${provider}`
-            : `${BACKEND_API_BASE}/tts-models/`
-          const response = await fetch(url, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
+          const response = await apiClient.get(`${BACKEND_API_BASE}/tts-models/`, {
+            params: provider ? { provider } : undefined,
           })
-          if (!response.ok) throw new Error('Failed to fetch TTS models')
-          const ttsModels = await response.json()
-          set({ ttsModels, ttsModelsLoading: false, ttsModelsLoaded: true })
+          set({ ttsModels: response.data, ttsModelsLoading: false, ttsModelsLoaded: true })
         } catch (error) {
           console.error('Failed to fetch TTS models:', error)
           set({ ttsModelsLoading: false })
@@ -662,15 +583,8 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
       // Fetch conversation history for a room
       fetchConversation: async (roomId: string) => {
         try {
-          const token = localStorage.getItem('access_token')
-          const response = await fetch(`${BACKEND_API_BASE}/rooms/${roomId}/conversation/`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          })
-          if (!response.ok) throw new Error('Failed to fetch conversation')
-          const data = await response.json()
-          return data.messages || []
+          const response = await apiClient.get(`${BACKEND_API_BASE}/rooms/${roomId}/conversation/`)
+          return response.data.messages || []
         } catch (error) {
           console.error('Failed to fetch conversation:', error)
           return []
@@ -680,13 +594,7 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
       // Clear conversation history for a room (start fresh)
       clearConversation: async (roomId: string) => {
         try {
-          const token = localStorage.getItem('access_token')
-          await fetch(`${BACKEND_API_BASE}/rooms/${roomId}/clear_conversation/`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          })
+          await apiClient.post(`${BACKEND_API_BASE}/rooms/${roomId}/clear_conversation/`)
         } catch (error) {
           console.error('Failed to clear conversation:', error)
         }
@@ -696,23 +604,15 @@ const useVoiceRoomStore = create<VoiceRoomStore>()(
       generateRoom: async (description: string, provider?: string) => {
         set({ isGeneratingRoom: true })
         try {
-          const token = localStorage.getItem('access_token')
-          const response = await fetch(`${BACKEND_API_BASE}/generate-room/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ description, provider }),
-          })
-          if (!response.ok) {
-            if (handleAuthError(response)) return null
-            throw new Error('Failed to generate room')
-          }
-          const config = await response.json()
+          const response = await apiClient.post(
+            `${BACKEND_API_BASE}/generate-room/`,
+            { description, provider },
+            { timeout: LONG_RUNNING_TIMEOUT_MS }
+          )
           set({ isGeneratingRoom: false })
-          return config as GeneratedRoomConfig
+          return response.data as GeneratedRoomConfig
         } catch (error) {
+          if (isUnauthorized(error)) return null
           console.error('Failed to generate room:', error)
           set({ isGeneratingRoom: false })
           return null

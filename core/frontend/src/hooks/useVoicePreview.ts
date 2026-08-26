@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { getAccessToken } from '@/api/client'
+import { fetchStream } from '@/api/transport'
 import type { VoiceInfo, TTSProviderId } from '@/types/voiceRoom'
 
 interface UseVoicePreviewOptions {
@@ -88,10 +88,7 @@ export function useVoicePreview({
 
       if (isInternalEndpoint) {
         // Fetch with authentication for internal endpoints
-        const token = getAccessToken()
-        const response = await fetch(previewUrl, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-        })
+        const response = await fetchStream(previewUrl)
 
         if (!response.ok) {
           console.error('Failed to fetch voice preview:', response.status)

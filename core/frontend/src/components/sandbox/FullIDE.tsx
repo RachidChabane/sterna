@@ -22,7 +22,8 @@ import { KeyboardShortcuts, getPlatformShortcuts } from './KeyboardShortcuts'
 import { BottomPanel } from './BottomPanel'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { getAccessToken, ORCHESTRATOR_URL } from '@/api/client'
+import axios from 'axios'
+import { getAccessToken, orchestratorClient } from '@/api/client'
 import { fsAPI } from '@/api/fs'
 import { getPreviewUrl, fetchPreviewToken } from '@/api/sandbox'
 import { Button } from '@/components/ui/button'
@@ -1419,32 +1420,19 @@ export function FullIDE({
         return
       }
 
-      
-      const response = await fetch(`${ORCHESTRATOR_URL}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          code: activeFile.content,
-          language: execLang,
-          user_id: userId,
-          conversation_id: projectId,
-          chat_id: projectId,
-          sync_mode: true,
-          project_id: projectId,
-          timeout: 30,
-          execution_id: executionId,
-        }),
-        signal: abortController.signal,
-      })
+      const response = await orchestratorClient.post<ExecutionResult>('/execute', {
+        code: activeFile.content,
+        language: execLang,
+        user_id: userId,
+        conversation_id: projectId,
+        chat_id: projectId,
+        sync_mode: true,
+        project_id: projectId,
+        timeout: 30,
+        execution_id: executionId,
+      }, { signal: abortController.signal })
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data: ExecutionResult = await response.json()
+      const data = response.data
       setResult(data)
 
       if (data.exit_code !== 0) {
@@ -1455,7 +1443,9 @@ export function FullIDE({
         })
       }
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      // Don't show error if execution was aborted by user (native fetch
+      // AbortError previously; axios raises a CanceledError instead)
+      if (axios.isCancel(error) || error.name === 'AbortError') {
         setResult({
           output: '',
           error: 'Execution cancelled by user',
@@ -1463,9 +1453,12 @@ export function FullIDE({
           execution_time: 0,
         })
       } else {
+        const message = axios.isAxiosError(error) && error.response
+          ? `HTTP ${error.response.status}`
+          : error.message || 'Execution failed'
         setResult({
           output: '',
-          error: error.message || 'Execution failed',
+          error: message,
           exit_code: 1,
           execution_time: 0,
         })
@@ -1491,10 +1484,7 @@ export function FullIDE({
     }
 
     try {
-            fetch(`${ORCHESTRATOR_URL}/cancel/${executionId}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-      })
+      orchestratorClient.post(`/cancel/${executionId}`)
     } finally {
       abortControllerRef.current = null
       executionIdRef.current = null

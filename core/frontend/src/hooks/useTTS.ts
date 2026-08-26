@@ -14,7 +14,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { getAccessToken } from '@/api/client'
+import { fetchStream } from '@/api/transport'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface UseTTSOptions {
@@ -201,9 +201,6 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
     setError(null)
 
     try {
-      const token = getAccessToken()
-      
-
       // Build request body with provider and common settings
       const requestBody: Record<string, any> = {
         text: cleanText,
@@ -226,11 +223,10 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSReturn {
         requestBody.language_code = language
       }
 
-      const response = await fetch('/api/voice-rooms/tts/', {
+      const response = await fetchStream('/api/voice-rooms/tts/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,

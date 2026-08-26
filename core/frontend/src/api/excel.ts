@@ -4,7 +4,8 @@
  * Communicates with the orchestrator for Excel operations using openpyxl
  */
 
-import { getAccessToken, ORCHESTRATOR_URL } from './client'
+import axios from 'axios'
+import { getAccessToken, orchestratorClient } from './client'
 
 export interface ExcelData {
   success: boolean
@@ -36,6 +37,24 @@ export interface BatchUpdateResult {
   error?: string
 }
 
+function requireToken(): void {
+  if (!getAccessToken()) throw new Error('No authentication token')
+}
+
+/**
+ * Read the backend-supplied `detail` off a failed orchestratorClient
+ * request, falling back to `fallback` — mirrors the `error.detail ||
+ * fallback` pattern the raw `fetch()` calls this client replaces used
+ * against the parsed JSON error body.
+ */
+function detailError(err: unknown, fallback: string): Error {
+  if (axios.isAxiosError(err)) {
+    const detail = (err.response?.data as { detail?: string } | undefined)?.detail
+    if (detail) return new Error(detail)
+  }
+  return new Error(fallback)
+}
+
 /**
  * Read an Excel file and get all data with formulas from the user's sandbox
  */
@@ -46,31 +65,21 @@ export async function readExcel(
   path: string,
   sheetIndex: number = 0
 ): Promise<ExcelData> {
-  const token = getAccessToken()
-  if (!token) throw new Error('No authentication token')
+  requireToken()
 
-  const response = await fetch(`${ORCHESTRATOR_URL}/excel/read`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
+  try {
+    const response = await orchestratorClient.post<ExcelData>('/excel/read', {
       user_id: userId,
       conversation_id: conversationId,
       chat_id: chatId,
       sync_mode: true,
       path,
       sheet_index: sheetIndex,
-    }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to read Excel file')
+    })
+    return response.data
+  } catch (err) {
+    throw detailError(err, 'Failed to read Excel file')
   }
-
-  return response.json()
 }
 
 /**
@@ -87,16 +96,10 @@ export async function updateCell(
   value?: string,
   formula?: string
 ): Promise<UpdateCellResult> {
-  const token = getAccessToken()
-  if (!token) throw new Error('No authentication token')
+  requireToken()
 
-  const response = await fetch(`${ORCHESTRATOR_URL}/excel/update-cell`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
+  try {
+    const response = await orchestratorClient.post<UpdateCellResult>('/excel/update-cell', {
       user_id: userId,
       conversation_id: conversationId,
       chat_id: chatId,
@@ -107,15 +110,11 @@ export async function updateCell(
       col,
       value,
       formula,
-    }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to update cell')
+    })
+    return response.data
+  } catch (err) {
+    throw detailError(err, 'Failed to update cell')
   }
-
-  return response.json()
 }
 
 /**
@@ -129,16 +128,10 @@ export async function batchUpdateCells(
   sheetIndex: number,
   updates: CellUpdate[]
 ): Promise<BatchUpdateResult> {
-  const token = getAccessToken()
-  if (!token) throw new Error('No authentication token')
+  requireToken()
 
-  const response = await fetch(`${ORCHESTRATOR_URL}/excel/batch-update`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
+  try {
+    const response = await orchestratorClient.post<BatchUpdateResult>('/excel/batch-update', {
       user_id: userId,
       conversation_id: conversationId,
       chat_id: chatId,
@@ -146,13 +139,9 @@ export async function batchUpdateCells(
       path,
       sheet_index: sheetIndex,
       updates,
-    }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to batch update cells')
+    })
+    return response.data
+  } catch (err) {
+    throw detailError(err, 'Failed to batch update cells')
   }
-
-  return response.json()
 }

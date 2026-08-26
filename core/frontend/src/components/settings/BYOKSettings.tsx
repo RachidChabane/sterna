@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import axios from 'axios'
 import { AlertTriangle, CheckCircle2, Info, Loader2, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import apiClient from '@/api/client'
 
 type ApiKeyStatus = {
   configured: boolean
@@ -16,19 +18,31 @@ type ProviderKeyInfo = {
   masked_key: string | null
 }
 
-const SETTINGS_ENDPOINT = '/api/settings/openrouter/'
-const PROVIDER_KEYS_ENDPOINT = '/api/settings/provider-keys/'
+const SETTINGS_ENDPOINT = '/settings/openrouter/'
+const PROVIDER_KEYS_ENDPOINT = '/settings/provider-keys/'
 
-async function authFetch(input: string, init?: RequestInit): Promise<Response> {
-  const { getAccessToken } = await import('@/api/client')
-  const accessToken = getAccessToken()
-  return fetch(input, {
-    ...init,
-    headers: {
-      ...(init?.headers || {}),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-  })
+/**
+ * Message for a failed request that didn't reach the server at all (no
+ * HTTP response) — a real network error, as opposed to the server
+ * responding with a non-2xx status.
+ */
+function networkErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) return err.message || 'Network error'
+  return err instanceof Error ? err.message : 'Network error'
+}
+
+/** Backend `{ error }` body from a failed save request, when present. */
+function saveErrorMessage(err: unknown, httpFallback: string): string {
+  if (axios.isAxiosError(err) && err.response) {
+    return (err.response.data as { error?: string } | undefined)?.error || httpFallback
+  }
+  return networkErrorMessage(err)
+}
+
+/** Fixed message for any non-2xx HTTP response; the real error otherwise. */
+function httpErrorMessage(err: unknown, httpFallback: string): string {
+  if (axios.isAxiosError(err) && err.response) return httpFallback
+  return networkErrorMessage(err)
 }
 
 function ProviderKeysSettings() {
@@ -40,15 +54,10 @@ function ProviderKeysSettings() {
 
   const refresh = async () => {
     try {
-      const resp = await authFetch(PROVIDER_KEYS_ENDPOINT)
-      if (resp.ok) {
-        const data = (await resp.json()) as { providers: ProviderKeyInfo[] }
-        setProviders(data.providers ?? [])
-      } else {
-        setError('Failed to load provider key status')
-      }
+      const resp = await apiClient.get<{ providers: ProviderKeyInfo[] }>(PROVIDER_KEYS_ENDPOINT)
+      setProviders(resp.data.providers ?? [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error')
+      setError(httpErrorMessage(err, 'Failed to load provider key status'))
     } finally {
       setLoading(false)
     }
@@ -64,20 +73,11 @@ function ProviderKeysSettings() {
     setBusyProvider(provider)
     setError(null)
     try {
-      const resp = await authFetch(`${PROVIDER_KEYS_ENDPOINT}${provider}/`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_key: draft }),
-      })
-      if (resp.ok) {
-        setDrafts((d) => ({ ...d, [provider]: '' }))
-        await refresh()
-      } else {
-        const body = await resp.json().catch(() => ({}))
-        setError(body?.error || 'Failed to save key')
-      }
+      await apiClient.put(`${PROVIDER_KEYS_ENDPOINT}${provider}/`, { api_key: draft })
+      setDrafts((d) => ({ ...d, [provider]: '' }))
+      await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error')
+      setError(saveErrorMessage(err, 'Failed to save key'))
     } finally {
       setBusyProvider(null)
     }
@@ -87,16 +87,10 @@ function ProviderKeysSettings() {
     setBusyProvider(provider)
     setError(null)
     try {
-      const resp = await authFetch(`${PROVIDER_KEYS_ENDPOINT}${provider}/`, {
-        method: 'DELETE',
-      })
-      if (resp.ok) {
-        await refresh()
-      } else {
-        setError('Failed to remove key')
-      }
+      await apiClient.delete(`${PROVIDER_KEYS_ENDPOINT}${provider}/`)
+      await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error')
+      setError(httpErrorMessage(err, 'Failed to remove key'))
     } finally {
       setBusyProvider(null)
     }
@@ -195,15 +189,10 @@ export function BYOKSettings() {
   const refresh = async () => {
     setLoading(true)
     try {
-      const resp = await authFetch(SETTINGS_ENDPOINT)
-      if (resp.ok) {
-        const data = (await resp.json()) as ApiKeyStatus
-        setStatus(data)
-      } else {
-        setError('Failed to load API key status')
-      }
+      const resp = await apiClient.get<ApiKeyStatus>(SETTINGS_ENDPOINT)
+      setStatus(resp.data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error')
+      setError(httpErrorMessage(err, 'Failed to load API key status'))
     } finally {
       setLoading(false)
     }
@@ -218,20 +207,11 @@ export function BYOKSettings() {
     setSaving(true)
     setError(null)
     try {
-      const resp = await authFetch(SETTINGS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_key: draftKey.trim() }),
-      })
-      if (resp.ok) {
-        setDraftKey('')
-        await refresh()
-      } else {
-        const body = await resp.json().catch(() => ({}))
-        setError(body?.error || 'Failed to save key')
-      }
+      await apiClient.post(SETTINGS_ENDPOINT, { api_key: draftKey.trim() })
+      setDraftKey('')
+      await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error')
+      setError(saveErrorMessage(err, 'Failed to save key'))
     } finally {
       setSaving(false)
     }
@@ -241,14 +221,10 @@ export function BYOKSettings() {
     setRemoving(true)
     setError(null)
     try {
-      const resp = await authFetch(SETTINGS_ENDPOINT, { method: 'DELETE' })
-      if (resp.ok) {
-        await refresh()
-      } else {
-        setError('Failed to remove key')
-      }
+      await apiClient.delete(SETTINGS_ENDPOINT)
+      await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error')
+      setError(httpErrorMessage(err, 'Failed to remove key'))
     } finally {
       setRemoving(false)
     }

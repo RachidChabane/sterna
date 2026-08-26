@@ -21,6 +21,7 @@ import type { GitHubIssue, GitHubRepo } from '@/api/codeSession'
 import type { AgentPlan } from '@/store/projectPanelStore'
 import type { MCPServer } from '@/api/mcp'
 import { conversationsAPI } from '@/api/conversations'
+import apiClient from '@/api/client'
 import { getDefaultModelParameters } from '@/config/modelParameters'
 
 export interface MentionItem {
@@ -568,12 +569,8 @@ export function useMentionAutocomplete(
   const fetchImageModels = useCallback(async () => {
     setIsLoadingSecondary(true)
     try {
-      const token = localStorage.getItem('access_token')
-      const response = await fetch('/api/settings/images/', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!response.ok) throw new Error('Failed to fetch image settings')
-      const data = await response.json()
+      const response = await apiClient.get('/settings/images/')
+      const data = response.data
       const models = (data.available_models || []).map((m: any) => ({
         id: m.id,
         name: m.name,
@@ -613,12 +610,8 @@ export function useMentionAutocomplete(
     setIsLoadingSecondary(true)
     const compatibleTypes = VIDEO_TOOL_COMPATIBLE_TYPES[toolName] || ['text']
     try {
-      const token = localStorage.getItem('access_token')
-      const response = await fetch('/api/settings/videos/', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!response.ok) throw new Error('Failed to fetch video settings')
-      const data = await response.json()
+      const response = await apiClient.get('/settings/videos/')
+      const data = response.data
 
       // Map all models with their input_type
       const allModels = (data.available_models || []).map((m: any) => ({

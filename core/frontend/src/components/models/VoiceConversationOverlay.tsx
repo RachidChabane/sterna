@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { useStreamingTTS } from '@/hooks/useStreamingTTS'
 import { useSettingsStore } from '@/store/settingsStore'
-import { getAccessToken } from '@/api/client'
+import apiClient, { LONG_RUNNING_TIMEOUT_MS } from '@/api/client'
 import { toast } from 'sonner'
 import { SpatialPresence } from '@/components/voice-rooms/SpatialPresence'
 import { UserVoicePulse } from '@/components/voice-rooms/UserVoicePulse'
@@ -451,20 +451,16 @@ export function VoiceConversationOverlay({
           formData.append('audio', audioBlob, `recording.${extension}`)
           formData.append('language', sttLanguage)
 
-          const accessToken = getAccessToken()
-
-          const response = await fetch('/api/llm/transcribe/', {
-            method: 'POST',
-            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-            body: formData,
+          const response = await apiClient.post('/llm/transcribe/', formData, {
+            // Un-set the instance's default JSON Content-Type so the
+            // browser can set the multipart boundary itself.
+            headers: { 'Content-Type': undefined },
+            timeout: LONG_RUNNING_TIMEOUT_MS,
+          }).catch((err) => {
+            throw new Error(`Transcription failed: ${err?.response?.status ?? 'network error'}`)
           })
 
-
-          if (!response.ok) {
-            throw new Error(`Transcription failed: ${response.status}`)
-          }
-
-          const result = await response.json()
+          const result = response.data
           const transcript = result.transcript?.trim()
 
           if (!transcript) {

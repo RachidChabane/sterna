@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
-import { getAccessToken, ORCHESTRATOR_URL } from '@/api/client'
+import axios from 'axios'
+import { getAccessToken, orchestratorClient } from '@/api/client'
 import { fsAPI } from '@/api/fs'
 import type { ExecutionResult } from './types'
 import { CommitHistory } from '@/components/sandbox/CommitHistory'
@@ -242,7 +243,7 @@ export function BottomPanel({
     setIsExecuting(true)
 
     try {
-      const token = await getAccessToken()
+      const token = getAccessToken()
       if (!token) {
         throw new Error('Not authenticated')
       }
@@ -264,13 +265,9 @@ export function BottomPanel({
         ? `${cdPrefix}${trimmedCommand} && pwd`
         : `${cdPrefix}${trimmedCommand}`
 
-      const response = await fetch(`${ORCHESTRATOR_URL}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      let result: ExecutionResult
+      try {
+        const response = await orchestratorClient.post<ExecutionResult>('/execute', {
           code: wrappedCommand,
           language: 'bash',
           user_id: userId,
@@ -279,14 +276,14 @@ export function BottomPanel({
           sync_mode: true,
           project_id: projectId,
           timeout: 30,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Execution failed: ${response.statusText}`)
+        })
+        result = response.data
+      } catch (err) {
+        if (axios.isAxiosError(err) && err.response) {
+          throw new Error(`Execution failed: ${err.response.statusText}`)
+        }
+        throw err
       }
-
-      const result = await response.json()
 
       let output: string = result.output || ''
 

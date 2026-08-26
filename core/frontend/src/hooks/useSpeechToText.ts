@@ -8,7 +8,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
-import { getAccessToken } from '@/api/client'
+import apiClient, { LONG_RUNNING_TIMEOUT_MS } from '@/api/client'
 import { useSettingsStore } from '@/store/settingsStore'
 
 /** Audio level entry with unique ID for stable rendering */
@@ -333,21 +333,17 @@ export function useSpeechToText(): UseSpeechToTextReturn {
           // Include language preference from settings
           formData.append('language', sttLanguage)
 
-          const accessToken = getAccessToken()
-          const response = await fetch('/api/llm/transcribe/', {
-            method: 'POST',
-            headers: {
-              ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
-            },
-            body: formData,
+          const response = await apiClient.post('/llm/transcribe/', formData, {
+            // Un-set the instance's default JSON Content-Type so the
+            // browser can set the multipart boundary itself.
+            headers: { 'Content-Type': undefined },
+            timeout: LONG_RUNNING_TIMEOUT_MS,
+          }).catch((err) => {
+            const data = err?.response?.data
+            throw new Error(data?.error || `Transcription failed: ${err?.response?.status ?? 'network error'}`)
           })
 
-          if (!response.ok) {
-            const data = await response.json().catch(() => ({}))
-            throw new Error(data.error || `Transcription failed: ${response.status}`)
-          }
-
-          const result = await response.json()
+          const result = response.data
 
           if (!result.success) {
             throw new Error(result.error || 'Transcription failed')

@@ -405,17 +405,9 @@ function VoiceSettings() {
       if (sttLanguages.length > 0) return // Already loaded
       setSttLanguagesLoading(true)
       try {
-        const { getAccessToken } = await import('@/api/client')
-        const accessToken = getAccessToken()
-        const response = await fetch('/api/llm/stt-languages/', {
-          headers: {
-            ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
-          },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setSttLanguages(data.languages || [])
-        }
+        const { default: apiClient } = await import('@/api/client')
+        const response = await apiClient.get('/llm/stt-languages/')
+        setSttLanguages(response.data.languages || [])
       } catch (error) {
         console.error('Failed to fetch STT languages:', error)
       } finally {
@@ -1092,18 +1084,10 @@ function ImageSettings() {
   useEffect(() => {
     const fetchImageSettings = async () => {
       try {
-        const { getAccessToken } = await import('@/api/client')
-        const accessToken = getAccessToken()
-        const response = await fetch('/api/settings/images/', {
-          headers: {
-            ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
-          },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setPreferredImageModel(data.preferred_image_model)
-          setAvailableImageModels(data.available_models || [])
-        }
+        const { default: apiClient } = await import('@/api/client')
+        const response = await apiClient.get('/settings/images/')
+        setPreferredImageModel(response.data.preferred_image_model)
+        setAvailableImageModels(response.data.available_models || [])
       } catch (error) {
         console.error('Failed to fetch image settings:', error)
       } finally {
@@ -1117,18 +1101,10 @@ function ImageSettings() {
   useEffect(() => {
     const fetchVideoSettings = async () => {
       try {
-        const { getAccessToken } = await import('@/api/client')
-        const accessToken = getAccessToken()
-        const response = await fetch('/api/settings/videos/', {
-          headers: {
-            ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
-          },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setPreferredVideoModel(data.preferred_video_model)
-          setAvailableVideoModels(data.available_models || [])
-        }
+        const { default: apiClient } = await import('@/api/client')
+        const response = await apiClient.get('/settings/videos/')
+        setPreferredVideoModel(response.data.preferred_video_model)
+        setAvailableVideoModels(response.data.available_models || [])
       } catch (error) {
         console.error('Failed to fetch video settings:', error)
       } finally {
@@ -1141,19 +1117,9 @@ function ImageSettings() {
   const handleImageModelChange = async (newModel: string) => {
     setIsSavingImage(true)
     try {
-      const { getAccessToken } = await import('@/api/client')
-      const accessToken = getAccessToken()
-      const response = await fetch('/api/settings/images/', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
-        },
-        body: JSON.stringify({ preferred_image_model: newModel }),
-      })
-      if (response.ok) {
-        setPreferredImageModel(newModel)
-      }
+      const { default: apiClient } = await import('@/api/client')
+      await apiClient.patch('/settings/images/', { preferred_image_model: newModel })
+      setPreferredImageModel(newModel)
     } catch (error) {
       console.error('Failed to update image settings:', error)
     } finally {
@@ -1164,19 +1130,9 @@ function ImageSettings() {
   const handleVideoModelChange = async (newModel: string) => {
     setIsSavingVideo(true)
     try {
-      const { getAccessToken } = await import('@/api/client')
-      const accessToken = getAccessToken()
-      const response = await fetch('/api/settings/videos/', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
-        },
-        body: JSON.stringify({ preferred_video_model: newModel }),
-      })
-      if (response.ok) {
-        setPreferredVideoModel(newModel)
-      }
+      const { default: apiClient } = await import('@/api/client')
+      await apiClient.patch('/settings/videos/', { preferred_video_model: newModel })
+      setPreferredVideoModel(newModel)
     } catch (error) {
       console.error('Failed to update video settings:', error)
     } finally {

@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
+import { fetchStream } from '@/api/transport'
 
 const AVATAR_CACHE_KEY = 'cached-avatar'
 const CACHE_DURATION = 24 * 60 * 60 * 1000 // 24 hours
@@ -83,7 +84,9 @@ export function CachedAvatar({
     // Fetch and cache the image
     loadingRef.current = true
 
-    fetch(src)
+    // `src` may point to a third-party avatar/icon CDN this app doesn't
+    // own — never attach our bearer token to it.
+    fetchStream(src, { auth: false })
       .then(res => {
         if (!res.ok) throw new Error('Failed to load avatar')
         return res.blob()

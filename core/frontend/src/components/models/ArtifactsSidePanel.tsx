@@ -57,6 +57,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { useUIStore } from '@/store/uiStore'
 import { sparksAPI, type SparkVersion } from '@/api/sparks'
 import { assetsAPI, type Asset, type GalleryAsset } from '@/api/assets'
+import { fetchStream } from '@/api/transport'
 import { AssetImage } from './AssetImage'
 import { VideoThumbnail } from '@/components/videos/VideoPlayer'
 import { ImageDetailModal } from '@/components/images/ImageDetailModal'
@@ -240,10 +241,7 @@ function SparkPanelDetail({
   const handleDownload = useCallback(async () => {
     if (spark.download_url) {
       try {
-        const token = localStorage.getItem('access_token')
-        const resp = await fetch(spark.download_url, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
+        const resp = await fetchStream(spark.download_url)
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
         const blob = await resp.blob()
         const url = URL.createObjectURL(blob)

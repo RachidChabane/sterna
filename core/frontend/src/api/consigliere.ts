@@ -3,8 +3,7 @@
  */
 
 import consigliereClient from './consigliereClient'
-import { setTokens, getRefreshToken, handleUnauthorized } from './client'
-import axios from 'axios'
+import { fetchStream } from './transport'
 import type { ChatGroup } from '@/components/models/types'
 
 // ============================================================================
@@ -302,48 +301,7 @@ export const consigliereApi = {
     },
     opts?: { signal?: AbortSignal }
   ) {
-    // Helper to fetch with token refresh on 401
-    const fetchWithAuth = async (url: string, options: RequestInit, isRetry = false): Promise<Response> => {
-      const accessToken = localStorage.getItem('access_token')
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      })
-
-      // If 401 and not already a retry, try to refresh token
-      if (response.status === 401 && !isRetry) {
-        const refreshToken = getRefreshToken()
-        if (refreshToken) {
-          try {
-            // Refresh the token
-            const refreshResponse = await axios.post('/api/auth/token/refresh/', {
-              refresh_token: refreshToken,
-            })
-            const access = refreshResponse.data.access || refreshResponse.data.access_token
-            const refresh = refreshResponse.data.refresh || refreshResponse.data.refresh_token || refreshToken
-            setTokens(access, refresh)
-
-            // Retry with new token
-            return fetchWithAuth(url, options, true)
-          } catch {
-            // Refresh failed - show session expired modal
-            handleUnauthorized()
-            throw new Error('Session expired. Please sign in again.')
-          }
-        } else {
-          // No refresh token - show session expired modal
-          handleUnauthorized()
-          throw new Error('Session expired. Please sign in again.')
-        }
-      }
-
-      return response
-    }
-
-    const response = await fetchWithAuth(
+    const response = await fetchStream(
       `${consigliereClient.defaults.baseURL}/chat_stream/`,
       {
         method: 'POST',
@@ -500,48 +458,7 @@ export const consigliereApi = {
     onProgress?: (event: AnalysisProgressEvent) => void,
     signal?: AbortSignal
   ): Promise<ConversationAnalysis> {
-    // Helper to fetch with token refresh on 401
-    const fetchWithAuth = async (url: string, options: RequestInit, isRetry = false): Promise<Response> => {
-      const accessToken = localStorage.getItem('access_token')
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      })
-
-      // If 401 and not already a retry, try to refresh token
-      if (response.status === 401 && !isRetry) {
-        const refreshToken = getRefreshToken()
-        if (refreshToken) {
-          try {
-            // Refresh the token
-            const refreshResponse = await axios.post('/api/auth/token/refresh/', {
-              refresh_token: refreshToken,
-            })
-            const access = refreshResponse.data.access || refreshResponse.data.access_token
-            const refresh = refreshResponse.data.refresh || refreshResponse.data.refresh_token || refreshToken
-            setTokens(access, refresh)
-
-            // Retry with new token
-            return fetchWithAuth(url, options, true)
-          } catch {
-            // Refresh failed - show session expired modal
-            handleUnauthorized()
-            throw new Error('Session expired. Please sign in again.')
-          }
-        } else {
-          // No refresh token - show session expired modal
-          handleUnauthorized()
-          throw new Error('Session expired. Please sign in again.')
-        }
-      }
-
-      return response
-    }
-
-    const response = await fetchWithAuth(
+    const response = await fetchStream(
       `${consigliereClient.defaults.baseURL}/${sessionId}/generate_analysis_stream/`,
       {
         method: 'POST',

@@ -13,7 +13,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { getAccessToken } from '@/api/client'
+import { fetchStream } from '@/api/transport'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface UseStreamingTTSOptions {
@@ -239,7 +239,6 @@ export function useStreamingTTS(options: UseStreamingTTSOptions = {}): UseStream
     setIsLoading(true)
 
     try {
-      const token = getAccessToken()
       const requestBody: Record<string, any> = {
         text: cleanText,
         provider,
@@ -259,11 +258,10 @@ export function useStreamingTTS(options: UseStreamingTTSOptions = {}): UseStream
         requestBody.language_code = language
       }
 
-      const response = await fetch('/api/voice-rooms/tts/', {
+      const response = await fetchStream('/api/voice-rooms/tts/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(requestBody),
         signal: abortControllerRef.current?.signal,

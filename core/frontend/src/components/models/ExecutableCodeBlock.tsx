@@ -13,7 +13,8 @@ import { useTheme } from '@/hooks/useTheme'
 import { useToast } from '@/hooks/use-toast'
 import { useAuthStore } from '@/store/authStore'
 import { useChatPanelContextSafe } from './ChatPanelContext'
-import { getAccessToken, ORCHESTRATOR_URL } from '@/api/client'
+import axios from 'axios'
+import { getAccessToken, orchestratorClient } from '@/api/client'
 import { useSettingsStore } from '@/store/settingsStore'
 import { getCodeTheme } from '@/constants/codeThemes'
 
@@ -103,15 +104,8 @@ export function ExecutableCodeBlock({ code, language, className }: ExecutableCod
     }
 
     try {
-            const cancelUrl = `${ORCHESTRATOR_URL}/cancel/${executionId}`
-
       // Call cancel endpoint (fire and forget - cleanup happens in background)
-      fetch(cancelUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      }).catch(error => {
+      orchestratorClient.post(`/cancel/${executionId}`).catch(error => {
         console.error('[ABORT] Failed to cancel execution:', error)
       })
     } finally {
@@ -153,35 +147,23 @@ export function ExecutableCodeBlock({ code, language, className }: ExecutableCod
     abortControllerRef.current = abortController
 
     try {
-      const response = await fetch(`${ORCHESTRATOR_URL}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          code,
-          language: normalizedLanguage,
-          user_id: user.id.toString(),
-          conversation_id: conversationId || 'default',
-          chat_id: chatId,
-          sync_mode: syncMode ?? true,
-          project_id: 'default',
-          timeout: 30,
-          execution_id: executionId,
-        }),
-        signal: abortController.signal,
-      })
+      const response = await orchestratorClient.post<ExecutionResult>('/execute', {
+        code,
+        language: normalizedLanguage,
+        user_id: user.id.toString(),
+        conversation_id: conversationId || 'default',
+        chat_id: chatId,
+        sync_mode: syncMode ?? true,
+        project_id: 'default',
+        timeout: 30,
+        execution_id: executionId,
+      }, { signal: abortController.signal })
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data: ExecutionResult = await response.json()
-      setResult(data)
+      setResult(response.data)
     } catch (error: any) {
-      // Don't show error if execution was aborted by user
-      if (error.name === 'AbortError') {
+      // Don't show error if execution was aborted by user (native fetch
+      // AbortError previously; axios raises a CanceledError instead)
+      if (axios.isCancel(error) || error.name === 'AbortError') {
         setResult({
           output: '',
           error: 'Execution cancelled by user',
@@ -190,9 +172,12 @@ export function ExecutableCodeBlock({ code, language, className }: ExecutableCod
           artifacts: [],
         })
       } else {
+        const message = axios.isAxiosError(error) && error.response
+          ? `HTTP ${error.response.status}`
+          : error.message || 'Execution failed'
         setResult({
           output: '',
-          error: error.message || 'Execution failed',
+          error: message,
           exit_code: 1,
           execution_time: 0,
           artifacts: [],

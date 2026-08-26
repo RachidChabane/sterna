@@ -25,7 +25,7 @@ import {
   readFileAsText
 } from '@/utils/fileUtils'
 import { validateFiles } from '@/utils/fileSecurityValidation'
-import { getAccessToken } from '@/api/client'
+import apiClient, { getAccessToken, LONG_RUNNING_TIMEOUT_MS } from '@/api/client'
 
 /**
  * Extract text content from PDF and Office documents using backend API
@@ -40,25 +40,20 @@ async function extractDocumentContent(file: File): Promise<string | null> {
       return null
     }
 
-    const response = await fetch('/api/documents/extract/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        filename: file.name,
-        file_data: base64,
-        mime_type: file.type
-      }),
+    const response = await apiClient.post('/documents/extract/', {
+      filename: file.name,
+      file_data: base64,
+      mime_type: file.type
+    }, { timeout: LONG_RUNNING_TIMEOUT_MS }).catch((err) => {
+      console.error(`[AttachmentMenu] Extraction failed: ${err instanceof Error ? err.message : err}`)
+      return null
     })
 
-    if (!response.ok) {
-      console.error(`[AttachmentMenu] Extraction failed: ${response.status}`)
+    if (!response) {
       return null
     }
 
-    const result = await response.json()
+    const result = response.data
     if (result.success && result.content) {
       return result.content
     } else {
