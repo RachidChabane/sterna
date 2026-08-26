@@ -11,11 +11,11 @@ Includes token optimization features:
 """
 
 import logging
-from typing import Callable, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from asgiref.sync import async_to_sync
-from celery import shared_task
-from channels.layers import get_channel_layer
+from celery import shared_task  # type: ignore[import-untyped]
+from channels.layers import get_channel_layer  # type: ignore[import-untyped]
 from django.utils import timezone
 
 from code_sessions.models import GitHubConnection
@@ -457,7 +457,7 @@ def run_agent_loop(
                f"compression={ENABLE_TOOL_COMPRESSION}")
 
     # Build messages for the agent
-    messages = [
+    messages: List[Dict[str, Any]] = [
         {
             "role": "system",
             "content": _build_coding_system_prompt(job, has_github=has_github),
@@ -590,7 +590,7 @@ def run_agent_loop(
     # Track accumulated usage
     total_prompt_tokens = 0
     total_completion_tokens = 0
-    total_cost = 0
+    total_cost = 0.0
     all_files_modified = []
     all_content = []
     all_steps = []  # Track steps for UI display

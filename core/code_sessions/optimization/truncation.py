@@ -10,7 +10,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .constants import (
     AST_CONTEXT_LINES_AFTER,
@@ -274,7 +274,7 @@ class SmartTruncator:
             (r'^(?:export\s+)?type\s+(\w+)', "type"),
         ]
 
-        definitions = []
+        definitions: List[Dict[str, Any]] = []
         for i, line in enumerate(lines):
             for pattern, def_type in patterns:
                 match = re.match(pattern, line)

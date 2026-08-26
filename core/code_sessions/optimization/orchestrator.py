@@ -72,7 +72,7 @@ class AgentOrchestrator:
         job: Any,  # CodeJob instance
         auth_token: str,
         github_token: Optional[str] = None,
-        on_step: Optional[Callable[[str, str, Any], None]] = None,
+        on_step: Optional[Callable[[str, Optional[str], Any], None]] = None,
     ):
         """
         Initialize orchestrator.
@@ -119,7 +119,7 @@ class AgentOrchestrator:
         logger.info(f"[Orchestrator] Scout model: {SCOUT_MODEL_ID}, Editor model: {self.job.session.model_id}")
 
         result = OrchestratorResult()
-        metrics = {
+        metrics: Dict[str, Any] = {
             "two_phase_enabled": True,
             "conversation_summarization": ENABLE_CONVERSATION_SUMMARIZATION,
             "tool_compression": ENABLE_TOOL_COMPRESSION,
@@ -230,7 +230,7 @@ class AgentOrchestrator:
         logger.info("Executing single-phase with optimizations")
 
         result = OrchestratorResult()
-        metrics = {
+        metrics: Dict[str, Any] = {
             "two_phase_enabled": False,
             "conversation_summarization": ENABLE_CONVERSATION_SUMMARIZATION,
             "tool_compression": ENABLE_TOOL_COMPRESSION,
@@ -290,8 +290,8 @@ class AgentOrchestrator:
 
         if scout_report.files_to_create:
             files_to_modify_str += "\nFiles to create:\n"
-            for f in scout_report.files_to_create:
-                files_to_modify_str += f"- {f.path}: {f.purpose}\n"
+            for fc in scout_report.files_to_create:
+                files_to_modify_str += f"- {fc.path}: {fc.purpose}\n"
 
         # Format snippets
         snippets_str = ""

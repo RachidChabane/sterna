@@ -2,6 +2,7 @@
 
 import logging
 import secrets
+from typing import cast
 
 from django.conf import settings
 from django.core.cache import cache
@@ -12,6 +13,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from django.shortcuts import get_object_or_404
+
+from authentication.models import User
 
 from .models import AgentPlan, ClonedRepository, CodeJob, CodeSession, CreatedPullRequest, GitHubConnection, PlanStep, SubAgent
 from .serializers import (
@@ -41,6 +44,15 @@ OAUTH_STATE_PREFIX = "code_github_oauth_state:"
 OAUTH_STATE_EXPIRY = 600  # 10 minutes
 
 
+def _authenticated_user_id(request: Request) -> str:
+    """Get the id of the requesting user.
+
+    Callers are guarded by IsAuthenticated, so request.user is always our
+    concrete User model rather than AnonymousUser.
+    """
+    return str(cast(User, request.user).id)
+
+
 # ==================== GitHub OAuth Views ====================
 
 
@@ -58,7 +70,7 @@ def github_connect(request: Request) -> Response:
 
     # Store state in cache with user ID (use base_state as key)
     cache_key = f"{OAUTH_STATE_PREFIX}{base_state}"
-    cache.set(cache_key, str(request.user.id), OAUTH_STATE_EXPIRY)
+    cache.set(cache_key, _authenticated_user_id(request), OAUTH_STATE_EXPIRY)
 
     # Get redirect URI from settings or request
     redirect_uri = request.query_params.get(
@@ -105,7 +117,7 @@ def github_callback(request: Request) -> Response:
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    if stored_user_id != str(request.user.id):
+    if stored_user_id != _authenticated_user_id(request):
         return Response(
             {"error": "State token mismatch"},
             status=status.HTTP_403_FORBIDDEN,
@@ -159,7 +171,7 @@ def github_callback(request: Request) -> Response:
         )
 
         logger.info(
-            f"GitHub connected for user {request.user.id}: {user_info.get('login')}"
+            f"GitHub connected for user {_authenticated_user_id(request)}: {user_info.get('login')}"
         )
 
         return Response({
@@ -210,7 +222,7 @@ def github_disconnect(request: Request) -> Response:
     deleted, _ = GitHubConnection.objects.filter(user=request.user).delete()
 
     if deleted:
-        logger.info(f"GitHub disconnected for user {request.user.id}")
+        logger.info(f"GitHub disconnected for user {_authenticated_user_id(request)}")
 
     return Response({"success": True, "deleted": deleted > 0})
 
@@ -482,7 +494,7 @@ class CodeJobViewSet(viewsets.ReadOnlyModelViewSet):
 
         # Revoke Celery task
         if job.celery_task_id:
-            from celery import current_app
+            from celery import current_app  # type: ignore[import-untyped]
 
             current_app.control.revoke(job.celery_task_id, terminate=True)
 
@@ -1066,6 +1078,7 @@ def start_implementation(request: Request) -> Response:
             {"error": "repo_full_name, issue_number, and issue_title are required"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    issue_title = str(issue_title)
 
     branch = request.data.get("branch", "main")
     issue_body = request.data.get("issue_body", "")

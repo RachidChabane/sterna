@@ -391,7 +391,7 @@ async def ensure_repo_in_sandbox(
             logger.warning(f"[ensure_repo] Force-restore failed: {e}")
 
         # Step 5: Reconcile git state (create branch, stage, commit)
-        reconcile_result = {"success": False}
+        reconcile_result: Dict[str, Any] = {"success": False}
         try:
             async with httpx.AsyncClient() as client:
                 reconcile_resp = await client.post(

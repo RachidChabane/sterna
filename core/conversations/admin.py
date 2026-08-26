@@ -40,13 +40,13 @@ class ConversationAdmin(admin.ModelAdmin):
         }),
     )
 
+    @admin.display(description='Messages')
     def message_count(self, obj):
         return obj.message_count
-    message_count.short_description = 'Messages'
 
+    @admin.display(description='Chats')
     def chat_count(self, obj):
         return obj.chat_count
-    chat_count.short_description = 'Chats'
 
 
 @admin.register(Chat)
@@ -74,9 +74,9 @@ class ChatAdmin(admin.ModelAdmin):
         }),
     )
 
+    @admin.display(description='Messages')
     def message_count(self, obj):
         return obj.message_count
-    message_count.short_description = 'Messages'
 
 
 @admin.register(Message)

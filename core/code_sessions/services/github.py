@@ -5,7 +5,7 @@ It uses the GitHub REST API with OAuth tokens stored in GitHubConnection.
 """
 
 import logging
-from typing import Optional
+from typing import Any, Optional, cast
 
 import httpx
 from django.conf import settings
@@ -16,7 +16,12 @@ logger = logging.getLogger(__name__)
 class GitHubAPIError(Exception):
     """Exception raised for GitHub API errors."""
 
-    def __init__(self, message: str, status_code: int = None, response: dict = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        response: Optional[dict] = None,
+    ):
         self.message = message
         self.status_code = status_code
         self.response = response
@@ -114,7 +119,7 @@ class GitHubService:
             dict: User information including login, id, name, email, avatar_url
         """
         response = await self.client.get(f"{self.BASE_URL}/user")
-        return self._handle_response(response)
+        return cast(dict, self._handle_response(response))
 
     async def get_user_emails(self) -> list[dict]:
         """Get authenticated user's email addresses.
@@ -123,7 +128,7 @@ class GitHubService:
             list: List of email objects with email, primary, verified fields
         """
         response = await self.client.get(f"{self.BASE_URL}/user/emails")
-        return self._handle_response(response)
+        return cast(list, self._handle_response(response))
 
     async def get_primary_email(self) -> str | None:
         """Get the user's primary verified email.
@@ -173,7 +178,7 @@ class GitHubService:
                 "type": type,
             },
         )
-        return self._handle_response(response)
+        return cast(list, self._handle_response(response))
 
     async def get_repo(self, owner: str, repo: str) -> dict:
         """Get repository details.
@@ -186,7 +191,7 @@ class GitHubService:
             dict: Repository details
         """
         response = await self.client.get(f"{self.BASE_URL}/repos/{owner}/{repo}")
-        return self._handle_response(response)
+        return cast(dict, self._handle_response(response))
 
     async def list_branches(
         self,
@@ -213,7 +218,7 @@ class GitHubService:
                 "per_page": min(per_page, 100),
             },
         )
-        return self._handle_response(response)
+        return cast(list, self._handle_response(response))
 
     async def get_default_branch(self, owner: str, repo: str) -> str:
         """Get repository's default branch name.
@@ -273,7 +278,7 @@ class GitHubService:
         title: str,
         body: str,
         head: str,
-        base: str = None,
+        base: Optional[str] = None,
         draft: bool = False,
     ) -> dict:
         """Create a pull request.
@@ -303,7 +308,7 @@ class GitHubService:
                 "draft": draft,
             },
         )
-        return self._handle_response(response)
+        return cast(dict, self._handle_response(response))
 
     async def list_pull_requests(
         self,
@@ -333,7 +338,7 @@ class GitHubService:
                 "per_page": min(per_page, 100),
             },
         )
-        return self._handle_response(response)
+        return cast(list, self._handle_response(response))
 
     # ==================== Commit Operations ====================
 
@@ -341,7 +346,7 @@ class GitHubService:
         self,
         owner: str,
         repo: str,
-        branch: str = None,
+        branch: Optional[str] = None,
         limit: int = 20,
     ) -> list[dict]:
         """List commits for a repository branch.
@@ -355,7 +360,7 @@ class GitHubService:
         Returns:
             list: List of commit objects
         """
-        params = {"per_page": min(limit, 100)}
+        params: dict[str, Any] = {"per_page": min(limit, 100)}
         if branch:
             params["sha"] = branch
 
@@ -363,7 +368,7 @@ class GitHubService:
             f"{self.BASE_URL}/repos/{owner}/{repo}/commits",
             params=params,
         )
-        return self._handle_response(response)
+        return cast(list, self._handle_response(response))
 
     async def compare_commits(
         self,
@@ -386,7 +391,7 @@ class GitHubService:
         response = await self.client.get(
             f"{self.BASE_URL}/repos/{owner}/{repo}/compare/{base}...{head}",
         )
-        return self._handle_response(response)
+        return cast(dict, self._handle_response(response))
 
     async def get_commit(
         self,
@@ -407,7 +412,7 @@ class GitHubService:
         response = await self.client.get(
             f"{self.BASE_URL}/repos/{owner}/{repo}/commits/{sha}",
         )
-        return self._handle_response(response)
+        return cast(dict, self._handle_response(response))
 
     # ==================== Git Operations Helpers ====================
 
@@ -449,7 +454,7 @@ class GitHubService:
     # ==================== OAuth Helpers ====================
 
     @classmethod
-    def get_authorization_url(cls, state: str, redirect_uri: str = None) -> str:
+    def get_authorization_url(cls, state: str, redirect_uri: Optional[str] = None) -> str:
         """Generate GitHub OAuth authorization URL.
 
         Args:

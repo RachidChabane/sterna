@@ -8,7 +8,7 @@ import logging
 from typing import Set
 
 from asgiref.sync import sync_to_async
-from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from channels.generic.websocket import AsyncJsonWebsocketConsumer  # type: ignore[import-untyped]
 from django.contrib.auth.models import AnonymousUser
 
 logger = logging.getLogger(__name__)
