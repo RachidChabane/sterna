@@ -3,6 +3,7 @@ Real-time Redis counters for smart router routing metrics.
 """
 
 import logging
+from typing import Optional
 
 from django.core.cache import cache
 
@@ -25,7 +26,7 @@ def record_routing_decision(
     resolved_model: str,
     cost_tier: str,
     score: int,
-    classification_latency_ms: int = None,
+    classification_latency_ms: Optional[int] = None,
     is_reroute: bool = False,
     tier2_fallback: bool = False,
 ):

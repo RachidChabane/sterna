@@ -13,7 +13,7 @@ import json
 import logging
 import uuid
 from contextvars import ContextVar
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple
 
 import httpx
 from asgiref.sync import sync_to_async
@@ -89,9 +89,9 @@ async def _check_spark_generation_gate(user_id) -> Optional[str]:
             QuotaExceededException,
         )
         from usage_quota.models import FeatureType, ServiceType
-        try:
+        if TYPE_CHECKING:
             from authentication.models import User
-        except ImportError:
+        else:
             from django.contrib.auth import get_user_model
             User = get_user_model()
         user = await sync_to_async(User.objects.get)(id=user_id)

@@ -89,10 +89,10 @@ class EndpointKeyResolver:
         except ValueError:
             # No key anywhere — last resort: reuse the agent's own endpoint.
             model = (
-                native_model_name(summarizer_model)
+                (native_model_name(summarizer_model) or summarizer_model)
                 if self._provider_slug
                 else summarizer_model
             )
             return self._api_key, self._base_url, model
-        model = native_model_name(summarizer_model) if slug else summarizer_model
+        model = (native_model_name(summarizer_model) or summarizer_model) if slug else summarizer_model
         return api_key, base_url, model

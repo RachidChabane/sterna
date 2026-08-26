@@ -98,10 +98,10 @@ def list_knowledge_base_documents() -> str:
         # Format for LLM
         formatted_lines = [f"📚 **Your Knowledge Base** ({len(doc_list)} document{'s' if len(doc_list) != 1 else ''}):\n"]
 
-        for i, doc in enumerate(doc_list, 1):
-            status_icon = "✅" if doc['status'] == 'ready' else "⏳" if doc['status'] == 'processing' else "❌"
+        for i, entry in enumerate(doc_list, 1):
+            status_icon = "✅" if entry['status'] == 'ready' else "⏳" if entry['status'] == 'processing' else "❌"
             formatted_lines.append(
-                f"{i}. {status_icon} **{doc['filename']}** ({doc['type'].upper()}, {doc['size_kb']:.1f} KB)"
+                f"{i}. {status_icon} **{entry['filename']}** ({entry['type'].upper()}, {entry['size_kb']:.1f} KB)"
             )
 
         total_size_mb = total_size / (1024 * 1024)
@@ -209,8 +209,8 @@ def get_knowledge_base_context_for_llm(
     user,
     query: str,
     max_results: int = 5,
-    conversation_id: str = None,
-    chat_id: str = None,
+    conversation_id: Optional[str] = None,
+    chat_id: Optional[str] = None,
 ) -> Optional[str]:
     """
     Get knowledge base context to inject into LLM prompt.

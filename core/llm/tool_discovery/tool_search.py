@@ -8,9 +8,9 @@ Implements Anthropic's Tool Search Tool pattern.
 import json
 import logging
 import re
-from typing import Optional, Callable
+from typing import Any, Dict, Optional
 
-from langchain_core.tools import tool
+from langchain_core.tools import tool, BaseTool
 from pydantic import BaseModel, Field
 
 from .service import ToolDiscoveryService, ToolDiscoveryContext
@@ -41,7 +41,7 @@ class ToolSearchInput(BaseModel):
 def create_tool_search_tool(
     discovery_service: ToolDiscoveryService,
     context: ToolDiscoveryContext
-) -> Callable:
+) -> BaseTool:
     """
     Factory to create the Tool Search Tool with injected context.
 
@@ -158,7 +158,7 @@ def create_tool_search_tool(
 def create_tool_search_tool_sync(
     discovery_service: ToolDiscoveryService,
     context: ToolDiscoveryContext
-) -> Callable:
+) -> BaseTool:
     """
     Create a synchronous version of the tool search tool.
 
@@ -246,7 +246,7 @@ class GetToolDetailsInput(BaseModel):
 def create_get_tool_details_tool(
     discovery_service: ToolDiscoveryService,
     context: ToolDiscoveryContext
-) -> Callable:
+) -> BaseTool:
     """
     Factory to create the Get Tool Details tool.
 
@@ -324,7 +324,7 @@ def create_get_tool_details_tool(
         # Build full details response
         # Sanitize function_name for Anthropic compatibility (only [a-zA-Z0-9_-] allowed)
         sanitized_id = tool_def.id.replace(":", "_")
-        result = {
+        result: Dict[str, Any] = {
             "function_name": sanitized_id,
             "name": tool_def.name,
             "description": tool_def.description,  # Full description

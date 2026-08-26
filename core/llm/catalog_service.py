@@ -10,6 +10,7 @@ from decimal import Decimal
 from django.core.cache import cache
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import QuerySet
 
 from .client import OpenRouterClient
 from .models import ModelCatalog
@@ -418,7 +419,7 @@ class CatalogService:
             logger.error(f"Failed to populate catalog: {e}")
             return False
 
-    def get_all_models_smart(self) -> List[ModelCatalog]:
+    def get_all_models_smart(self) -> "QuerySet[ModelCatalog]":
         """
         Get all models, automatically fetching from OpenRouter if needed.
 
@@ -658,7 +659,7 @@ class CatalogService:
             models = self.fetch_and_cache_models(force_refresh=True)
 
             # Count by provider
-            provider_counts = {}
+            provider_counts: Dict[str, int] = {}
             for model in models:
                 provider = model.get("id", "").split("/")[0]
                 provider_counts[provider] = provider_counts.get(provider, 0) + 1

@@ -171,7 +171,7 @@ class PTCEngine:
         # Build execution environment
         # Note: In production, this would execute in the sandbox
         # For now, we prepare the code for sandbox execution
-        execution_code = self._prepare_code_for_sandbox(code, tool_wrappers.keys())
+        execution_code = self._prepare_code_for_sandbox(code, list(tool_wrappers.keys()))
 
         try:
             # Execute via orchestrator sandbox

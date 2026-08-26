@@ -100,7 +100,7 @@ def extract_brave_search_sources(tool_results: List[Dict]) -> List[Dict[str, str
     brave_image_search, brave_video_search, brave_local_search.
     """
     sources: List[Dict[str, str]] = []
-    seen_urls = set()
+    seen_urls: set[str] = set()
 
     for result_data in tool_results:
         tool_call = result_data.get("tool_call", {})

@@ -7,6 +7,7 @@ serialization.
 """
 
 import logging
+from typing import Any, Dict, List
 
 from ..catalog_service import CatalogService
 from ..prompts_v2 import estimate_system_prompt
@@ -84,14 +85,16 @@ def estimate_batch_cost(data: dict) -> dict:
         base_system_prompt if base_system_prompt else None, data
     )
     # Choose alpha/beta: request override > task-derived > defaults
-    if data.get("alpha") is not None and data.get("beta") is not None:
-        alpha = float(data.get("alpha"))
-        beta = float(data.get("beta"))
+    alpha_override = data.get("alpha")
+    beta_override = data.get("beta")
+    if alpha_override is not None and beta_override is not None:
+        alpha = float(alpha_override)
+        beta = float(beta_override)
     else:
         try:
             from ..prompt_classifier import predict_prompt_type, get_task_coefficients
             task_info = predict_prompt_type(typed_text, files_meta)
-            primary = task_info.get('task_primary')
+            primary = task_info.get('task_primary') or 'explanation'
             alpha, beta = get_task_coefficients(primary)
             # Special case: files-only (no typed text) → summarization-like output
             if task_info.get('signals', {}).get('has_files') and not task_info.get('signals', {}).get('has_text'):
@@ -111,7 +114,8 @@ def estimate_batch_cost(data: dict) -> dict:
             beta = BETA_T_DEFAULT
             task_primary = 'explanation'
             task_detection = None
-    margin = data.get("margin") if data.get("margin") is not None else SAFETY_COMPLETION_RESERVE
+    margin_override = data.get("margin")
+    margin = margin_override if margin_override is not None else SAFETY_COMPLETION_RESERVE
 
     # Compute prompt tokens P
     def image_tokens(images) -> int:
@@ -191,12 +195,10 @@ def estimate_batch_cost(data: dict) -> dict:
     deprecated_override = data.get("estimated_completion_tokens")
 
     catalog = CatalogService()
-    costs = []
-    total_cost = 0
 
     # Compute costs per model with per-model capacity using Ĉ(P) = min(M, W − P − margin, max(0, α + β·P))
-    costs = []
-    total_cost = 0
+    costs: List[Dict[str, Any]] = []
+    total_cost = 0.0
     per_model_estimates = []
     per_model_prompt_tokens = {}  # Track prompt tokens per model
 

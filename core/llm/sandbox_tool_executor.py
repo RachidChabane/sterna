@@ -9,7 +9,7 @@ import json
 import logging
 import asyncio
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from sterna.middleware.request_id import request_id_headers
 
@@ -632,7 +632,7 @@ class HTTPToolExecutor:
         todos = args.get("todos", [])
 
         # Validate todo structure
-        validated_todos = []
+        validated_todos: List[Dict[str, Any]] = []
         for todo in todos:
             if isinstance(todo, dict) and "status" in todo:
                 # Get text from either 'text' or 'content' field
@@ -880,8 +880,8 @@ class HTTPToolExecutor:
 
             if report.files_to_create:
                 summary_parts.append(f"\nNeed to create {len(report.files_to_create)} new file(s):")
-                for f in report.files_to_create[:5]:
-                    summary_parts.append(f"  - {f.path}: {f.purpose}")
+                for new_file in report.files_to_create[:5]:
+                    summary_parts.append(f"  - {new_file.path}: {new_file.purpose}")
 
             if report.approach:
                 summary_parts.append(f"\nSuggested approach:\n{report.approach}")
@@ -1080,7 +1080,7 @@ class HTTPToolExecutor:
         try:
             # Import services
             from .services import execute_coding_agent, get_api_key_for_user
-            from users.models import User
+            from authentication.models import User
 
             # Get model from agent context (passed via thread-local or similar mechanism)
             # For now, use a default model - this will be enhanced when integrated with agent
@@ -1214,7 +1214,7 @@ class HTTPToolExecutor:
 
         try:
             from .services import execute_coding_agent, get_api_key_for_user
-            from users.models import User
+            from authentication.models import User
             from conversations.models import Conversation
             from code_sessions.services.plan_service import create_plan_from_content
 
@@ -1329,7 +1329,7 @@ class HTTPToolExecutor:
 
         try:
             from .services import execute_coding_agent, get_api_key_for_user
-            from users.models import User
+            from authentication.models import User
             from code_sessions.models import AgentPlan, ClonedRepository, GitHubConnection
 
             # Load plan from DB
@@ -1485,7 +1485,7 @@ class HTTPToolExecutor:
 
         try:
             from .services import execute_coding_agent, get_api_key_for_user
-            from users.models import User
+            from authentication.models import User
             from code_sessions.models import AgentPlan
             from code_sessions.services.plan_service import update_plan_from_content
 

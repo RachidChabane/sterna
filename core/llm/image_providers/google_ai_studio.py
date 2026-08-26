@@ -255,12 +255,12 @@ class GoogleAIStudioProvider(BaseImageProvider):
                 raise ImageProviderError("No candidates in response")
 
             content = candidates[0].get("content", {})
-            parts = content.get("parts", [])
+            response_parts = content.get("parts", [])
 
             result_image_data = None
             mime_type = "image/png"
 
-            for part in parts:
+            for part in response_parts:
                 if "inlineData" in part:
                     inline_data = part["inlineData"]
                     result_image_data = base64.b64decode(inline_data["data"])

@@ -15,7 +15,7 @@ import asyncio
 import json
 import logging
 from decimal import Decimal
-from typing import Any, Awaitable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Awaitable, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +41,9 @@ async def check_code_session_budget(context) -> Tuple[Optional[str], Optional[fl
             QuotaExceededException,
         )
         from usage_quota.models import ServiceType, FeatureType
-        try:
+        if TYPE_CHECKING:
             from authentication.models import User
-        except ImportError:
+        else:
             from django.contrib.auth import get_user_model
             User = get_user_model()
         user = await sync_to_async(User.objects.get)(id=context.user_id)
@@ -117,9 +117,9 @@ async def bill_code_session(
         from usage_quota.billing.service import get_billing_service
         from usage_quota.billing.operations import BillableOperation
         from usage_quota.models import ServiceType, FeatureType, UsageLog
-        try:
+        if TYPE_CHECKING:
             from authentication.models import User
-        except ImportError:
+        else:
             from django.contrib.auth import get_user_model
             User = get_user_model()
         user = await sync_to_async(User.objects.get)(id=context.user_id)

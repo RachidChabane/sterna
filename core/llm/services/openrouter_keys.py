@@ -87,8 +87,8 @@ class OpenRouterKeyService:
     def provision_key_for_user(
         self,
         user: 'User',
-        limit: float = None,
-        limit_reset: str = None,
+        limit: Optional[float] = None,
+        limit_reset: Optional[str] = None,
     ) -> bool:
         """
         Provision a new OpenRouter API key for a user.

@@ -4,7 +4,7 @@ Avoid magic numbers by centralizing thresholds and mappings here.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional, cast
 
 PriorityLevel = Literal["off", "nice", "important", "critical"]
 CostDirection = Literal["lower", "higher"]
@@ -181,7 +181,9 @@ COMPARISON_PRESETS: Dict[PresetId, ComparisonPreset] = {
 
 def get_preset(preset_id: str) -> ComparisonPreset:
     """Get a preset by ID, defaulting to balanced."""
-    return COMPARISON_PRESETS.get(preset_id, COMPARISON_PRESETS["balanced"])
+    if preset_id in COMPARISON_PRESETS:
+        return COMPARISON_PRESETS[cast(PresetId, preset_id)]
+    return COMPARISON_PRESETS["balanced"]
 
 
 def get_all_preset_ids() -> List[PresetId]:

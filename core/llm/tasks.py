@@ -23,7 +23,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 import httpx
-from celery import shared_task
+from celery import shared_task  # type: ignore[import-untyped]
 from django.core.cache import cache
 
 logger = logging.getLogger(__name__)

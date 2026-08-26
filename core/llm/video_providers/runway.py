@@ -169,15 +169,16 @@ class RunwayProvider(BaseVideoProvider):
 
         if endpoint == "/text_to_video":
             # Text-to-video payload
-            payload = {
+            payload: Dict[str, Any] = {
                 "model": model_id,
                 "promptText": input_data.prompt,
             }
 
             # Add duration (Veo supports 4, 6, or 8 seconds)
             if input_data.duration:
+                requested_duration = input_data.duration
                 valid_durations = [4, 6, 8]
-                duration = min(valid_durations, key=lambda x: abs(x - input_data.duration))
+                duration = min(valid_durations, key=lambda x: abs(x - requested_duration))
                 payload["duration"] = duration
 
             # Add aspect ratio
@@ -210,7 +211,7 @@ class RunwayProvider(BaseVideoProvider):
             # Image-to-video payload
             # API docs: https://docs.dev.runwayml.com/api/
             # Supported models: gen4_turbo, veo3.1, gen3a_turbo, veo3.1_fast, veo3
-            payload: Dict[str, Any] = {
+            payload = {
                 "model": model_id,
             }
 
@@ -228,8 +229,9 @@ class RunwayProvider(BaseVideoProvider):
 
             # Add duration (gen4_turbo supports 5 or 10 seconds)
             if input_data.duration:
+                requested_duration = input_data.duration
                 valid_durations = [5, 10]
-                duration = min(valid_durations, key=lambda x: abs(x - input_data.duration))
+                duration = min(valid_durations, key=lambda x: abs(x - requested_duration))
                 payload["duration"] = duration
             else:
                 payload["duration"] = 5
@@ -249,7 +251,7 @@ class RunwayProvider(BaseVideoProvider):
         elif endpoint == "/video_to_video":
             # Video-to-video payload (gen4_aleph)
             # API docs: https://docs.dev.runwayml.com/api/
-            payload: Dict[str, Any] = {
+            payload = {
                 "model": model_id,
             }
 
@@ -279,7 +281,7 @@ class RunwayProvider(BaseVideoProvider):
         elif endpoint == "/character_performance":
             # Character animation (Act Two) payload
             # API docs: https://docs.dev.runwayml.com/api/
-            payload: Dict[str, Any] = {
+            payload = {
                 "model": model_id,
             }
 

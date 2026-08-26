@@ -129,8 +129,8 @@ def extract_xlsx_content(file_data: bytes, filename: str) -> str:
         Exception: If extraction fails
     """
     try:
-        import openpyxl
-        import pandas as pd
+        import openpyxl  # type: ignore[import-untyped]
+        import pandas as pd  # type: ignore[import-untyped]
 
         excel_file = io.BytesIO(file_data)
         workbook = openpyxl.load_workbook(excel_file, data_only=True)

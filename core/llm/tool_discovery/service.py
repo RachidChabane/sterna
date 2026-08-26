@@ -476,9 +476,9 @@ class ToolDiscoveryService:
         # Discovered tools
         for tool_id in context.discovered_tool_ids:
             if tool_id not in seen_ids:
-                tool = self.catalog.get_tool(tool_id, user_id=context.user_id)
-                if tool:
-                    tools.append(tool)
+                discovered_tool = self.catalog.get_tool(tool_id, user_id=context.user_id)
+                if discovered_tool:
+                    tools.append(discovered_tool)
                     seen_ids.add(tool_id)
 
         return tools
@@ -524,12 +524,12 @@ class ToolDiscoveryService:
             Summary dictionary
         """
         always_loaded = self.get_always_loaded_tools(context)
-        discovered = [
+        discovered_or_none = [
             self.catalog.get_tool(tid, user_id=context.user_id)
             for tid in context.discovered_tool_ids
             if tid not in {t.id for t in always_loaded}
         ]
-        discovered = [t for t in discovered if t is not None]
+        discovered: List[ToolDefinition] = [t for t in discovered_or_none if t is not None]
 
         return {
             "user_id": context.user_id,

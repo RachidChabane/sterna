@@ -7,7 +7,7 @@ through the normal chat flow via prompt injection.
 """
 import base64
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import httpx
 from asgiref.sync import sync_to_async
@@ -128,7 +128,7 @@ async def deploy_spark_to_vercel(
     orchestrator_url: str,
     chat_id: str,
     conversation_id: str,
-    deployment_id: str = None,
+    deployment_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Deploy an existing Next.js project from the sandbox workspace to Vercel.
 

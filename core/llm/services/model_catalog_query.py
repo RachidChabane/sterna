@@ -117,7 +117,8 @@ def build_model_list_response(filters: dict, query_params, fallback_queryset) ->
 
     # Apply tier filtering
     if filters.get("tier"):
-        tier_models = MODEL_TIERS.get(filters["tier"], {}).get("models", [])
+        tier_config = MODEL_TIERS.get(filters["tier"])
+        tier_models = tier_config["models"] if tier_config else []
         if tier_models:
             queryset = queryset.filter(model_id__in=tier_models)
 
@@ -253,7 +254,7 @@ def build_model_list_response(filters: dict, query_params, fallback_queryset) ->
 
     # Serialize the page
     serializer = ModelCatalogSerializer(page_queryset, many=True)
-    results = serializer.data
+    results: list = list(serializer.data)
 
     # Prepend Sterna Auto entry on page 1 (no search/provider filter active)
     if page_number == 1 and not filters.get("search") and not filters.get("provider"):

@@ -451,10 +451,10 @@ class LangChainSummarizer(MessageSummarizer):
     ) -> Tuple[str, int]:
         """Generate summary using LangChain chat model."""
         try:
-            from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+            from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 
             # Convert dict messages to LangChain format
-            lc_messages = []
+            lc_messages: List[BaseMessage] = []
             for msg in messages:
                 role = msg.get("role", "user")
                 content = msg.get("content", "")

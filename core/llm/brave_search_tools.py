@@ -219,8 +219,8 @@ async def brave_web_search(
     query: str,
     count: int = 10,
     safesearch: str = "moderate",
-    freshness: str = None,
-    goggles_id: str = None,
+    freshness: Optional[str] = None,
+    goggles_id: Optional[str] = None,
     enriched: bool = False
 ) -> str:
     """Web search. enriched=True for entities/places (infobox, FAQ, map)."""
@@ -299,7 +299,7 @@ async def brave_video_search(
 async def brave_news_search(
     query: str,
     count: int = 10,
-    freshness: str = None
+    freshness: Optional[str] = None
 ) -> str:
     """News article search."""
     logger.info(f"[BraveSearchTool] News search: {query}")
