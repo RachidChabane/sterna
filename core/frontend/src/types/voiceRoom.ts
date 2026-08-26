@@ -391,7 +391,7 @@ export type ClientEvent =
 /**
  * Language info from ElevenLabs
  */
-export interface TTSLanguage {
+interface TTSLanguage {
   language_id: string
   name: string
   country_code: string
