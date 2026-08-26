@@ -44,6 +44,7 @@ from llm.tests.golden.harness import (
     assert_matches_golden_json,
     assert_stream_is_substantive,
     capture_sse,
+    parse_event_payloads,
     seed_model_catalog,
 )
 from llm.tests.golden.orchestrator_double import (
@@ -56,9 +57,27 @@ pytestmark = pytest.mark.golden
 
 STREAM_URL = "/api/llm/completions/stream-complete-v2/"
 
+ANSWER_URL = "/api/code-sessions/coding-agent/answer/"
+
 STOP = "stop"
 TOOL_CALLS = "tool_calls"
 FIRST_CALL_INDEX = 0
+
+CODING_AGENT_TURN_EVENTS = [
+    "generation_id",
+    "content",
+    "file_tool_executing",
+    "coding_agent_step",
+    "coding_agent_completed",
+    "file_tool_executed",
+    "done",
+]
+"""What a turn that ran the coding agent must have put on the wire.
+
+The three `coding_agent_*` events are the contract the frontend
+renders a run from, so a transcript recorded without them is a
+degenerate stream, not a baseline.
+"""
 
 CODING_AGENT_PLAN_NAME = "coding-agent-golden-plan"
 CODE_SESSION_WEEKLY_LIMIT = 100
@@ -367,7 +386,7 @@ class CodingAgentGoldenTests(APITestCase):
         assert_stream_is_substantive(
             self,
             raw,
-            ["generation_id", "content", "file_tool_executing", "file_tool_executed", "done"],
+            CODING_AGENT_TURN_EVENTS,
         )
         assert_matches_golden(self, "v2_coding_agent_plan_mode", raw)
         assert_matches_golden_json(
@@ -420,7 +439,7 @@ class CodingAgentGoldenTests(APITestCase):
         assert_stream_is_substantive(
             self,
             raw,
-            ["generation_id", "content", "file_tool_executing", "file_tool_executed", "done"],
+            CODING_AGENT_TURN_EVENTS,
         )
         assert_matches_golden(self, "v2_coding_agent_implement_mode", raw)
         assert_matches_golden_json(
@@ -447,6 +466,50 @@ class CodingAgentGoldenTests(APITestCase):
         self.assertEqual(plan.status, AgentPlan.Status.COMPLETED)
         self.assertEqual(plan.implementation_branch, f"implement/{plan.slug}")
 
+    def test_implement_mode_relays_the_question_and_its_answer(self):
+        """The full question round trip, from the chat stream and back.
+
+        The run's block reaches the browser as a `coding_agent_question`
+        frame on the turn's own stream, and the answer the user picks
+        goes back to the sandbox through the answer endpoint. The wait
+        itself is the orchestrator's: the tool call stays in flight
+        until the relay releases it.
+        """
+        plan = self._seed_ready_plan()
+        orchestrator = _implement_orchestrator()
+
+        raw = self._post(
+            self._script(
+                IMPLEMENT_TOOL_CALL_ID,
+                IMPLEMENT_TOOL_NAME,
+                {"plan_id": str(plan.id)},
+                "The plan is implemented on its branch.",
+            ),
+            orchestrator,
+        )
+
+        asked = parse_event_payloads(raw, "coding_agent_question")
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(asked[0]["question"], QUESTION)
+        self.assertEqual(asked[0]["options"], QUESTION_OPTIONS)
+
+        with patch.object(httpx.AsyncClient, "post", orchestrator.post):
+            answered = self.client.post(
+                ANSWER_URL,
+                {"chat_id": str(self.chat.id), "answer": asked[0]["options"][0]["label"]},
+                format="json",
+            )
+
+        self.assertEqual(answered.status_code, 200)
+        self.assertTrue(answered.json()["success"])
+        relayed = [
+            request["payload"]
+            for request in orchestrator.request_log()
+            if request["url"].endswith("/coding-agent/answer")
+        ]
+        self.assertEqual([payload["answer"] for payload in relayed], [ANSWER])
+        self.assertEqual(relayed[0]["chat_id"], str(self.chat.id))
+
     # --- (c) mid-run quota exhaustion: the runner stops the job early ---
 
     def test_implement_mode_quota_exceeded_transcript(self):
@@ -466,7 +529,7 @@ class CodingAgentGoldenTests(APITestCase):
         assert_stream_is_substantive(
             self,
             raw,
-            ["generation_id", "content", "file_tool_executing", "file_tool_executed", "done"],
+            CODING_AGENT_TURN_EVENTS,
         )
         assert_matches_golden(self, "v2_coding_agent_quota_exceeded", raw)
         assert_matches_golden_json(

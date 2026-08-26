@@ -45,6 +45,18 @@ APPROVAL_ENTRY_PATTERN = re.compile(
 ELAPSED_SECONDS_PATTERN = re.compile(rb'"elapsed_seconds": \d+')
 ELAPSED_SECONDS_PLACEHOLDER = b'"elapsed_seconds": <elapsed-seconds>'
 
+# The wall-clock milliseconds a coding-agent call took, carried by the
+# `coding_agent_completed` event. Anchored on both neighbouring field
+# names, so no `duration_ms` a fixture supplies elsewhere can match:
+# a change to either name, or to their order, leaves the raw reading
+# in place and the comparison fails.
+CODING_AGENT_DURATION_PATTERN = re.compile(
+    rb'"files_created": (\[[^\]]*\]), "duration_ms": \d+, "total_tokens":'
+)
+CODING_AGENT_DURATION_REPLACEMENT = (
+    rb'"files_created": \1, "duration_ms": <duration-ms>, "total_tokens":'
+)
+
 
 class NormalizationRule(NamedTuple):
     """One declared rewrite, applied to the raw transcript bytes."""
@@ -129,6 +141,16 @@ NORMALIZATION_RULES: List[NormalizationRule] = [
             "<elapsed-seconds>."
         ),
         apply=lambda raw: ELAPSED_SECONDS_PATTERN.sub(ELAPSED_SECONDS_PLACEHOLDER, raw),
+    ),
+    NormalizationRule(
+        name="coding_agent_duration_ms",
+        description=(
+            "The wall-clock duration a coding_agent_completed event "
+            "reports becomes <duration-ms>."
+        ),
+        apply=lambda raw: CODING_AGENT_DURATION_PATTERN.sub(
+            CODING_AGENT_DURATION_REPLACEMENT, raw
+        ),
     ),
 ]
 

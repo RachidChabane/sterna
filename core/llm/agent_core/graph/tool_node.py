@@ -1,10 +1,13 @@
 """The node that answers the pending tool calls and feeds the results back.
 
 Calls that may run now do so concurrently, each under its own
-keep-alive, and each produces one tool-role message appended to the
-conversation so the next generation can read it. A call still waiting
-on the user's sign-off stays pending and is left for the round after
-the pause. Three outcomes are answered the same way
+keep-alive and -- where the progress port opens one -- its own
+progress channel, and each produces one tool-role message appended to
+the conversation so the next generation can read it. What a progress
+channel reports lands while the call is still running, and what it
+makes of the finished call lands before the round's results do. A
+call still waiting on the user's sign-off stays pending and is left
+for the round after the pause. Three outcomes are answered the same way
 — as a result the model can reason about rather than as a failure that
 ends the turn: a call naming a tool the registry does not hold, a call
 the user denied, and a handler that raised.
@@ -27,7 +30,7 @@ from ..provider import ProviderMessage
 from ..registry import ToolDefinition
 from .approval_nodes import partition_by_gate
 from .dependencies import GraphDependencies
-from .emission import EventStream, Heartbeat
+from .emission import EventStream, Heartbeat, ProgressPump
 from .ports import ToolApprovalDecision
 from .state import AgentTurnState
 
@@ -112,12 +115,16 @@ async def _run_one(
     if decode_error is not None:
         return _failure(call, decode_error)
 
+    watch = deps.tool_progress.watch(call)
+    interval_seconds = deps.config.heartbeat_interval_seconds
     async with Heartbeat(
-        stream,
-        tool=call.function.name,
-        interval_seconds=deps.config.heartbeat_interval_seconds,
-    ):
-        return await _invoke(call, definition, arguments, deps)
+        stream, tool=call.function.name, interval_seconds=interval_seconds
+    ), ProgressPump(stream, watch=watch, interval_seconds=interval_seconds):
+        outcome = await _invoke(call, definition, arguments, deps)
+
+    if watch is not None:
+        stream.emit_all(await watch.close(outcome.result))
+    return outcome
 
 
 async def _invoke(

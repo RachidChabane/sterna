@@ -164,7 +164,10 @@ class CodingAgentEventTests(unittest.TestCase):
         self.assertEqual(event.event_type, EventType.CODING_AGENT_STEP)
 
     def test_coding_agent_question_event(self):
-        event = CodingAgentQuestionEvent(question="Overwrite existing file?", options=["yes", "no"])
+        event = CodingAgentQuestionEvent(
+            question="Overwrite existing file?",
+            options=[{"label": "Yes", "description": "Replace the file."}],
+        )
         self.assertEqual(event.event_type, EventType.CODING_AGENT_QUESTION)
 
     def test_coding_agent_completed_event(self):

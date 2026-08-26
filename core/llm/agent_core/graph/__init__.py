@@ -15,7 +15,7 @@ web framework, a database, or a request.
 
 from .builder import build_agent_graph
 from .dependencies import GraphDependencies
-from .emission import EventStream, Heartbeat
+from .emission import EventStream, Heartbeat, ProgressPump
 from .errors import to_error_event
 from .policies import AgentTurnConfig, ApprovalPolicy, RetryPolicy
 from .ports import (
@@ -27,8 +27,11 @@ from .ports import (
     CostBreakdown,
     LocalApprovals,
     NoDerivedToolEvents,
+    NoToolProgress,
     ProviderReportedCost,
     ToolApprovalDecision,
+    ToolProgressPort,
+    ToolProgressWatch,
     ToolResultEventsPort,
     UnboundedContextWindow,
 )
@@ -54,10 +57,14 @@ __all__ = [
     "Heartbeat",
     "LocalApprovals",
     "NoDerivedToolEvents",
+    "NoToolProgress",
     "Node",
+    "ProgressPump",
     "ProviderReportedCost",
     "RetryPolicy",
     "ToolApprovalDecision",
+    "ToolProgressPort",
+    "ToolProgressWatch",
     "ToolResultEventsPort",
     "TurnNotPausedError",
     "UnboundedContextWindow",

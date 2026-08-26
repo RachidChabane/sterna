@@ -59,5 +59,12 @@
       },
       "budget_usd": 20.0
     }
+  },
+  {
+    "url": "http://orchestrator:8003/coding-agent/progress",
+    "payload": {
+      "user_id": "<uuid-1>",
+      "chat_id": "<uuid-3>"
+    }
   }
 ]

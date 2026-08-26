@@ -13,6 +13,8 @@ import unittest
 from typing import List, Optional, Sequence
 
 from llm.agent_core.events import (
+    CodingAgentCompletedEvent,
+    CodingAgentStepEvent,
     ContextTrimmedEvent,
     ErrorCode,
     EventType,
@@ -335,6 +337,123 @@ class ToolResultEventsPortTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(
             events.index(preview), events.index(first_of(events, EventType.FILE_TOOL_EXECUTED))
         )
+
+
+class _WatchedRun:
+    """A progress watch that reports one step per poll, then a summary."""
+
+    def __init__(self, poll_raises: Optional[BaseException] = None) -> None:
+        self.polls = 0
+        self.closed_with: Optional[JsonDict] = None
+        self._poll_raises = poll_raises
+
+    async def poll(self) -> Sequence[StreamEvent]:
+        self.polls += 1
+        if self._poll_raises is not None:
+            raise self._poll_raises
+        return [
+            CodingAgentStepEvent(
+                step_index=self.polls - 1,
+                type="text",
+                tool=None,
+                content=f"step {self.polls}",
+                timestamp=None,
+            )
+        ]
+
+    async def close(self, result: JsonDict) -> Sequence[StreamEvent]:
+        self.closed_with = result
+        return [
+            CodingAgentCompletedEvent(
+                success=bool(result.get("success")),
+                summary="finished",
+                files_modified=[],
+                files_created=[],
+                duration_ms=0,
+                total_tokens=0,
+                steps=[],
+            )
+        ]
+
+
+class _WatchesOneTool:
+    """A progress port that watches a single named tool."""
+
+    def __init__(self, tool_id: str, watch: _WatchedRun) -> None:
+        self._tool_id = tool_id
+        self._watch = watch
+
+    def watch(self, call: ToolCall):
+        return self._watch if call.function.name == self._tool_id else None
+
+
+class ToolProgressTests(unittest.IsolatedAsyncioTestCase):
+    def _turn(self, tool: RecordingTool, port, *, interval_seconds: Optional[float]):
+        provider = ScriptedProvider(
+            [
+                tool_call_generation("gen-1", tool_call("call-1", tool.tool_id)),
+                text_generation("gen-2", "done"),
+            ]
+        )
+        return AgentLoop(
+            dependencies(
+                provider,
+                [tool],
+                config=AgentTurnConfig(
+                    model=FIXTURE_MODEL, heartbeat_interval_seconds=interval_seconds
+                ),
+                tool_progress=port,
+            )
+        )
+
+    async def test_a_watched_call_reports_while_it_runs(self):
+        watch = _WatchedRun()
+        tool = RecordingTool("coding_agent", delay_seconds=0.05)
+        loop = self._turn(tool, _WatchesOneTool("coding_agent", watch), interval_seconds=0.01)
+
+        events = await run_turn(loop)
+
+        steps = all_of(events, EventType.CODING_AGENT_STEP)
+        self.assertGreaterEqual(len(steps), 2)
+        executed = events.index(first_of(events, EventType.FILE_TOOL_EXECUTED))
+        self.assertLess(events.index(steps[-1]), executed)
+
+    async def test_the_close_report_lands_before_the_round_s_results(self):
+        watch = _WatchedRun()
+        tool = RecordingTool("coding_agent", result={"success": True, "summary": "ok"})
+        loop = self._turn(tool, _WatchesOneTool("coding_agent", watch), interval_seconds=None)
+
+        events = await run_turn(loop)
+
+        completed = first_of(events, EventType.CODING_AGENT_COMPLETED)
+        self.assertEqual(watch.closed_with, {"success": True, "summary": "ok"})
+        self.assertEqual(all_of(events, EventType.CODING_AGENT_STEP), [])
+        self.assertLess(
+            events.index(completed),
+            events.index(first_of(events, EventType.FILE_TOOL_EXECUTED)),
+        )
+
+    async def test_an_unwatched_call_reports_nothing(self):
+        watch = _WatchedRun()
+        tool = RecordingTool("read_file")
+        loop = self._turn(tool, _WatchesOneTool("coding_agent", watch), interval_seconds=0.01)
+
+        events = await run_turn(loop)
+
+        self.assertEqual(watch.polls, 0)
+        self.assertIsNone(watch.closed_with)
+        self.assertEqual(all_of(events, EventType.CODING_AGENT_COMPLETED), [])
+
+    async def test_a_failing_poll_does_not_fail_the_call(self):
+        watch = _WatchedRun(poll_raises=RuntimeError("the orchestrator is unreachable"))
+        tool = RecordingTool("coding_agent", delay_seconds=0.05)
+        loop = self._turn(tool, _WatchesOneTool("coding_agent", watch), interval_seconds=0.01)
+
+        events = await run_turn(loop)
+
+        self.assertGreaterEqual(watch.polls, 2)
+        executed = first_of(events, EventType.FILE_TOOL_EXECUTED)
+        self.assertTrue(executed.results[0]["success"])
 
 
 class HeartbeatTests(unittest.IsolatedAsyncioTestCase):

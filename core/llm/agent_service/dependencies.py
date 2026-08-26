@@ -11,10 +11,11 @@ This module is the one place they are put together, so the shape of a
 turn is stated once and a request only supplies its own values. The
 two endpoints assemble different turns and each has its own builder:
 V2 runs every call it is given, compacts a history that no longer
-fits, and derives citations and previews from what a tool returned;
-V1 gates every call outside its sandboxed workspace tools, sends the
-history as it stands, and speaks a vocabulary with no derived event
-in it.
+fits, derives citations and previews from what a tool returned, and
+reports a coding-agent run's progress while the call is still in
+flight; V1 gates every call outside its sandboxed workspace tools,
+sends the history as it stands, and speaks a vocabulary with no
+derived event in it.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from ..agent_core.openrouter_provider import OpenRouterProvider
 from ..agent_core.registry import ToolExecutionContext, ToolRegistry
 from ..constants import TOOL_HEARTBEAT_INTERVAL_SECONDS
 from .approvals import StoredToolApprovals
+from .coding_agent_progress import CodingAgentProgress, ResolveContext
 from .context_window import CompactingContextWindow
 from .cost_accounting import CatalogPriceCostAccountant
 from .mcp_port import RegistryMCPTools, published_tool_id
@@ -92,9 +94,14 @@ class TurnStack:
 
 
 async def build_turn_stack(
-    request: TurnRequest, *, summarizer_endpoint
+    request: TurnRequest, *, summarizer_endpoint, resolve_file_tools_context: ResolveContext
 ) -> TurnStack:
-    """The dependencies one turn runs against, and the client it streams over."""
+    """The dependencies one turn runs against, and the client it streams over.
+
+    `resolve_file_tools_context` is read rather than passed by value:
+    the context the coding-agent progress port polls through is
+    installed once these dependencies exist.
+    """
 
     tool_set = await build_tool_set(
         request.flags,
@@ -137,6 +144,7 @@ async def build_turn_stack(
         tool_result_events=V2ToolResultEvents(
             web_search_enabled=request.flags.brave_search
         ),
+        tool_progress=CodingAgentProgress(resolve_file_tools_context),
     )
     return TurnStack(
         dependencies=dependencies, tool_set=tool_set, http_client=http_client

@@ -16,6 +16,15 @@ data: {"tool_calls": [{"id": "toolcall-implement-plan", "type": "function", "fun
 event: heartbeat
 data: {"tool": "implement_plan", "elapsed_seconds": <elapsed-seconds>}
 
+event: coding_agent_step
+data: {"step_index": 0, "type": "system", "content": "System: init"}
+
+event: coding_agent_step
+data: {"step_index": 1, "type": "tool_call", "tool": "mcp__ask-user__ask_user", "content": "Using mcp__ask-user__ask_user"}
+
+event: coding_agent_completed
+data: {"success": false, "summary": null, "files_modified": [], "files_created": [], "duration_ms": <duration-ms>, "total_tokens": 64000, "steps": [{"type": "system", "tool": null, "content": "System: init"}, {"type": "tool_call", "tool": "mcp__ask-user__ask_user", "content": "Using mcp__ask-user__ask_user"}]}
+
 event: file_tool_executed
 data: {"tool_calls": [{"id": "toolcall-implement-plan", "type": "function", "function": {"name": "implement_plan", "arguments": "{\"plan_id\": \"<uuid-1>\"}"}, "display_name": "Implement Plan"}], "results": [{"tool_call": {"id": "toolcall-implement-plan", "type": "function", "function": {"name": "implement_plan", "arguments": "{\"plan_id\": \"<uuid-1>\"}"}}, "result": {"success": false, "status": "error", "error_type": "quota_exceeded", "message": "Coding agent stopped: usage quota exceeded mid-run.", "limit_type": "weekly", "remaining_usd": 20.0}, "success": false}]}
 

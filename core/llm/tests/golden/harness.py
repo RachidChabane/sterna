@@ -162,6 +162,17 @@ def parse_event_names(raw: bytes) -> list:
     ]
 
 
+def parse_event_payloads(raw: bytes, event_name: str) -> list:
+    """The decoded payload of every frame carrying `event_name`, in order."""
+    payloads = []
+    for frame in raw.decode("utf-8").split("\n\n"):
+        lines = frame.splitlines()
+        if len(lines) < 2 or lines[0] != f"event: {event_name}":
+            continue
+        payloads.append(json.loads(lines[1][len("data: "):]))
+    return payloads
+
+
 def assert_stream_is_substantive(test_case, raw: bytes, expected_events) -> None:
     """Guard against a golden file that locks in a degenerate stream.
 
