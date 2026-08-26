@@ -112,6 +112,17 @@ class DefaultApprovalMatchesV1ClassificationTests(unittest.TestCase):
                 self.assertNotIn(tool_id, self.auto_tool_names)
                 self.assertIs(self.discovered[tool_id].approval, ToolApproval.REQUIRED)
 
+    def test_the_tool_discovery_meta_tools_are_required(self):
+        """`search_available_tools` / `get_tool_details` are not in the six-name
+        gate either: V2's auto-all approval policy still runs them ungated,
+        but their default classification (like every other tool here) is
+        `REQUIRED`, matching every tool outside the six file_tool_ids."""
+
+        for tool_id in ("search_available_tools", "get_tool_details"):
+            with self.subTest(tool_id=tool_id):
+                self.assertNotIn(tool_id, self.auto_tool_names)
+                self.assertIs(self.discovered[tool_id].approval, ToolApproval.REQUIRED)
+
     def test_agent_orchestration_tools_are_required(self):
         """Multi-step / delegating tools are not part of the six-name gate either."""
 

@@ -99,6 +99,8 @@ async def build_turn_stack(
     tool_set = await build_tool_set(
         request.flags,
         user_id=request.user_id,
+        conversation_id=request.conversation_id,
+        chat_id=request.chat_id,
         mcp_tools=MCPToolSource(RegistryMCPTools()),
     )
     http_client = httpx.AsyncClient(timeout=PROVIDER_TIMEOUT_SECONDS)
