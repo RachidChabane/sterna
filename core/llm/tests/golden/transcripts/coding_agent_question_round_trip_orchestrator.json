@@ -1,0 +1,80 @@
+{
+  "requests": [
+    {
+      "url": "http://orchestrator:8003/coding-agent/progress",
+      "payload": {
+        "user_id": "user-golden",
+        "chat_id": "chat-golden"
+      }
+    },
+    {
+      "url": "http://orchestrator:8003/coding-agent/answer",
+      "payload": {
+        "user_id": "user-golden",
+        "chat_id": "chat-golden",
+        "answer": "Delete"
+      }
+    }
+  ],
+  "progress": {
+    "found": true,
+    "step_count": 2,
+    "total_steps": 2,
+    "completed": false,
+    "exit_code": null,
+    "files_created": [],
+    "files_modified": [],
+    "files_read": [
+      "src/auth/session.py"
+    ],
+    "files_deleted": [],
+    "steps": [
+      {
+        "type": "system",
+        "tool": null,
+        "content": "System: init",
+        "input": null,
+        "output": null
+      },
+      {
+        "type": "tool_call",
+        "tool": "mcp__ask-user__ask_user",
+        "content": "Using mcp__ask-user__ask_user",
+        "input": {
+          "question": "Should an archived session row be deleted from the live table?",
+          "options": [
+            {
+              "label": "Delete",
+              "description": "Remove the row once it is archived."
+            },
+            {
+              "label": "Keep",
+              "description": "Leave the row in place and mark it archived."
+            }
+          ]
+        },
+        "output": null
+      }
+    ],
+    "error": null,
+    "summary": null,
+    "total_cost_usd": 0.0912,
+    "total_tokens": 21300,
+    "pending_question": {
+      "question": "Should an archived session row be deleted from the live table?",
+      "options": [
+        {
+          "label": "Delete",
+          "description": "Remove the row once it is archived."
+        },
+        {
+          "label": "Keep",
+          "description": "Leave the row in place and mark it archived."
+        }
+      ]
+    }
+  },
+  "answer_result": {
+    "success": true
+  }
+}

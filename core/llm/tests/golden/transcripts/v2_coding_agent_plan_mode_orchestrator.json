@@ -1,0 +1,49 @@
+[
+  {
+    "url": "http://orchestrator:8003/fs/list",
+    "payload": {
+      "path": "attachments",
+      "user_id": "<uuid-1>",
+      "conversation_id": "<uuid-2>",
+      "chat_id": "<uuid-3>",
+      "sync_mode": true
+    }
+  },
+  {
+    "url": "http://orchestrator:8003/coding-agent/execute",
+    "payload": {
+      "user_id": "<uuid-1>",
+      "conversation_id": "<uuid-2>",
+      "chat_id": "<uuid-3>",
+      "task": "Archive expired sessions instead of deleting them",
+      "model": "fixture/golden-model",
+      "allowed_tools": [
+        "Read",
+        "Glob",
+        "Grep",
+        "Bash"
+      ],
+      "max_iterations": 30,
+      "openrouter_api_key": "sk-golden-fixture",
+      "model_metadata": {
+        "model_name": "Golden Fixture Model",
+        "model_id": "fixture/golden-model",
+        "provider": "fixture",
+        "model_icon_slug": null,
+        "model_icon_url": null,
+        "provider_icon_slug": null,
+        "provider_icon_url": null,
+        "message_id": null
+      },
+      "mcp_servers": {},
+      "mode": "plan",
+      "plan_id": null,
+      "sub_agents": [],
+      "user_model_preferences": {
+        "fast_model_id": "anthropic/claude-haiku-4.5",
+        "balanced_model_id": "anthropic/claude-sonnet-4.5",
+        "powerful_model_id": "anthropic/claude-opus-4"
+      }
+    }
+  }
+]

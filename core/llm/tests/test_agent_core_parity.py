@@ -1,4 +1,8 @@
-"""Parity: the agent core reproduces every committed golden transcript.
+"""Parity: the agent core reproduces the provider-scripted goldens.
+
+A transcript is in scope when the whole turn can be replayed from a
+scripted provider and fixed tool results. `OUT_OF_SCOPE_TRANSCRIPTS`
+names the ones that cannot, each locked by its own end-to-end test.
 
 Each scenario drives `llm.agent_core.graph` with the generations its
 golden fixture fed the legacy streaming path, renders the loop's typed
@@ -31,6 +35,16 @@ pytestmark = pytest.mark.golden
 USER_ROLE = "user"
 THREAD_ID_PREFIX = "parity"
 
+# Transcripts of a turn this harness cannot script. Their tool call
+# leaves the loop for the sandbox orchestrator, so the stream depends on
+# database records and an HTTP boundary that the framework-free scenario
+# doubles do not carry. `llm.tests.golden.test_v2_coding_agent_transcripts`
+# drives those two end to end and is their lock.
+OUT_OF_SCOPE_TRANSCRIPTS = frozenset({
+    "v2_coding_agent_plan_mode",
+    "v2_coding_agent_implement_mode",
+})
+
 
 async def _run(scenario: ParityScenario) -> List[StreamEvent]:
     loop = AgentLoop(scenario.build_dependencies())
@@ -42,9 +56,15 @@ async def _run(scenario: ParityScenario) -> List[StreamEvent]:
 
 
 def _golden_names() -> List[str]:
+    """Every committed transcript this harness is expected to reproduce."""
+
     return sorted(
-        path.name[: -len(TRANSCRIPT_SUFFIX)]
-        for path in TRANSCRIPTS_DIR.glob(f"*{TRANSCRIPT_SUFFIX}")
+        name
+        for name in (
+            path.name[: -len(TRANSCRIPT_SUFFIX)]
+            for path in TRANSCRIPTS_DIR.glob(f"*{TRANSCRIPT_SUFFIX}")
+        )
+        if name not in OUT_OF_SCOPE_TRANSCRIPTS
     )
 
 
@@ -53,6 +73,16 @@ class AgentCoreGoldenParityTests(unittest.TestCase):
 
     def test_every_golden_transcript_has_a_scenario(self):
         self.assertEqual(sorted(scenario.name for scenario in scenarios()), _golden_names())
+
+    def test_every_out_of_scope_transcript_exists(self):
+        """An exclusion that names no transcript would weaken the check above."""
+
+        missing = sorted(
+            name
+            for name in OUT_OF_SCOPE_TRANSCRIPTS
+            if not transcript_path(name).exists()
+        )
+        self.assertEqual(missing, [], "excluded transcripts that no longer exist")
 
     def test_every_declared_divergence_states_a_reason(self):
         unexplained = [

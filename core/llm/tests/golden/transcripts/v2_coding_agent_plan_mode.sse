@@ -1,0 +1,33 @@
+event: generation_id
+data: {"generation_id": "genid-golden-first"}
+
+event: content
+data: {"content": "Handing this to the coding agent."}
+
+event: file_tool_executing
+data: {"tool_calls": [{"function": {"name": "...", "arguments": "{}"}, "id": "loading", "type": "function"}]}
+
+event: usage_update
+data: {"usage": {"prompt_tokens": 120, "completion_tokens": 40, "total_tokens": 160}, "cost": 0.00019999999999999998, "prompt_cost": 0.00011999999999999999, "completion_cost": 7.999999999999999e-05, "generation_id": "genid-golden-first", "generation_ids": ["genid-golden-first"]}
+
+event: file_tool_executing
+data: {"tool_calls": [{"id": "toolcall-plan-implementation", "type": "function", "function": {"name": "plan_implementation", "arguments": "{\"task\": \"Archive expired sessions instead of deleting them\"}"}, "display_name": "Plan Implementation"}]}
+
+event: heartbeat
+data: {"tool": "plan_implementation", "elapsed_seconds": <elapsed-seconds>}
+
+event: file_tool_executed
+data: {"tool_calls": [{"id": "toolcall-plan-implementation", "type": "function", "function": {"name": "plan_implementation", "arguments": "{\"task\": \"Archive expired sessions instead of deleting them\"}"}, "display_name": "Plan Implementation"}], "results": [{"tool_call": {"id": "toolcall-plan-implementation", "type": "function", "function": {"name": "plan_implementation", "arguments": "{\"task\": \"Archive expired sessions instead of deleting them\"}"}}, "result": {"success": true, "data": {"plan_id": "<uuid-1>", "plan_title": "Archive expired sessions", "total_steps": 2, "status": "ready"}, "cost_usd": 0.0}, "success": true}]}
+
+event: generation_id
+data: {"generation_id": "genid-golden-follow-up"}
+
+event: content
+data: {"content": "The plan is ready for your review."}
+
+event: usage_update
+data: {"usage": {"prompt_tokens": 320, "completion_tokens": 65, "total_tokens": 385}, "cost": 0.00045, "prompt_cost": 0.00031999999999999997, "completion_cost": 0.00013, "generation_id": "genid-golden-follow-up", "generation_ids": ["genid-golden-first", "genid-golden-follow-up"]}
+
+event: done
+data: {"model": "fixture/golden-model", "finish_reason": "stop", "usage": {"prompt_tokens": 320, "completion_tokens": 65, "total_tokens": 385}, "cost": 0.00045, "prompt_cost": 0.00031999999999999997, "completion_cost": 0.00013, "tool_cost": 0.0, "generation_id": "genid-golden-follow-up", "generation_ids": ["genid-golden-first", "genid-golden-follow-up"]}
+

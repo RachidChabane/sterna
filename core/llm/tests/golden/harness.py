@@ -9,6 +9,7 @@ Set the environment variable `GOLDEN_UPDATE=1` to rewrite the transcripts
 from the current behavior instead of asserting against them.
 """
 
+import json
 import os
 from decimal import Decimal
 from pathlib import Path
@@ -20,6 +21,8 @@ from .normalization import normalize
 
 TRANSCRIPTS_DIR = Path(__file__).resolve().parent / "transcripts"
 TRANSCRIPT_SUFFIX = ".sse"
+JSON_TRANSCRIPT_SUFFIX = ".json"
+JSON_INDENT = 2
 UPDATE_ENV_VAR = "GOLDEN_UPDATE"
 
 # --- Fixture constants ------------------------------------------------
@@ -115,6 +118,38 @@ def assert_matches_golden(test_case, name: str, raw: bytes) -> None:
         normalized.decode("utf-8"),
         expected.decode("utf-8"),
         f"Captured SSE stream diverged from {path.name}.",
+    )
+
+
+def json_transcript_path(name: str) -> Path:
+    return TRANSCRIPTS_DIR / f"{name}{JSON_TRANSCRIPT_SUFFIX}"
+
+
+def assert_matches_golden_json(test_case, name: str, payload) -> None:
+    """Compare a captured JSON-shaped exchange to its committed golden.
+
+    Serialized with a fixed indent and the key order the payload was
+    built in, then put through the same `normalize` rules as an SSE
+    transcript, so an identifier the code under test generated reads as
+    the same placeholder in both.
+    """
+    serialized = json.dumps(payload, indent=JSON_INDENT, ensure_ascii=False) + "\n"
+    normalized = normalize(serialized.encode("utf-8"))
+    path = json_transcript_path(name)
+
+    if os.environ.get(UPDATE_ENV_VAR) == "1":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(normalized)
+        return
+
+    test_case.assertTrue(
+        path.exists(),
+        f"Missing golden transcript {path}. Run with {UPDATE_ENV_VAR}=1 to create it.",
+    )
+    test_case.assertEqual(
+        normalized.decode("utf-8"),
+        path.read_bytes().decode("utf-8"),
+        f"Captured exchange diverged from {path.name}.",
     )
 
 
