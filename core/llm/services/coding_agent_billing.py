@@ -6,9 +6,9 @@ two-sided contract around `execute_coding_agent`: a pre-flight budget gate
 before the sandbox job starts, and a settlement that survives the caller's
 own cancellation once it ends. Centralizing both here means the gate and
 the settlement apply the same way regardless of which handler called them
-or which harness (Claude Code, opencode) the orchestrator ran the job
-with — and regardless of whether the browser that asked for it is still
-listening when the job finishes.
+or which harness the orchestrator ran the job with — and regardless of
+whether the browser that asked for it is still listening when the job
+finishes.
 """
 
 import asyncio

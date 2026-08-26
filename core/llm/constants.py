@@ -69,7 +69,7 @@ MAX_EXTENDED_SEARCHES_PER_MESSAGE = 3
 TOOL_EXECUTION_TIMEOUT_SECONDS = 300  # 5 minutes
 
 # Coding Agent specific timeout
-# The coding_agent tool runs Claude Code CLI which can take longer for complex tasks
+# The coding_agent tool runs the opencode CLI which can take longer for complex tasks
 # This allows up to 15 minutes for autonomous coding agent execution
 CODING_AGENT_TIMEOUT_SECONDS = 900  # 15 minutes
 

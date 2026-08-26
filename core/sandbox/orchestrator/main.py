@@ -27,7 +27,6 @@ from auth import CurrentUser, verify_jwt_token_from_query, generate_preview_toke
 from security_monitor import security_monitor
 from mcp_endpoints import router as mcp_router, set_sandbox_executor
 from workspace_client import get_workspace_client
-from anthropic_bridge import handle_messages_request as _bridge_handler
 
 # ArtifactStorage is optional - only initialize if S3/MinIO is configured
 artifact_storage = None
@@ -52,9 +51,9 @@ init_observability(
     service="orchestrator",
     app_loggers=(
         "main", "sandbox_executor", "coding_agent_runner",
-        "anthropic_bridge", "mcp_endpoints", "mcp_manager", "mcp_tools",
+        "mcp_endpoints", "mcp_manager", "mcp_tools",
         "workspace_client", "file_tools", "tool_executor",
-        "security_monitor", "artifact_storage", "claude_output_parser",
+        "security_monitor", "artifact_storage",
         "excel_handler", "auth",
     ),
 )
@@ -118,18 +117,6 @@ if sandbox_executor:
 
 # Include MCP router
 app.include_router(mcp_router)
-
-
-# ---------------------------------------------------------------------------
-# Anthropic-to-OpenAI Bridge
-# Allows Claude Code CLI to work with non-Anthropic models via OpenRouter.
-# Claude Code speaks Anthropic Messages format; the bridge translates to
-# OpenAI Chat Completions format for OpenRouter's /v1/chat/completions.
-# ---------------------------------------------------------------------------
-@app.post("/bridge/v1/messages")
-async def bridge_messages(request: Request):
-    """Bridge endpoint: Anthropic Messages → OpenAI Chat Completions → OpenRouter."""
-    return await _bridge_handler(request)
 
 
 @app.on_event("startup")

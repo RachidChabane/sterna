@@ -1,9 +1,9 @@
 """The workspace scan that refuses to start a job on a planted config.
 
-A user can write to their own workspace from the sandbox terminal. Both
-harnesses read configuration from files found there — settings, hooks,
-MCP server definitions, agent permissions — so a job whose workspace
-holds one does not start.
+A user can write to their own workspace from the sandbox terminal, and
+an agent harness reads configuration from files found there — settings,
+hooks, MCP server definitions, agent permissions — so a job whose
+workspace holds one does not start.
 
 opencode widens what has to be covered: it looks for ``opencode.json``
 and ``opencode.jsonc`` in the working directory *and every directory

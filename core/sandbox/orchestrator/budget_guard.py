@@ -9,8 +9,8 @@ timed-out run — the process exits, the runner's normal zombie/exit-code
 handling takes over, and the job settles for whatever it actually spent.
 
 A harness has no notion of its own budget: this module is the only place
-that compares cost against a ceiling, so enforcement is identical whether
-the harness is Claude Code or opencode.
+that compares cost against a ceiling, so enforcement is identical
+regardless of which harness the job runs on.
 """
 
 from typing import Optional, Protocol

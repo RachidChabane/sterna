@@ -23,14 +23,7 @@ from dataclasses import dataclass, field
 from workspace_client import get_workspace_client
 import opencode_harness
 from budget_guard import over_budget, terminate_command
-from claude_permission_profile import settings_for as claude_settings_for
-from coding_harness import (
-    OPENCODE,
-    AgentOutputAdapter,
-    create_adapter,
-    parse_run_output,
-    resolve_harness,
-)
+from coding_harness import AgentOutputAdapter, create_adapter, parse_run_output, resolve_harness
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +33,9 @@ logger = logging.getLogger(__name__)
 # can't write to tmpfs-mounted workspace directories.
 _progress_store: Dict[str, dict] = {}
 
-PLAN_MODE = "plan"
+#: Hosts the ask-user relay must reach past the egress proxy: itself
+#: (loopback) and the orchestrator, which the relay calls back into.
+RELAY_NO_PROXY_HOSTS = "localhost,127.0.0.1,sterna-orchestrator"
 
 
 def get_progress_from_store(user_id: str, chat_id: str) -> Optional[dict]:
@@ -142,10 +137,10 @@ class CodingAgentRunner:
         workspace_path: str
     ) -> tuple[bool, List[str]]:
         """
-        SECURITY: Scan workspace for dangerous Claude config files.
+        SECURITY: Scan workspace for dangerous agent config files.
 
         Users could plant malicious config files via the terminal that would
-        be read when the Coding Agent agent runs, potentially:
+        be read when the coding agent runs, potentially:
         - Defining malicious MCP servers that execute arbitrary code
         - Injecting hooks that run on agent events
         - Modifying agent behavior via settings
@@ -183,36 +178,26 @@ class CodingAgentRunner:
         self,
         container,
         job_id: str,
-        workspace_path: str,
-        mode: str = "auto",
-        harness: str = "",
     ) -> str:
         """
         SECURITY: Create an ephemeral HOME directory for this job.
 
-        This prevents any persistent config files from being read and ensures
-        each execution starts with a clean, controlled environment.
-
-        Also lays down whatever the harness reads from HOME: the Claude
-        harness takes its permissions from a settings file written here,
-        while opencode takes its own from the environment and needs only
-        the data directory a planning run writes its plan into.
+        This prevents any persistent config files from being read and
+        ensures each execution starts with a clean, controlled
+        environment. opencode takes its configuration from the
+        environment, not from a file under HOME; it needs only its data
+        directory, where a planning run's plan is allowed to land.
 
         Args:
             container: Docker container
             job_id: Unique job identifier
-            workspace_path: The workspace directory to restrict access to
-            mode: Agent mode - "plan" for restricted, anything else for full
-            harness: CLI harness the job runs on
 
         Returns:
             Path to the ephemeral home directory
         """
         ephemeral_home = f"/tmp/claude-home-{job_id}"
-        claude_config_dir = f"{ephemeral_home}/.claude"
 
-        # Create the ephemeral home and .claude config directory
-        setup_cmd = f'mkdir -p "{claude_config_dir}" && chmod 700 "{ephemeral_home}"'
+        setup_cmd = f'mkdir -p "{ephemeral_home}" && chmod 700 "{ephemeral_home}"'
         result = container.exec_run(
             ["sh", "-c", setup_cmd],
             user="sandboxuser"
@@ -225,44 +210,10 @@ class CodingAgentRunner:
             )
             return "/home/sandboxuser"
 
-        if harness == OPENCODE:
-            # opencode takes its configuration from the environment, not
-            # from a file under HOME; it needs only its data directory,
-            # where a planning run's plan is allowed to land.
-            container.exec_run(
-                ["sh", "-c", f'mkdir -p "{opencode_harness.plans_dir_for(ephemeral_home)}"'],
-                user="sandboxuser",
-            )
-            logger.info(f"[SECURITY] Created ephemeral home directory: {ephemeral_home}")
-            return ephemeral_home
-
-        # The container bounds the job; these settings narrow it further.
-        settings = claude_settings_for(mode, workspace_path, ephemeral_home)
-        if mode == PLAN_MODE:
-            logger.info(
-                "[SECURITY] Plan mode: read-only workspace, bash exploration allowed"
-            )
-
-        settings_json = json.dumps(settings, indent=2)
-        settings_path = f"{claude_config_dir}/settings.json"
-
-        # Write the settings file
-        write_cmd = f"cat > {settings_path} << 'SETTINGS_EOF'\n{settings_json}\nSETTINGS_EOF"
-        write_result = container.exec_run(
-            ["sh", "-c", write_cmd],
-            user="sandboxuser"
+        container.exec_run(
+            ["sh", "-c", f'mkdir -p "{opencode_harness.plans_dir_for(ephemeral_home)}"'],
+            user="sandboxuser",
         )
-
-        if write_result.exit_code != 0:
-            logger.warning(
-                "[SECURITY] Failed to write Claude settings file, "
-                "file access restrictions may not be enforced"
-            )
-        else:
-            logger.info(
-                f"[SECURITY] Created Claude settings with workspace restriction: {workspace_path}"
-            )
-
         logger.info(f"[SECURITY] Created ephemeral home directory: {ephemeral_home}")
         return ephemeral_home
 
@@ -325,10 +276,7 @@ class CodingAgentRunner:
             config=config,
             ephemeral_home=ephemeral_home,
             api_key=api_key,
-            base_env={
-                key: value for key, value in base_env.items()
-                if not key.startswith(("ANTHROPIC_", "CLAUDE_"))
-            },
+            base_env=base_env,
         )
         cmd = (
             f"stdbuf -oL python3 {wrapper_path} {spec_path} "
@@ -845,19 +793,14 @@ class CodingAgentRunner:
             # Calculate duration
             duration_ms = int((time.time() - start_time) * 1000)
 
-            # If plan mode, read the plan file from the sandbox
+            # Plan mode: when the agent wrote a plan, the wrapper already
+            # resolved it (see opencode_run_wrapper.newest_plan) into the
+            # run's summary; `_run_agent` falls the summary back to
+            # "Task completed" when there is none, so this is always set
+            # on a successful run but is only ever a real plan when one
+            # was written.
             if mode == "plan" and result.get("success"):
-                ephemeral_home = f"/tmp/claude-home-{job_id}"
-                plan_content = await self._read_plan_from_sandbox(
-                    container, workspace_path, ephemeral_home=ephemeral_home
-                )
-                if not plan_content:
-                    # Fallback: use the agent's text output (summary) as the plan
-                    plan_content = result.get("summary")
-                if plan_content:
-                    result["plan_content"] = plan_content
-                else:
-                    logger.warning("[CodingAgent] No plan content found after plan mode execution")
+                result["plan_content"] = result.get("summary")
 
             # Parse result
             if result["success"]:
@@ -1044,63 +987,6 @@ class CodingAgentRunner:
             logger.warning(f"[CodingAgent] Failed to load plan {plan_id}: {e}")
             return None
 
-    async def _read_plan_from_sandbox(
-        self,
-        container,
-        workspace_path: str,
-        ephemeral_home: str = "",
-    ) -> Optional[str]:
-        """Read the plan file from the sandbox after plan-mode execution.
-
-        Checks two locations in order:
-        1. ExitPlanMode output: {ephemeral_home}/.claude/plans/*.md
-        2. Legacy fallback: {workspace_path}/plans/plan.md
-        """
-        # First: try reading from ExitPlanMode output location
-        if ephemeral_home:
-            plans_dir = f"{ephemeral_home}/.claude/plans"
-            try:
-                # Find the most recently modified .md file
-                result = container.exec_run(
-                    ["sh", "-c", f"ls -t {plans_dir}/*.md 2>/dev/null | head -1"],
-                    user="sandboxuser",
-                )
-                if result.exit_code == 0 and result.output:
-                    plan_file = result.output.decode("utf-8", errors="replace").strip()
-                    if plan_file:
-                        content_result = container.exec_run(
-                            ["cat", plan_file],
-                            user="sandboxuser",
-                        )
-                        if content_result.exit_code == 0 and content_result.output:
-                            content = content_result.output.decode("utf-8", errors="replace")
-                            if content.strip():
-                                logger.info(
-                                    f"[CodingAgent] Read plan from ExitPlanMode: "
-                                    f"{plan_file} ({len(content)} chars)"
-                                )
-                                return content
-            except Exception as e:
-                logger.warning(f"[CodingAgent] Failed to read ExitPlanMode plans: {e}")
-
-        # Fallback: try legacy location
-        plan_path = f"{workspace_path}/plans/plan.md"
-        try:
-            result = container.exec_run(
-                ["cat", plan_path],
-                workdir=workspace_path,
-                user="sandboxuser",
-            )
-            if result.exit_code == 0 and result.output:
-                content = result.output.decode("utf-8", errors="replace")
-                if content.strip():
-                    logger.info(f"[CodingAgent] Read plan.md (legacy): {len(content)} chars")
-                    return content
-            return None
-        except Exception as e:
-            logger.warning(f"[CodingAgent] Failed to read plan.md: {e}")
-            return None
-
     def _build_sub_agents_section(self, sub_agents: Optional[List[Dict[str, Any]]]) -> str:
         """Build a CLAUDE.md section listing available sub-agents.
 
@@ -1140,10 +1026,10 @@ class CodingAgentRunner:
     ) -> Optional[str]:
         """Write a mode-specific CLAUDE.md to the workspace root.
 
-        Claude Code deeply respects CLAUDE.md in the project directory.
-        This is our primary mechanism to control agent behavior per mode.
-        Combined with filesystem-level chmod (for plan mode), this provides
-        belt-and-suspenders enforcement.
+        `opencode_harness.build_env` sets `OPENCODE_DISABLE_PROJECT_CONFIG`,
+        which moves opencode's instruction discovery off the workspace, so
+        opencode does not read this file. See the call site for what
+        actually enforces plan mode.
 
         Returns the original CLAUDE.md content (if any) for restoration, or None.
         """
@@ -1332,11 +1218,12 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
         budget_usd: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
-        Run the Coding Agent CLI agent.
+        Run the coding agent CLI, staged by `_prepare_opencode_run`.
 
-        Uses the real Coding Agent CLI with OpenRouter as the backend.
-        The CLI is called with --print and --output-format stream-json
-        for structured output parsing.
+        opencode is invoked non-interactively (`opencode run --format
+        json`, staged with the rest of its command line in
+        `opencode_harness.build_argv`) against OpenRouter as the backend,
+        with its JSON event stream parsed by `OpencodeOutputAdapter`.
         """
         try:
             # Read config to get task and allowed tools
@@ -1358,7 +1245,6 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
             mode = config.get("mode", "auto")
             plan_content = config.get("plan_content")
             sub_agents = config.get("sub_agents")  # Sub-agent defs as {name, markdown} dicts
-            user_model_preferences = config.get("user_model_preferences")  # Tier→model mapping
             harness = resolve_harness(config.get("harness"))
 
             # SECURITY: Scan for dangerous config files before execution
@@ -1378,9 +1264,7 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
             # SECURITY: an ephemeral HOME keeps a job from reading, or
             # leaving behind, any persistent configuration.
             job_id = job_dir.split("-")[-1] if "-" in job_dir else "unknown"
-            ephemeral_home = await self._setup_ephemeral_home(
-                container, job_id, workspace_path, mode=mode, harness=harness
-            )
+            ephemeral_home = await self._setup_ephemeral_home(container, job_id)
 
             # Create writable directories for pip/npm package installs on the workspace tmpfs.
             # The root filesystem is read-only, and /tmp is small, so packages go under /workspace.
@@ -1408,91 +1292,19 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
                 else:
                     logger.info(f"[CodingAgent] Wrote {len(sub_agents)} sub-agent files to {agents_dir}")
 
-            # Inject MCP ask_user relay script into sandbox
-            mcp_script_content = Path(__file__).parent.joinpath("mcp_ask_user_script.py").read_text()
-            mcp_script_path = f"{ephemeral_home}/mcp-ask-user.py"
-            escaped_script = mcp_script_content.replace("'", "'\"'\"'")
-            inject_result = container.exec_run(
-                ["sh", "-c", f"printf '%s' '{escaped_script}' > {mcp_script_path} && chmod +x {mcp_script_path}"],
-                user="sandboxuser",
-            )
-            if inject_result.exit_code != 0:
-                logger.warning(f"[CodingAgent] Failed to inject MCP ask_user script: {inject_result.output.decode()[:200] if inject_result.output else 'unknown'}")
+            if mcp_servers:
+                logger.warning(
+                    f"[CodingAgent] MCP config requested with {len(mcp_servers)} servers "
+                    f"({list(mcp_servers.keys())}), but user MCP passthrough is temporarily disabled "
+                    "due to CLI compatibility issues. Only ask-user MCP server will be available."
+                )
 
-            # Build allowed tools string
-            tools_str = ",".join(allowed_tools)
-
-            # Determine if model needs the Anthropic-to-OpenAI bridge.
-            # OpenRouter's Anthropic skin (/api/v1/messages) only works with
-            # Anthropic-provider models. Non-Anthropic models (Google, OpenAI,
-            # open-source, etc.) need the bridge which translates to OpenAI
-            # Chat Completions format and routes via /api/v1/chat/completions.
-            _model_lower = model.lower()
-            is_anthropic_model = (
-                _model_lower.startswith("anthropic/")
-                or _model_lower.startswith("claude-")
-                or "/claude" in _model_lower
-            )
-
-            if is_anthropic_model:
-                # Anthropic models → use OpenRouter's Anthropic skin directly
-                anthropic_base_url = "https://openrouter.ai/api"
-                # Always include sterna-orchestrator so MCP ask_user relay bypasses egress proxy
-                no_proxy = "localhost,127.0.0.1,sterna-orchestrator"
-                logger.info(f"[CodingAgent] Anthropic model detected ({model}), using OpenRouter Anthropic skin")
-            else:
-                # Non-Anthropic models → use the bridge in the orchestrator
-                # The bridge converts Anthropic format to OpenAI format and
-                # forwards to OpenRouter's /api/v1/chat/completions endpoint.
-                anthropic_base_url = "http://sterna-orchestrator:8003/bridge"
-                no_proxy = "localhost,127.0.0.1,sterna-orchestrator"
-                logger.info(f"[CodingAgent] Non-Anthropic model detected ({model}), routing through bridge")
-
-            # Check if any user tier model is non-Anthropic — if so, we need the bridge
-            # for those sub-agents too. Since ANTHROPIC_BASE_URL is a single value and the
-            # bridge already passes through Anthropic models, it's safe to route everything
-            # through the bridge when any tier is non-Anthropic.
-            all_tier_models = [
-                m for m in [
-                    (user_model_preferences or {}).get("fast_model_id"),
-                    (user_model_preferences or {}).get("balanced_model_id"),
-                    (user_model_preferences or {}).get("powerful_model_id"),
-                    model,  # parent model
-                ]
-                if m  # skip None and empty strings
-            ]
-            any_non_anthropic = any(
-                not (m.lower().startswith("anthropic/") or "claude" in m.lower())
-                for m in all_tier_models
-            )
-            if any_non_anthropic:
-                anthropic_base_url = "http://sterna-orchestrator:8003/bridge"
-                no_proxy = "localhost,127.0.0.1,sterna-orchestrator"
-                logger.info("[CodingAgent] Non-Anthropic tier model detected, routing through bridge")
-
-            # Set up environment for OpenRouter
-            # Claude CLI uses ANTHROPIC_API_KEY for authentication
-            env = {
-                "ANTHROPIC_BASE_URL": anthropic_base_url,
-                "ANTHROPIC_API_KEY": api_key,  # Claude CLI needs this set to the OpenRouter key
-                "ANTHROPIC_MODEL": model,
-                # ANTHROPIC_SMALL_FAST_MODEL and CLAUDE_CODE_SUBAGENT_MODEL stay pinned to
-                # the parent model. These control ad-hoc sub-agents spawned internally by
-                # Claude Code itself (e.g. via the Task tool without an explicit agent name),
-                # NOT user-defined agents from .claude/agents/. User-defined agents get their
-                # model from the .md frontmatter `model:` field, which resolves via the
-                # ANTHROPIC_DEFAULT_*_MODEL env vars below.
-                "ANTHROPIC_SMALL_FAST_MODEL": model,
-                # User-defined agent tier overrides. These map Claude CLI's internal aliases
-                # (haiku/sonnet/opus) to the user's preferred models per tier.
-                "ANTHROPIC_DEFAULT_HAIKU_MODEL": (user_model_preferences or {}).get("fast_model_id", model),
-                "ANTHROPIC_DEFAULT_SONNET_MODEL": (user_model_preferences or {}).get("balanced_model_id", model),
-                "ANTHROPIC_DEFAULT_OPUS_MODEL": (user_model_preferences or {}).get("powerful_model_id", model),
-                # CLAUDE_CODE_SUBAGENT_MODEL controls Task sub-agents spawned without
-                # an explicit agent name. Stays pinned to parent model for billing consistency.
-                "CLAUDE_CODE_SUBAGENT_MODEL": model,
-                # TLS: Use the mitmproxy CA certificate from egress proxy
-                # This is mounted via docker-compose volume at /etc/ssl/proxy-ca/
+            # Environment every harness invocation shares: TLS trust for the
+            # egress proxy, the ephemeral HOME, and pip/npm redirected onto
+            # the workspace tmpfs (the root filesystem is read-only and
+            # /tmp is small). `_prepare_opencode_run` layers opencode's own
+            # settings on top of this.
+            base_env = {
                 "NODE_EXTRA_CA_CERTS": "/etc/ssl/proxy-ca/mitmproxy-ca-cert.pem",
                 # SECURITY: Use ephemeral home to prevent config persistence attacks
                 "HOME": ephemeral_home,
@@ -1505,8 +1317,10 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
                 "HTTPS_PROXY": "http://egress-proxy:8888",
                 "http_proxy": "http://egress-proxy:8888",
                 "https_proxy": "http://egress-proxy:8888",
-                "NO_PROXY": no_proxy,
-                "no_proxy": no_proxy,
+                # The ask-user relay calls back into the orchestrator, so it
+                # must reach it — and itself — past the egress proxy.
+                "NO_PROXY": RELAY_NO_PROXY_HOSTS,
+                "no_proxy": RELAY_NO_PROXY_HOSTS,
                 # Package install support (pip/npm work inside sandbox)
                 # Root filesystem is read-only; /tmp is small (200MB ephemeral home).
                 # Redirect pip user-installs and npm cache to /workspace where there's room.
@@ -1524,47 +1338,8 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
                 "NEXT_TELEMETRY_DISABLED": "1",  # Prevent next build from spawning background telemetry (causes hangs)
             }
 
-            # Build MCP config with ask_user server (and optionally user's servers)
-            mcp_config = {
-                "mcpServers": {
-                    "ask-user": {
-                        "command": "python3",
-                        "args": [
-                            mcp_script_path,
-                            "--user-id", self.user_id,
-                            "--chat-id", self.chat_id,
-                            "--token", job_token,
-                        ],
-                    }
-                }
-            }
-            if mcp_servers:
-                logger.warning(
-                    f"[CodingAgent] MCP config requested with {len(mcp_servers)} servers "
-                    f"({list(mcp_servers.keys())}), but user MCP passthrough is temporarily disabled "
-                    "due to CLI compatibility issues. Only ask-user MCP server will be available."
-                )
-            mcp_config_path = f"{job_dir}/mcp-config.json"
-            mcp_config_json = json.dumps(mcp_config)
-            escaped_mcp = mcp_config_json.replace("'", "'\"'\"'")
-            container.exec_run(
-                ["sh", "-c", f"printf '%s' '{escaped_mcp}' > {mcp_config_path}"],
-                user="sandboxuser",
-            )
-            mcp_flag = f"--mcp-config {mcp_config_path}"
-
-            # Build the claude CLI command
-            # --print: Non-interactive mode
-            # --verbose: Required for stream-json output
-            # --output-format stream-json: Structured output for parsing
-            # --max-turns: Limit iterations
-            # --allowedTools: Restrict available tools
-            # SECURITY FLAGS:
-            # --mcp-config or --strict-mcp-config: Control MCP server access
-            # --no-session-persistence: Don't save sessions to disk (prevents data persistence)
-
             # SECURITY: Prepend workspace enforcement instructions
-            # This ensures Claude only operates within the designated workspace
+            # This ensures the coding agent only operates within the designated workspace
             workspace_instruction = f"""CRITICAL WORKSPACE RESTRICTION:
 You are working in the directory: {workspace_path}
 ALL file operations MUST be within this directory. You MUST NOT:
@@ -1603,21 +1378,11 @@ Do NOT use ask_user for:
             output_file = f"{job_dir}/.coding-agent-output.jsonl"
             progress_file = f"{job_dir}/.coding-agent-progress.json"
 
-            # Escape the task content for shell
-            escaped_task = full_task.replace("'", "'\"'\"'")
-
-            # Build command: write task file, run claude, redirect output to file
-            # Use stdbuf -oL for line buffering and tee to write to file
-            # IMPORTANT: Redirect tee's stdout to /dev/null because in background processes
-            # stdout has no reader, which causes SIGPIPE and early termination
-            cmd = f'''printf '%s' '{escaped_task}' > {task_file} && stdbuf -oL claude --print --verbose --output-format stream-json --max-turns {max_iterations} --allowedTools "{tools_str}" --disallowedTools "AskUserQuestion" {mcp_flag} --no-session-persistence < {task_file} 2>&1 | tee {output_file} > /dev/null'''
-
-            if harness == OPENCODE:
-                cmd, env = await self._prepare_opencode_run(
-                    container, job_dir, ephemeral_home, workspace_path, mode,
-                    model, api_key, max_iterations, allowed_tools,
-                    task_file, output_file, full_task, env, job_token,
-                )
+            cmd, env = await self._prepare_opencode_run(
+                container, job_dir, ephemeral_home, workspace_path, mode,
+                model, api_key, max_iterations, allowed_tools,
+                task_file, output_file, full_task, base_env, job_token,
+            )
 
             logger.info(f"[CodingAgent] Executing {harness} in {workspace_path}")
             logger.debug(f"[CodingAgent] Command: {cmd[:200]}...")
@@ -1625,15 +1390,16 @@ Do NOT use ask_user for:
             logger.info(f"[CodingAgent] API key provided: {bool(api_key)}")
 
             # Write mode-specific CLAUDE.md before any filesystem restrictions.
-            # Claude Code deeply respects CLAUDE.md — this guides the agent's intent.
+            # opencode does not read it — see `_write_mode_claude_md`.
             original_claude_md = await self._write_mode_claude_md(
                 container, workspace_path, mode, sub_agents=sub_agents
             )
 
             # PLAN MODE: Make workspace read-only at filesystem level.
-            # This is the ONLY reliable way to prevent the agent from modifying files,
-            # since Claude Code CLI does not enforce settings.json deny rules for built-in tools.
-            # CLAUDE.md guides intent, chmod enforces it.
+            # This is the reliable enforcement layer beneath opencode's own
+            # plan-agent permission profile (`opencode_harness.build_permission_profile`),
+            # which denies `edit` but cannot stop `bash` from writing a file
+            # a permission rule does not separately deny.
             if mode == "plan":
                 logger.info(f"[CodingAgent] Plan mode: making workspace read-only: {workspace_path}")
                 chmod_result = container.exec_run(

@@ -922,8 +922,8 @@ class SubAgent(models.Model):
             "description": self.description,
         }
         # Only include model in frontmatter if it's a valid Claude CLI alias.
-        # "inherit" means use the parent model, so omit model: to let CLI use
-        # its default (controlled by ANTHROPIC_SMALL_FAST_MODEL env var).
+        # "inherit" means use the parent model, so omit model: to let the
+        # CLI fall back to its own default model resolution.
         model_alias = self._map_model_to_claude_alias()
         if model_alias != "inherit":
             frontmatter["model"] = model_alias

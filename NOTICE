@@ -120,15 +120,10 @@ is Google's official, unmodified brand asset, used per Google's Identity
 brand guidelines for the "Sign in with Google" button.
 
 ================================================================================
-Third-party runtime dependency (not distributed with this software)
+Third-party runtime dependency
 ================================================================================
 
-The optional coding-agent feature shells out, at runtime, to Anthropic's
-Claude Code CLI (`@anthropic-ai/claude-code`), installed from npm at
+The optional coding-agent feature shells out, at runtime, to opencode
+(`opencode-ai` on npm), installed globally into the sandbox image at
 container build time (see `core/sandbox/runtime/Dockerfile.sandbox-base`).
-That CLI is Anthropic's proprietary software, distributed under
-Anthropic's own commercial terms, and is not part of this repository or
-this project's license. Operators enabling that feature are
-responsible for complying with Anthropic's terms for their own use of the
-CLI (or for routing requests through OpenRouter instead, which this
-codebase does by default).
+opencode is open-source software distributed under the MIT license.

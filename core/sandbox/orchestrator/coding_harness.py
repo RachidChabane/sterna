@@ -20,13 +20,11 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Protocol, Set, runtime_checkable
 
-from claude_output_parser import ClaudeOutputParser, parse_claude_output
 from opencode_output_adapter import OpencodeOutputAdapter
 
-CLAUDE_CODE = "claude-code"
 OPENCODE = "opencode"
 
-SUPPORTED_HARNESSES = (CLAUDE_CODE, OPENCODE)
+SUPPORTED_HARNESSES = (OPENCODE,)
 
 #: Environment variable naming the harness for jobs that do not pick one.
 HARNESS_ENV_VAR = "CODING_AGENT_HARNESS"
@@ -62,21 +60,6 @@ class AgentOutputAdapter(Protocol):
         """Consume one output line; report whether it produced a step."""
 
 
-class ClaudeCodeOutputAdapter(ClaudeOutputParser):
-    """Adapts the Claude Code stream parser to the harness port.
-
-    Adds nothing but `ingest`, which reproduces the append-and-count
-    loop the runner has always driven `parse_line` with.
-    """
-
-    def ingest(self, line: str) -> bool:
-        step = self.parse_line(line)
-        if step is None:
-            return False
-        self.steps.append(step)
-        return True
-
-
 def resolve_harness(requested: Optional[str] = None) -> str:
     """Pick the harness for a job.
 
@@ -104,29 +87,24 @@ class RunOutcome:
 
 
 def create_adapter(harness: str, workspace_path: str = "") -> AgentOutputAdapter:
-    """The output adapter that reads a running job's stream."""
-    if harness == OPENCODE:
-        return OpencodeOutputAdapter(workspace_path)
-    return ClaudeCodeOutputAdapter()
+    """The output adapter that reads a running job's stream.
+
+    `harness` is the extension point a second harness would switch on;
+    `SUPPORTED_HARNESSES` names every harness `resolve_harness` can hand
+    back, and opencode is the only entry in it.
+    """
+    return OpencodeOutputAdapter(workspace_path)
 
 
 def parse_run_output(
     harness: str, output: str, workspace_path: str = ""
 ) -> RunOutcome:
-    """Replay a finished run's whole output into its outcome."""
-    if harness != OPENCODE:
-        parsed = parse_claude_output(output)
-        return RunOutcome(
-            success=parsed.success,
-            summary=parsed.summary,
-            steps=parsed.steps,
-            files_created=parsed.files_created,
-            files_modified=parsed.files_modified,
-            error=parsed.error,
-            total_tokens=parsed.total_tokens,
-            total_cost_usd=parsed.total_cost_usd,
-        )
+    """Replay a finished run's whole output into its outcome.
 
+    `harness` is the extension point a second harness would switch on;
+    `SUPPORTED_HARNESSES` names every harness `resolve_harness` can hand
+    back, and opencode is the only entry in it.
+    """
     adapter = OpencodeOutputAdapter(workspace_path)
     for line in output.split("\n"):
         adapter.ingest(line)

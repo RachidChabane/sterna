@@ -42,7 +42,7 @@ make createsuperuser
 
 ### Optional: coding-agent sandbox stack
 
-The AI coding-agent sandbox (spawns per-session containers to run Claude Code against a cloned repo) lives in its own compose file, `sandbox/docker-compose.sandbox.yml`. It's optional and separate from the quickstart above because it needs the core stack's network to already exist:
+The AI coding-agent sandbox (spawns per-session containers to run opencode against a cloned repo) lives in its own compose file, `sandbox/docker-compose.sandbox.yml`. It's optional and separate from the quickstart above because it needs the core stack's network to already exist:
 
 ```bash
 # after `make dev` has created the core_default network

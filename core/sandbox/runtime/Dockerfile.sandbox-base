@@ -21,12 +21,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 RUN npm install -g opencode-ai@1.17.11 && \
     npm cache clean --force
 
-# Install Claude Code CLI globally
-# Kept as the fallback the CODING_AGENT_HARNESS environment variable can
-# still select; the default harness is opencode.
-RUN npm install -g @anthropic-ai/claude-code && \
-    npm cache clean --force
-
 # Install mitmproxy CA certificate for egress proxy HTTPS support
 COPY mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy-ca-cert.crt
 RUN update-ca-certificates

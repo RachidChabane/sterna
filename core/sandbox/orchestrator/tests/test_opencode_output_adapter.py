@@ -103,10 +103,10 @@ class TestFileTracking:
 class TestStepOrdering:
     """One assistant step yields its tool call before its prose.
 
-    opencode emits the prose first. The payload has always carried the
-    other order, because the Claude parser appended a message's tool
-    calls before returning its text. Step order therefore tracks how
-    the model grouped parts into messages, in both harnesses.
+    opencode emits the prose first, but the pinned progress payload puts
+    a step's tool call ahead of its text — see the golden contract in
+    `test_opencode_progress_goldens`. Step order therefore tracks how the
+    model grouped parts into messages, not the order opencode emitted them.
     """
 
     def test_a_tool_call_precedes_prose_from_the_same_step(self):
@@ -136,8 +136,8 @@ class TestStepOrdering:
         ]
 
     def test_a_line_that_yields_two_steps_counts_once(self):
-        """`step_count` counts output lines that produced steps, which
-        is what the Claude parser's own loop counted."""
+        """`step_count` counts output lines that produced steps, not the
+        steps themselves — see `coding_harness`'s module docstring."""
         adapter, counted = _run(
             _system(),
             _text("prose"),

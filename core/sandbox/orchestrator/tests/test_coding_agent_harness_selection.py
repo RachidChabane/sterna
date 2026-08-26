@@ -1,7 +1,8 @@
 """Which harness a job runs on, and what the runner stages for it.
 
-A job runs on opencode unless it, or the environment, asks for Claude
-Code instead. These tests pin that default and the staging
+opencode is the only harness `resolve_harness` can hand back: an
+explicit request or an environment value naming anything else falls
+back to it. These tests pin that resolution and the staging
 `_prepare_opencode_run` does, using a mock container that records the
 commands the runner issues.
 """
@@ -13,16 +14,8 @@ from unittest.mock import MagicMock
 import pytest
 
 import coding_harness
-from claude_permission_profile import settings_for
 from coding_agent_runner import CodingAgentRunner
-from coding_harness import (
-    CLAUDE_CODE,
-    OPENCODE,
-    ClaudeCodeOutputAdapter,
-    create_adapter,
-    parse_run_output,
-    resolve_harness,
-)
+from coding_harness import OPENCODE, create_adapter, parse_run_output, resolve_harness
 from opencode_output_adapter import OpencodeOutputAdapter
 
 WORKSPACE = "/workspace/chat-abc"
@@ -39,37 +32,18 @@ class TestHarnessSelection:
     def test_default_is_opencode(self):
         assert resolve_harness() == OPENCODE
 
-    def test_a_job_can_request_claude_code(self):
-        assert resolve_harness(CLAUDE_CODE) == CLAUDE_CODE
-
-    def test_the_environment_selects_for_jobs_that_do_not(self, monkeypatch):
-        monkeypatch.setenv(coding_harness.HARNESS_ENV_VAR, CLAUDE_CODE)
-        assert resolve_harness() == CLAUDE_CODE
-
-    def test_a_job_overrides_the_environment(self, monkeypatch):
-        monkeypatch.setenv(coding_harness.HARNESS_ENV_VAR, CLAUDE_CODE)
-        assert resolve_harness(OPENCODE) == OPENCODE
-
-    def test_an_unknown_name_falls_back_rather_than_failing(self, monkeypatch):
+    def test_an_unrecognized_environment_value_falls_back(self, monkeypatch):
         monkeypatch.setenv(coding_harness.HARNESS_ENV_VAR, "gpt-engineer")
         assert resolve_harness() == OPENCODE
+
+    def test_an_unrecognized_request_falls_back_rather_than_failing(self):
         assert resolve_harness("gpt-engineer") == OPENCODE
 
-    def test_each_harness_gets_its_own_adapter(self):
+    def test_the_adapter_is_the_opencode_adapter(self):
         assert isinstance(create_adapter(OPENCODE), OpencodeOutputAdapter)
-        assert isinstance(create_adapter(CLAUDE_CODE), ClaudeCodeOutputAdapter)
 
 
 class TestOutcomeParsing:
-    def test_a_claude_run_is_read_by_the_claude_parser(self):
-        stream = json.dumps(
-            {"type": "result", "subtype": "success", "result": "done",
-             "total_cost_usd": 0.5}
-        )
-        outcome = parse_run_output(CLAUDE_CODE, stream)
-        assert outcome.summary == "done"
-        assert outcome.total_cost_usd == 0.5
-
     def test_an_opencode_run_is_read_by_the_opencode_adapter(self):
         stream = "\n".join(
             json.dumps(event)
@@ -121,7 +95,7 @@ def _staged(mode="implement"):
             container, JOB_DIR, EPHEMERAL_HOME, WORKSPACE, mode,
             "anthropic/claude-sonnet-4.5", "sk-or-SECRET", 25, ["Read", "Write"],
             f"{JOB_DIR}/.task.txt", f"{JOB_DIR}/.out.jsonl", "TASK BODY",
-            {"HTTPS_PROXY": "http://egress-proxy:8888", "ANTHROPIC_API_KEY": "sk-or-SECRET"},
+            {"HTTPS_PROXY": "http://egress-proxy:8888"},
             "job-token",
         )
     )
@@ -180,34 +154,9 @@ class TestOpencodeStaging:
         stderr_redirect, _, _ = cmd.partition(" | tee")
         assert "2>>" in stderr_redirect
 
-    def test_claude_only_variables_do_not_reach_opencode(self):
+    def test_base_environment_passes_through_untouched(self):
         _, env, _ = _staged()
-        assert "ANTHROPIC_API_KEY" not in env
         assert env["HTTPS_PROXY"] == "http://egress-proxy:8888"
-
-
-class TestClaudePermissionProfile:
-    """The settings document the Claude harness has always written."""
-
-    def test_plan_mode_denies_writing_to_the_workspace(self):
-        deny = settings_for("plan", WORKSPACE, EPHEMERAL_HOME)["permissions"]["deny"]
-        assert f"Write({WORKSPACE}/**)" in deny
-        assert f"Edit({WORKSPACE}/**)" in deny
-
-    def test_plan_mode_allows_writing_only_to_the_ephemeral_home(self):
-        allow = settings_for("plan", WORKSPACE, EPHEMERAL_HOME)["permissions"]["allow"]
-        assert f"Write({EPHEMERAL_HOME}/**)" in allow
-        assert f"Write({WORKSPACE}/**)" not in allow
-
-    def test_implement_mode_allows_writing_to_the_workspace(self):
-        allow = settings_for("auto", WORKSPACE, EPHEMERAL_HOME)["permissions"]["allow"]
-        assert f"Write({WORKSPACE}/**)" in allow
-
-    def test_network_reaching_commands_are_denied_in_both_modes(self):
-        for mode in ("plan", "auto"):
-            deny = settings_for(mode, WORKSPACE, EPHEMERAL_HOME)["permissions"]["deny"]
-            for command in ("Bash(sudo*)", "Bash(curl*)", "Bash(wget*)", "Bash(ssh*)"):
-                assert command in deny
 
 
 class TestEnvironmentExport:

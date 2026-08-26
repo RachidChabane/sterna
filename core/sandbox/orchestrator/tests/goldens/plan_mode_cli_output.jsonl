@@ -1,7 +1,0 @@
-{"type": "system", "subtype": "init", "cwd": "/workspace/chat-golden/repo", "tools": ["Read", "Glob", "Grep", "Bash"], "model": "anthropic/claude-sonnet-4.5"}
-{"type": "assistant", "message": {"content": [{"type": "text", "text": "I'll read the session module before writing the plan."}, {"type": "tool_use", "id": "toolu_plan_glob", "name": "Glob", "input": {"pattern": "src/auth/**/*.py"}}]}}
-{"type": "user", "message": {"content": [{"type": "tool_result", "content": "src/auth/session.py\nsrc/auth/tokens.py"}]}}
-{"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "toolu_plan_read", "name": "Read", "input": {"file_path": "src/auth/session.py"}}]}}
-{"type": "user", "message": {"content": [{"type": "tool_result", "content": "def purge_expired(now):\n    Session.objects.filter(expires_at__lt=now).delete()\n"}]}}
-{"type": "assistant", "message": {"content": [{"type": "text", "text": "The plan is ready for review."}]}}
-{"type": "result", "subtype": "success", "result": "# Implementation Plan: Archive expired sessions\n\n## Summary\nExpired sessions are deleted outright. Archive them to a retention table first.\n\n### Step 1: Add the archive model\n**Files:** src/auth/archive.py\nDefine ArchivedSession mirroring the Session columns plus archived_at.\n\n### Step 2: Archive before purging\n**Files:** src/auth/session.py\nCopy each expiring row into ArchivedSession, then delete it.\n", "usage": {"input_tokens": 18450, "output_tokens": 1320}, "total_cost_usd": 0.0412}

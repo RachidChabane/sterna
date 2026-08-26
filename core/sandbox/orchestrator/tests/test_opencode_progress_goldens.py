@@ -1,16 +1,18 @@
 """The opencode harness against the pinned progress-store payloads.
 
-`test_coding_agent_progress_goldens` pins what the progress store holds
-for a plan-mode and an implement-mode run of the Claude Code harness.
-The chat layer polls that payload, so it is a contract the harness must
-not move: the same two scenarios, run through opencode, have to leave
-the store holding the same bytes.
+`CodingAgentRunner._write_progress_file` is the only writer of the
+in-memory progress store, and `get_progress_from_store` serves whatever
+it last wrote to `/coding-agent/progress`. The dict it builds — its
+field names, their order, the per-step shape, and the counters — is the
+contract the chat layer polls, so a plan-mode and an implement-mode
+scenario are pinned here byte for byte, independently of anything
+Django-side.
 
 Each scenario replays a recorded opencode stream
 (``*_opencode_output.jsonl``) through `OpencodeOutputAdapter` on the
 loop `_execute_with_streaming` runs — ingest one line, write progress
-when it produced a step — and compares the result against the very same
-golden files the Claude scenarios are compared against.
+when it produced a step. Two snapshots are pinned per scenario — one
+taken mid-run, while the agent is still working, and the terminal one.
 
 The recorded streams carry opencode's own line shapes: ``step_start`` /
 ``text`` / ``tool_use`` / ``step_finish`` from ``opencode run --format
@@ -94,14 +96,10 @@ def _replay(stream_name, snapshot_tool):
 
 
 def _assert_matches_golden(name, payload):
-    """Compare against the golden the Claude scenario is pinned to."""
     serialized = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
     path = GOLDENS_DIR / f"{name}.json"
     assert path.exists(), f"Missing golden {path}."
-    assert serialized == path.read_text(), (
-        f"opencode progress payload diverged from {path.name}, "
-        "which the Claude Code harness still matches."
-    )
+    assert serialized == path.read_text(), f"Progress payload diverged from {path.name}."
 
 
 def test_plan_mode_progress_store_payloads():
@@ -131,15 +129,52 @@ def test_implement_mode_progress_store_payloads():
 
 
 def test_usage_is_withheld_until_the_run_ends():
-    """Mid-run payloads report no usage, as the Claude harness does.
+    """Mid-run payloads report no usage.
 
-    opencode reports tokens and cost on every step; the Claude CLI
-    reports them once, in its terminal event. The adapter accrues
-    silently so a poll taken mid-run cannot show a partial figure the
-    chat layer would have to reconcile later.
+    opencode reports tokens and cost on every step, but the adapter
+    accrues them silently so a poll taken mid-run cannot show a partial
+    figure the chat layer would have to reconcile later.
     """
     snapshots = _replay("implement_mode_opencode_output.jsonl", IMPLEMENT_MODE_SNAPSHOT_TOOL)
 
     assert snapshots[MID_RUN_KEY]["total_cost_usd"] == 0.0
     assert snapshots[MID_RUN_KEY]["total_tokens"] == 0
     assert snapshots[FINAL_KEY]["total_tokens"] == 45180
+
+
+def test_progress_write_replaces_the_stored_job_token():
+    """A progress write leaves nothing in the store but the payload.
+
+    `run_coding_agent` puts the run's `_job_token` under the same key
+    before the agent starts, and `/mcp/ask-user` rejects a relayed
+    question whose token does not match the stored one. The first
+    progress write replaces the whole entry, so the token is gone before
+    opencode produces its first line.
+    """
+    runner = CodingAgentRunner(
+        sandbox_executor=MagicMock(), user_id=USER_ID, chat_id=CHAT_ID
+    )
+    coding_agent_runner._progress_store[STORE_KEY] = {"_job_token": "token-golden"}
+
+    try:
+        runner._write_progress_file(
+            MagicMock(), PROGRESS_FILE, OpencodeOutputAdapter(), 0
+        )
+        stored = get_progress_from_store(USER_ID, CHAT_ID)
+    finally:
+        coding_agent_runner._progress_store.pop(STORE_KEY, None)
+
+    assert "_job_token" not in stored
+
+
+def test_progress_store_holds_no_pending_question():
+    """The question a run blocks on is not part of the stored payload.
+
+    `/coding-agent/progress` merges it in from the orchestrator's own
+    `_pending_questions` map, so a reader of the store alone never sees
+    one — including for a run whose stream calls `ask_user`.
+    """
+    snapshots = _replay("implement_mode_opencode_output.jsonl", IMPLEMENT_MODE_SNAPSHOT_TOOL)
+
+    for snapshot in snapshots.values():
+        assert "pending_question" not in snapshot
