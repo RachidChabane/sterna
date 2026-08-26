@@ -10,7 +10,7 @@
   "dead_code": {
     "backend_vulture": 17,
     "backend_files_scanned": 414,
-    "frontend_knip": 32,
+    "frontend_knip": 30,
     "frontend_files_scanned": 476
   },
   "loc_caps": {

@@ -8,10 +8,29 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 frontend_root="$repo_root/core/frontend"
+generated_path="$frontend_root/src/api/generated/schema.d.ts"
+
+if [ ! -f "$generated_path" ]; then
+  echo "No generated API types found at ${generated_path#"$repo_root"/}; run 'pnpm gen:api' in core/frontend first." >&2
+  exit 1
+fi
+
+# openapi-typescript's --check is expected to fail (and leave the file
+# untouched) on drift, without writing to it — that is what makes it
+# safe to run here as a read-only gate. Hash the file before and after
+# so a version of the flag that silently regenerates instead of
+# checking is caught as a harness fault, not reported as a clean pass.
+before_sha256="$(shasum -a 256 "$generated_path" | cut -d' ' -f1)"
 
 if ! (cd "$frontend_root" && pnpm run gen:api --check); then
   echo "Generated API types are out of date: core/frontend/src/api/generated/schema.d.ts does not match a fresh run against baselines/openapi.yaml." >&2
   echo "Run 'pnpm gen:api' in core/frontend and commit the result." >&2
+  exit 1
+fi
+
+after_sha256="$(shasum -a 256 "$generated_path" | cut -d' ' -f1)"
+if [ "$before_sha256" != "$after_sha256" ]; then
+  echo "gen:api --check reported success but rewrote core/frontend/src/api/generated/schema.d.ts; treating as a harness fault (the --check flag did not act as a read-only drift check)." >&2
   exit 1
 fi
 

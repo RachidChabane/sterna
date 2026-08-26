@@ -70,7 +70,7 @@ export type CreateSparkRequest = components['schemas']['SparkCreate']
 /**
  * Request payload for updating a spark (creates new version)
  */
-export type UpdateSparkRequest = components['schemas']['PatchedSparkUpdate']
+export type UpdateSparkRequest = components['schemas']['SparkUpdate']
 
 /**
  * Response from listing sparks
