@@ -1295,8 +1295,8 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
             if mcp_servers:
                 logger.warning(
                     f"[CodingAgent] MCP config requested with {len(mcp_servers)} servers "
-                    f"({list(mcp_servers.keys())}), but user MCP passthrough is temporarily disabled "
-                    "due to CLI compatibility issues. Only ask-user MCP server will be available."
+                    f"({list(mcp_servers.keys())}), but only the ask-user relay is wired into "
+                    "the harness; user-supplied MCP servers are not passed through."
                 )
 
             # Environment every harness invocation shares: TLS trust for the
