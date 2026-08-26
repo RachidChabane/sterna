@@ -43,7 +43,7 @@
       "core/frontend/src/components/models/VoiceConversationOverlay.tsx": 994,
       "core/frontend/src/components/sandbox/BottomPanel.tsx": 850,
       "core/frontend/src/components/sandbox/ExcelPreview.tsx": 1124,
-      "core/frontend/src/components/sandbox/FullIDE.tsx": 2576,
+      "core/frontend/src/components/sandbox/FullIDE.tsx": 745,
       "core/frontend/src/components/settings/SettingsModal.tsx": 1485,
       "core/frontend/src/components/sparks/SparksPage.tsx": 825,
       "core/frontend/src/components/voice-rooms/CreateRoomModal.tsx": 929,
