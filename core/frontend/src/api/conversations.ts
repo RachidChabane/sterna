@@ -9,6 +9,7 @@ import { api } from './client'
 import type { Chat, ChatSpark, Message, ModelParameters, ChatInstructions } from '@/components/models/types'
 import type { Model, WebSource } from '@/api/llm'
 import { getDefaultModelParameters } from '@/config/modelParameters'
+import type { components } from './generated/schema'
 
 // ============================================================================
 // API Response Types
@@ -134,54 +135,24 @@ interface MessageStep {
 // Request Types
 // ============================================================================
 
-export interface CreateConversationRequest {
-  name?: string
-  is_custom_name?: boolean
-  consigliere_session_id?: string
-  model_id?: string
-  model_provider?: string
-  parameters?: ModelParameters
-}
+// The generated ConversationCreate/MessageCreate schemas bake in the
+// serializer's readOnly response fields (id, created_at, updated_at)
+// as required properties of the same merged type — the backend does
+// not split request/response component schemas. Omit those fields so
+// the type describes what a caller actually sends.
+export type CreateConversationRequest = Omit<components['schemas']['ConversationCreate'], 'id' | 'created_at' | 'updated_at'>
 
-export interface UpdateConversationRequest {
-  name?: string
-  is_custom_name?: boolean
-  is_archived?: boolean
-  is_pinned?: boolean
-  consigliere_session_id?: string
-}
+export type UpdateConversationRequest = components['schemas']['PatchedConversationUpdate']
 
-export interface CreateChatRequest {
-  model_id?: string
-  model_provider?: string
-  parameters?: ModelParameters
-  position?: number
-  instructions?: ChatInstructions
-}
+export type CreateChatRequest = components['schemas']['ChatCreate']
 
-export interface UpdateChatRequest {
-  model_id?: string
-  model_provider?: string
-  parameters?: ModelParameters
-  position?: number
-  is_disabled?: boolean
-  is_hidden?: boolean
-  instructions?: ChatInstructions
-}
+export type UpdateChatRequest = components['schemas']['PatchedChat']
 
-export interface CreateMessageRequest {
-  role: 'user' | 'assistant' | 'tool' | 'system'
-  content: MessageContent
-  model_id?: string
-  model_provider?: string
-  prompt_tokens?: number
-  completion_tokens?: number
-  cost?: number | string  // Django DecimalField expects string for precision
-  tool_calls?: ToolCall[]
-  tool_call_id?: string
-  steps?: MessageStep[]
-  metadata?: Record<string, unknown>
-  is_stopped?: boolean
+// `cost` is widened back to `number | string`: callers pass a plain
+// number, and the wire format (Django DecimalField-as-string) is a
+// serialization detail the request type does not need to enforce.
+export type CreateMessageRequest = Omit<components['schemas']['MessageCreate'], 'id' | 'cost'> & {
+  cost?: number | string
 }
 
 export interface BulkCreateMessagesRequest {

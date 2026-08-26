@@ -11,6 +11,8 @@ import type {
   ConsentResponse,
   ConsentRecord,
   ConsentSaveRequest,
+  CatalogComparisonRequest,
+  CatalogComparisonResponse,
 } from './types'
 
 // Authentication endpoints
@@ -97,8 +99,8 @@ export const openRouterApi = {
   estimateCost: (data: { model: string; prompt_tokens: number; completion_tokens: number }) =>
     apiClient.post('/llm/estimate-cost/', data),
 
-  compareCatalog: (data: import('./types').CatalogComparisonRequest) =>
-    apiClient.post<import('./types').CatalogComparisonResponse>('/llm/models/compare/', data),
+  compareCatalog: (data: CatalogComparisonRequest) =>
+    apiClient.post<CatalogComparisonResponse>('/llm/models/compare/', data),
 }
 
 // Image generation model endpoints
