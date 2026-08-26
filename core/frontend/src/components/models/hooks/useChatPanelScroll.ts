@@ -10,7 +10,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { RefObject } from 'react'
 import type { Message } from '../types'
 
-export function useChatPanelScroll(scrollAreaRef: RefObject<HTMLDivElement>, messages: Message[]) {
+export function useChatPanelScroll(scrollAreaRef: RefObject<HTMLDivElement | null>, messages: Message[]) {
   const prevLastMsgKeyRef = useRef<string | null>(null)
 
   useLayoutEffect(() => {
