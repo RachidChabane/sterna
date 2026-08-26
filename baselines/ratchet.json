@@ -30,7 +30,7 @@
       "core/frontend/src/components/models/CodingAgentDisplay.tsx": 1287,
       "core/frontend/src/components/models/DocumentDownloader.tsx": 854,
       "core/frontend/src/components/models/FilePreviewModal.tsx": 853,
-      "core/frontend/src/components/models/FileToolExecutionsDisplay.tsx": 2960,
+      "core/frontend/src/components/models/FileToolExecutionsDisplay.tsx": 90,
       "core/frontend/src/components/models/ImmersiveChatView.tsx": 2122,
       "core/frontend/src/components/models/ListToolResultsDisplay.tsx": 1228,
       "core/frontend/src/components/models/MessageInput.tsx": 1075,
