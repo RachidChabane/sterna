@@ -1,6 +1,6 @@
 {
-  "mypy_errors": 670,
-  "mypy_checked_files": 773,
+  "mypy_errors": 493,
+  "mypy_checked_files": 775,
   "ts_explicit_any": 0,
   "ts_as_unknown": 17,
   "eslint_errors": 369,

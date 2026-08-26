@@ -21,6 +21,7 @@ Run AFTER:
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 import stripe
 from django.core.management.base import BaseCommand, CommandError
@@ -44,7 +45,7 @@ SAAS_TAX_CODE = "txcd_10103000"
 # Displayed prices are tax-EXCLUSIVE (tax added on top at Checkout).
 # Without an explicit tax_behavior, Stripe creates Prices as
 # 'unspecified' and automatic_tax Checkout sessions fail.
-PRICE_TAX_BEHAVIOR = "exclusive"
+PRICE_TAX_BEHAVIOR: Literal["exclusive"] = "exclusive"
 
 
 class Command(BaseCommand):

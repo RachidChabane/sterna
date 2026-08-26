@@ -75,13 +75,13 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
         }),
     )
 
+    @admin.display(description='Weekly Limit')
     def weekly_limit_display(self, obj):
         return f"${obj.weekly_limit_usd}"
-    weekly_limit_display.short_description = 'Weekly Limit'
 
+    @admin.display(description='Session Limit')
     def session_limit_display(self, obj):
         return f"${obj.session_limit_usd}"
-    session_limit_display.short_description = 'Session Limit'
 
 
 @admin.register(UserSubscription)
@@ -122,23 +122,23 @@ class UserSubscriptionAdmin(admin.ModelAdmin):
         }),
     )
 
+    @admin.display(description='User')
     def user_email(self, obj):
         return obj.user.email
-    user_email.short_description = 'User'
 
+    @admin.display(description='Weekly Limit')
     def effective_weekly_limit_display(self, obj):
         limit = obj.effective_weekly_limit
         if obj.custom_weekly_limit_usd:
             return format_html('<b>${}</b> (custom)', limit)
         return f"${limit}"
-    effective_weekly_limit_display.short_description = 'Weekly Limit'
 
+    @admin.display(description='Session Limit')
     def effective_session_limit_display(self, obj):
         limit = obj.effective_session_limit
         if obj.custom_session_limit_usd:
             return format_html('<b>${}</b> (custom)', limit)
         return f"${limit}"
-    effective_session_limit_display.short_description = 'Session Limit'
 
 
 @admin.register(ServicePricing)
@@ -187,6 +187,7 @@ class ServicePricingAdmin(admin.ModelAdmin):
         }),
     )
 
+    @admin.display(description='Pricing')
     def pricing_display(self, obj):
         """Display the relevant pricing for this service type."""
         if obj.price_per_1m_input_tokens:
@@ -198,7 +199,6 @@ class ServicePricingAdmin(admin.ModelAdmin):
         if obj.price_per_request:
             return f"${obj.price_per_request}/request"
         return "-"
-    pricing_display.short_description = 'Pricing'
 
 
 @admin.register(UsageLog)
@@ -233,14 +233,15 @@ class UsageLogAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    @admin.display(description='User')
     def user_email(self, obj):
         return obj.user.email
-    user_email.short_description = 'User'
 
+    @admin.display(description='Cost (USD)')
     def cost_display(self, obj):
         return f"${obj.cost_usd:.6f}"
-    cost_display.short_description = 'Cost (USD)'
 
+    @admin.display(description='Usage')
     def usage_display(self, obj):
         """Display relevant usage metric based on service type."""
         if obj.total_tokens:
@@ -252,7 +253,6 @@ class UsageLogAdmin(admin.ModelAdmin):
         if obj.request_count > 1:
             return f"{obj.request_count} requests"
         return "1 request"
-    usage_display.short_description = 'Usage'
 
 
 @admin.register(StripeWebhookEvent)
@@ -284,6 +284,7 @@ class StripeWebhookEventAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    @admin.display(description='Status')
     def processed_status_display(self, obj):
         color = {
             'ok': 'green', 'error': 'red',
@@ -291,14 +292,13 @@ class StripeWebhookEventAdmin(admin.ModelAdmin):
         }.get(obj.processed_status, 'orange')
         label = obj.processed_status or 'pending'
         return format_html('<b style="color:{}">{}</b>', color, label)
-    processed_status_display.short_description = 'Status'
 
+    @admin.display(description='Payload')
     def payload_pretty(self, obj):
         return format_html(
             '<pre style="white-space:pre-wrap;">{}</pre>',
             json.dumps(obj.payload, indent=2, default=str),
         )
-    payload_pretty.short_description = 'Payload'
 
     @admin.action(description='Replay selected events (re-dispatch handler)')
     def replay_events(self, request, queryset):

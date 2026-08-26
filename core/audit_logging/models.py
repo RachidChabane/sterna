@@ -3,14 +3,16 @@ Audit log models for tracking all significant actions.
 """
 
 import uuid
+from typing import TYPE_CHECKING, Optional
+from django.conf import settings
 from django.db import models
-from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.utils import timezone
 from django.db.models import JSONField
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from authentication.models import User
 
 
 class AuditLogManager(models.Manager):
@@ -134,14 +136,23 @@ class AuditLog(models.Model):
         "SYSTEM_CONFIG_CHANGED": "System configuration changed",
     }
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    if TYPE_CHECKING:
+        # Shadow attribute Django generates for the `user` ForeignKey;
+        # not otherwise visible to mypy without the django-stubs plugin.
+        user_id: Optional[uuid.UUID]
+
+    id: models.UUIDField = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False
+    )
 
     # When
-    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+    timestamp: models.DateTimeField = models.DateTimeField(
+        default=timezone.now, db_index=True
+    )
 
     # Who
-    user = models.ForeignKey(
-        User,
+    user: "models.ForeignKey[Optional[User], Optional[User]]" = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -149,13 +160,15 @@ class AuditLog(models.Model):
     )
 
     # User information snapshot (in case user is deleted)
-    user_email = models.EmailField(null=True, blank=True)
-    user_ip = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(null=True, blank=True)
+    user_email: models.EmailField = models.EmailField(null=True, blank=True)
+    user_ip: models.GenericIPAddressField = models.GenericIPAddressField(
+        null=True, blank=True
+    )
+    user_agent: models.TextField = models.TextField(null=True, blank=True)
 
     # What
-    action = models.CharField(max_length=100, db_index=True)
-    action_category = models.CharField(
+    action: models.CharField = models.CharField(max_length=100, db_index=True)
+    action_category: models.CharField = models.CharField(
         max_length=20,
         choices=[(k, v) for k, v in ACTION_CATEGORIES.items()],
         null=True,
@@ -164,12 +177,14 @@ class AuditLog(models.Model):
     )
 
     # On what (generic relation to any model)
-    resource_type = models.ForeignKey(
+    resource_type: "models.ForeignKey[Optional[ContentType], Optional[ContentType]]" = models.ForeignKey(
         ContentType, on_delete=models.SET_NULL, null=True, blank=True
     )
-    resource_id = models.CharField(max_length=255, null=True, blank=True)
+    resource_id: models.CharField = models.CharField(
+        max_length=255, null=True, blank=True
+    )
     resource_object = GenericForeignKey("resource_type", "resource_id")
-    resource_str = models.CharField(
+    resource_str: models.CharField = models.CharField(
         max_length=255,
         null=True,
         blank=True,
@@ -180,10 +195,10 @@ class AuditLog(models.Model):
     extra_data = JSONField(default=dict, blank=True)
 
     # Request information
-    request_id = models.CharField(
+    request_id: models.CharField = models.CharField(
         max_length=100, null=True, blank=True, help_text="Request ID for correlation"
     )
-    session_id = models.CharField(
+    session_id: models.CharField = models.CharField(
         max_length=100,
         null=True,
         blank=True,
@@ -191,11 +206,11 @@ class AuditLog(models.Model):
     )
 
     # Success/failure tracking
-    success = models.BooleanField(default=True)
-    error_message = models.TextField(null=True, blank=True)
+    success: models.BooleanField = models.BooleanField(default=True)
+    error_message: models.TextField = models.TextField(null=True, blank=True)
 
     # Performance tracking
-    duration_ms = models.IntegerField(
+    duration_ms: models.IntegerField = models.IntegerField(
         null=True, blank=True, help_text="Duration of the action in milliseconds"
     )
 
@@ -256,21 +271,23 @@ class AuditLogRetentionPolicy(models.Model):
         ("years", "Years"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id: models.UUIDField = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False
+    )
 
-    name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True)
+    name: models.CharField = models.CharField(max_length=100, unique=True)
+    description: models.TextField = models.TextField(blank=True)
 
     # Retention period
-    retention_value = models.PositiveIntegerField(
+    retention_value: models.PositiveIntegerField = models.PositiveIntegerField(
         help_text="How long to keep audit logs"
     )
-    retention_unit = models.CharField(
+    retention_unit: models.CharField = models.CharField(
         max_length=10, choices=RETENTION_UNITS, default="days"
     )
 
     # What to apply this policy to
-    action_category = models.CharField(
+    action_category: models.CharField = models.CharField(
         max_length=20,
         choices=[(k, v) for k, v in AuditLog.ACTION_CATEGORIES.items()],
         null=True,
@@ -279,14 +296,14 @@ class AuditLogRetentionPolicy(models.Model):
     )
 
     # Archive before deletion
-    archive_before_deletion = models.BooleanField(
+    archive_before_deletion: models.BooleanField = models.BooleanField(
         default=True, help_text="Archive logs to cold storage before deletion"
     )
 
-    is_active = models.BooleanField(default=True)
+    is_active: models.BooleanField = models.BooleanField(default=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
@@ -317,22 +334,27 @@ class AuditLogArchive(models.Model):
     Older logs are moved here based on retention policies.
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id: models.UUIDField = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False
+    )
 
     # Original audit log ID
-    original_id = models.UUIDField(db_index=True)
+    original_id: models.UUIDField = models.UUIDField(db_index=True)
 
     # Archived data (full JSON dump of original log)
     archived_data = JSONField()
 
     # Archive metadata
-    archived_at = models.DateTimeField(default=timezone.now)
-    archived_by_policy = models.ForeignKey(
+    archived_at: models.DateTimeField = models.DateTimeField(default=timezone.now)
+    archived_by_policy: (
+        "models.ForeignKey[Optional[AuditLogRetentionPolicy], "
+        "Optional[AuditLogRetentionPolicy]]"
+    ) = models.ForeignKey(
         AuditLogRetentionPolicy, on_delete=models.SET_NULL, null=True, blank=True
     )
 
     # Storage location (for external archives)
-    storage_location = models.CharField(
+    storage_location: models.CharField = models.CharField(
         max_length=500,
         null=True,
         blank=True,

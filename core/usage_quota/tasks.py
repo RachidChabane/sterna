@@ -6,11 +6,12 @@ Handles retry logic for failed usage deductions to ensure no usage is lost.
 
 import json
 import logging
+from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Protocol
 
 import stripe as _stripe
-from celery import shared_task
+from celery import shared_task  # type: ignore[import-untyped]
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -21,6 +22,29 @@ FAILED_DEDUCTIONS_KEY = "quota:failed_deductions"
 
 # Maximum age for failed deductions before they're discarded (24 hours)
 MAX_DEDUCTION_AGE_SECONDS = 86400
+
+
+class _RedisListOps(Protocol):
+    """Narrow view of the redis-py client's list commands this module
+    needs. Django's cache API (BaseCache) has no LPOP/RPUSH/LLEN — the
+    default cache backend must be a Redis-backed one for the failed
+    deductions fallback queue below to function.
+    """
+
+    def lpop(self, name: str) -> Optional[bytes]: ...
+    def rpush(self, name: str, *values: Any) -> int: ...
+    def llen(self, name: str) -> int: ...
+
+
+def _redis_list_client() -> _RedisListOps:
+    """Reach through the Django cache wrapper to the underlying
+    redis-py client, which exposes the native list commands Django's
+    cache API does not.
+    """
+    # `_cache` is RedisCache's own implementation attribute (not part
+    # of BaseCache's public contract), so this is a genuine framework
+    # edge rather than something a narrower type could express.
+    return cache._cache.get_client()  # type: ignore[attr-defined]
 
 
 @shared_task(
@@ -63,7 +87,7 @@ def retry_failed_deduction(self, deduction_data: Dict[str, Any]) -> bool:
         queued_at = deduction_data.get('queued_at')
         if queued_at:
             try:
-                queued_time = timezone.datetime.fromisoformat(queued_at)
+                queued_time = datetime.fromisoformat(queued_at)
                 age_seconds = (timezone.now() - queued_time).total_seconds()
                 if age_seconds > MAX_DEDUCTION_AGE_SECONDS:
                     logger.warning(
@@ -124,9 +148,10 @@ def process_failed_deductions_queue() -> int:
     processed = 0
 
     try:
+        redis_client = _redis_list_client()
         # Get all failed deductions from Redis list
         while True:
-            raw = cache.lpop(FAILED_DEDUCTIONS_KEY)
+            raw = redis_client.lpop(FAILED_DEDUCTIONS_KEY)
             if not raw:
                 break
 
@@ -136,11 +161,14 @@ def process_failed_deductions_queue() -> int:
                 retry_failed_deduction.delay(deduction_data)
                 processed += 1
             except json.JSONDecodeError:
-                logger.error(f"Invalid JSON in failed deductions queue: {raw}")
+                logger.error(
+                    "Invalid JSON in failed deductions queue: %r",
+                    raw.decode(errors="replace"),
+                )
             except Exception as e:
                 logger.error(f"Failed to queue deduction for retry: {e}")
                 # Put it back at the end of the queue
-                cache.rpush(FAILED_DEDUCTIONS_KEY, raw)
+                redis_client.rpush(FAILED_DEDUCTIONS_KEY, raw)
                 break
 
     except Exception as e:
@@ -195,7 +223,9 @@ def queue_failed_deduction(
 
         try:
             # Fallback: store in Redis for later processing
-            cache.rpush(FAILED_DEDUCTIONS_KEY, json.dumps(deduction_data))
+            _redis_list_client().rpush(
+                FAILED_DEDUCTIONS_KEY, json.dumps(deduction_data)
+            )
             logger.info(f"Stored failed deduction in Redis: user={user_id}, service={service}")
             return True
         except Exception as redis_error:
@@ -206,7 +236,7 @@ def queue_failed_deduction(
 def get_failed_deductions_count() -> int:
     """Get the number of failed deductions waiting in the Redis queue."""
     try:
-        return cache.llen(FAILED_DEDUCTIONS_KEY) or 0
+        return _redis_list_client().llen(FAILED_DEDUCTIONS_KEY) or 0
     except Exception:
         return 0
 
@@ -216,7 +246,7 @@ def get_failed_deductions_count() -> int:
     name="usage_quota.tasks.ensure_stripe_customer",
     max_retries=5,
     default_retry_delay=30,
-    autoretry_for=(_stripe.error.RateLimitError, _stripe.error.APIConnectionError),
+    autoretry_for=(_stripe.RateLimitError, _stripe.APIConnectionError),
     retry_backoff=True,
     retry_backoff_max=600,
 )

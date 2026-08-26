@@ -12,7 +12,7 @@ FEATURE_RELEASE_STAGE: dict[str, ReleaseStage] = {
 }
 
 # Stages visible to non-admin users
-_PUBLIC_STAGES: set[ReleaseStage] = {'ga', 'beta', 'experimental', 'preview'}
+_PUBLIC_STAGES: set[ReleaseStage] = {'ga', 'beta', 'experimental'}
 
 
 def get_release_stages(is_admin: bool = False) -> dict[str, ReleaseStage]:

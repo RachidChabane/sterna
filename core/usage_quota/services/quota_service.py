@@ -14,7 +14,7 @@ Key Design Decisions:
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, TYPE_CHECKING
 
 from django.core.cache import cache
@@ -59,8 +59,8 @@ class QuotaCheckResult:
     weekly_used_usd: Decimal = Decimal('0')
     session_used_usd: Decimal = Decimal('0')
     # Window end times for user-friendly reset messages
-    weekly_window_end: Optional[timezone.datetime] = None
-    session_window_end: Optional[timezone.datetime] = None
+    weekly_window_end: Optional[datetime] = None
+    session_window_end: Optional[datetime] = None
 
 
 @dataclass
@@ -152,7 +152,7 @@ class QuotaService:
 
     def _is_weekly_window_active(
         self,
-        window_start: Optional[timezone.datetime],
+        window_start: Optional[datetime],
     ) -> bool:
         """Check if the fixed weekly window is currently active."""
         if window_start is None:
@@ -162,8 +162,8 @@ class QuotaService:
 
     def _get_weekly_window_end(
         self,
-        window_start: Optional[timezone.datetime],
-    ) -> Optional[timezone.datetime]:
+        window_start: Optional[datetime],
+    ) -> Optional[datetime]:
         """Get the end time of the fixed weekly window."""
         if window_start is None:
             return None
@@ -171,7 +171,7 @@ class QuotaService:
 
     def _is_session_window_active(
         self,
-        window_start: Optional[timezone.datetime],
+        window_start: Optional[datetime],
     ) -> bool:
         """Check if the fixed session window is currently active."""
         if window_start is None:
@@ -181,8 +181,8 @@ class QuotaService:
 
     def _get_session_window_end(
         self,
-        window_start: Optional[timezone.datetime],
-    ) -> Optional[timezone.datetime]:
+        window_start: Optional[datetime],
+    ) -> Optional[datetime]:
         """Get the end time of the fixed session window."""
         if window_start is None:
             return None
@@ -195,7 +195,7 @@ class QuotaService:
     def get_weekly_usage(
         self,
         user: 'User',
-        window_start: Optional[timezone.datetime],
+        window_start: Optional[datetime],
     ) -> Decimal:
         """
         Get total usage within the fixed weekly window.
@@ -236,7 +236,7 @@ class QuotaService:
     def get_session_usage(
         self,
         user: 'User',
-        window_start: Optional[timezone.datetime],
+        window_start: Optional[datetime],
     ) -> Decimal:
         """
         Get total usage within the fixed session window.
@@ -308,6 +308,8 @@ class QuotaService:
             SubscriptionNotFoundException: If user has no subscription
         """
         subscription = self._get_or_create_subscription(user)
+        if subscription is None:
+            raise SubscriptionNotFoundException(str(user.id))
 
         # task 10: per-feature limit consultation lives here — consult
         # subscription.plan.get_per_feature_limits()[feature] when the
@@ -414,6 +416,7 @@ class QuotaService:
             SubscriptionNotFoundException: If user has no subscription
         """
         # Lock subscription row to prevent concurrent modifications
+        subscription: Optional[UserSubscription]
         try:
             subscription = UserSubscription.objects.select_for_update().get(
                 user=user,
@@ -530,7 +533,7 @@ class QuotaService:
     def _calculate_weekly_usage_direct(
         self,
         user: 'User',
-        window_start: timezone.datetime,
+        window_start: datetime,
     ) -> Decimal:
         """Calculate weekly usage directly from DB (bypasses cache)."""
         window_end = window_start + timedelta(days=WEEKLY_WINDOW_DAYS)
@@ -545,7 +548,7 @@ class QuotaService:
     def _calculate_session_usage_direct(
         self,
         user: 'User',
-        window_start: timezone.datetime,
+        window_start: datetime,
     ) -> Decimal:
         """Calculate session usage directly from DB (bypasses cache)."""
         window_end = window_start + timedelta(hours=SESSION_WINDOW_HOURS)
@@ -590,6 +593,7 @@ class QuotaService:
         if quota is exceeded (for backward compatibility with existing code).
         """
         # Get or create subscription with lock
+        subscription: Optional[UserSubscription]
         try:
             subscription = UserSubscription.objects.select_for_update().get(
                 user=user,
@@ -863,26 +867,24 @@ class QuotaService:
         session_limit = subscription.effective_session_limit
 
         # Weekly: Fixed window
-        weekly_active = self._is_weekly_window_active(subscription.weekly_window_start)
-        if weekly_active:
-            weekly_used = self.get_weekly_usage(user, subscription.weekly_window_start)
-            weekly_window_start = subscription.weekly_window_start.isoformat()
-            weekly_window_end = self._get_weekly_window_end(
-                subscription.weekly_window_start
-            ).isoformat()
+        w_start = subscription.weekly_window_start
+        if w_start is not None and self._is_weekly_window_active(w_start):
+            weekly_used = self.get_weekly_usage(user, w_start)
+            weekly_window_start = w_start.isoformat()
+            w_end = self._get_weekly_window_end(w_start)
+            weekly_window_end = w_end.isoformat() if w_end else ''
         else:
             weekly_used = Decimal('0')
             weekly_window_start = ''
             weekly_window_end = ''
 
         # Session: Fixed window (like weekly)
-        session_active = self._is_session_window_active(subscription.session_window_start)
-        if session_active:
-            session_used = self.get_session_usage(user, subscription.session_window_start)
-            session_window_start = subscription.session_window_start.isoformat()
-            session_window_end = self._get_session_window_end(
-                subscription.session_window_start
-            ).isoformat()
+        s_start = subscription.session_window_start
+        if s_start is not None and self._is_session_window_active(s_start):
+            session_used = self.get_session_usage(user, s_start)
+            session_window_start = s_start.isoformat()
+            s_end = self._get_session_window_end(s_start)
+            session_window_end = s_end.isoformat() if s_end else ''
         else:
             session_used = Decimal('0')
             session_window_start = ''
@@ -892,12 +894,9 @@ class QuotaService:
         session_remaining = max(Decimal('0'), session_limit - session_used)
 
         # Get usage breakdown (only within active weekly window)
-        by_service = self._get_usage_by_service(
-            user, subscription.weekly_window_start if weekly_active else None
-        )
-        by_feature = self._get_usage_by_feature(
-            user, subscription.weekly_window_start if weekly_active else None
-        )
+        active_w_start = w_start if weekly_window_start else None
+        by_service = self._get_usage_by_service(user, active_w_start)
+        by_feature = self._get_usage_by_feature(user, active_w_start)
 
         return QuotaInfo(
             plan_name=subscription.plan.name,
@@ -973,7 +972,7 @@ class QuotaService:
     def _get_usage_by_service(
         self,
         user: 'User',
-        window_start: Optional[timezone.datetime] = None,
+        window_start: Optional[datetime] = None,
     ) -> Dict[str, Dict[str, Any]]:
         """Get usage breakdown by service within the fixed window."""
         if window_start is None:
@@ -1010,7 +1009,7 @@ class QuotaService:
     def _get_usage_by_feature(
         self,
         user: 'User',
-        window_start: Optional[timezone.datetime] = None,
+        window_start: Optional[datetime] = None,
     ) -> Dict[str, Dict[str, Any]]:
         """Get usage breakdown by feature within the fixed window."""
         if window_start is None:
@@ -1056,7 +1055,7 @@ class QuotaService:
     def get_fixed_window_usage(
         self,
         user: 'User',
-        window_start: Optional[timezone.datetime],
+        window_start: Optional[datetime],
         duration: timedelta,
     ) -> Decimal:
         """
@@ -1066,7 +1065,7 @@ class QuotaService:
         if duration.days == WEEKLY_WINDOW_DAYS:
             return self.get_weekly_usage(user, window_start)
         elif duration.total_seconds() == SESSION_WINDOW_HOURS * 3600:
-            return self.get_session_usage(user)
+            return self.get_session_usage(user, window_start)
         else:
             # Generic fallback
             if window_start is None:

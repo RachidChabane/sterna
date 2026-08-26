@@ -298,12 +298,16 @@ def _cancel_superseded_subscription(*, user, old_sub_id: str,
                 extra={**log_extra, 'old_status': old_status},
             )
             return
-        stripe.Subscription.delete(old_sub_id)
+        # stripe-python's DeletableAPIResource.delete is a dual-dispatch
+        # method (@class_method_variant): called on the class with a raw
+        # id, as here, it correctly routes to the classmethod variant at
+        # runtime, but its stub only types the instance-call overload.
+        stripe.Subscription.delete(old_sub_id)  # type: ignore[arg-type]
         logger.warning(
             'stripe.webhook.superseded_subscription_canceled',
             extra={**log_extra, 'old_status': old_status},
         )
-    except stripe.error.StripeError:
+    except stripe.StripeError:
         logger.exception(
             'stripe.webhook.superseded_subscription_cancel_failed',
             extra=log_extra,
@@ -586,14 +590,15 @@ def _handle_subscription_updated(event: Any) -> None:
             new_plan is not None and new_plan.id != row.plan_id
         )
         is_downgrade = (
-            plan_changed
+            new_plan is not None
+            and plan_changed
             and new_plan.weekly_limit_usd < row.plan.weekly_limit_usd
         )
         prev_cancel = bool(previous.get('cancel_at_period_end',
                                         row.cancel_at_period_end))
         cancel_just_set = (cancel_at_end and not prev_cancel)
 
-        if plan_changed:
+        if plan_changed and new_plan is not None:
             from_plan = row.plan
             row.plan = new_plan
         if sub_id:

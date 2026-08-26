@@ -13,9 +13,9 @@ from datetime import timedelta
 from decimal import Decimal
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from authentication.models import User
 from usage_quota._tier_seed import seed_tiers_for_tests
 from usage_quota.billing.service import get_billing_service
 from usage_quota.exceptions import (
@@ -30,9 +30,6 @@ from usage_quota.models import (
     UsageLog,
     UserSubscription,
 )
-
-
-User = get_user_model()
 
 
 SERVICE_MAP = {
@@ -60,7 +57,7 @@ SERVICE_MAP = {
 }
 
 
-def _make_user(tier_slug: str, suffix: str = '') -> 'User':
+def _make_user(tier_slug: str, suffix: str = '') -> User:
     email = f'{tier_slug}{suffix}@test.com'
     user = User.objects.create_user(email=email, password='x')
     plan = SubscriptionPlan.objects.get(name=tier_slug)

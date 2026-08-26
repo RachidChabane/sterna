@@ -8,7 +8,7 @@ Handles pre-flight quota checks and post-operation usage recording.
 import logging
 from decimal import Decimal
 from functools import wraps
-from typing import Callable, Optional, TypeVar, Any
+from typing import Awaitable, Callable, Optional, TypeVar, Any
 
 from usage_quota.billing.operations import BillableOperation
 from usage_quota.billing.service import get_billing_service
@@ -95,6 +95,12 @@ def billable(
                 status = billing.check_quota(user, service, cost, feature)
                 if not status.allowed:
                     raise QuotaExceededException(
+                        message=(
+                            "Session rate limit exceeded. Try again in a "
+                            "few hours."
+                            if status.denial_reason == "session"
+                            else "Weekly usage limit exceeded"
+                        ),
                         limit_type=status.denial_reason or "quota",
                         limit_usd=status.weekly_limit_usd if status.denial_reason == "weekly" else status.session_limit_usd,
                         used_usd=status.weekly_used_usd if status.denial_reason == "weekly" else status.session_used_usd,
@@ -135,7 +141,7 @@ def billable_async(
     Same functionality as @billable but for async functions.
     See @billable for full documentation.
     """
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> T:
             user = _extract_user(args, kwargs)
@@ -154,6 +160,12 @@ def billable_async(
                 status = billing.check_quota(user, service, cost, feature)
                 if not status.allowed:
                     raise QuotaExceededException(
+                        message=(
+                            "Session rate limit exceeded. Try again in a "
+                            "few hours."
+                            if status.denial_reason == "session"
+                            else "Weekly usage limit exceeded"
+                        ),
                         limit_type=status.denial_reason or "quota",
                         limit_usd=status.weekly_limit_usd if status.denial_reason == "weekly" else status.session_limit_usd,
                         used_usd=status.weekly_used_usd if status.denial_reason == "weekly" else status.session_used_usd,
