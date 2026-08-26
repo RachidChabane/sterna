@@ -1,22 +1,19 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { Message } from '@/components/models/types'
+import type { toast } from '@/hooks/use-toast'
+import type { ChatGroup, MessageContent, ToolCall } from '@/components/models/types'
 
 /** API message shape sent to the backend; includes the `system` role which never appears in UI state. */
 export type ApiMessage = {
   role: 'user' | 'assistant' | 'tool' | 'system'
-  content: any
+  content: MessageContent
   tool_call_id?: string
 }
 
-/**
- * setChatGroups' React state updater. Chat groups themselves stay loosely typed
- * (`any[]`) across this hook, same as the rest of the models components — named
- * here once so that isn't a separately-declared `any` at every call site.
- */
-export type SetChatGroups = Dispatch<SetStateAction<any[]>>
+/** setChatGroups' React state updater. */
+export type SetChatGroups = Dispatch<SetStateAction<ChatGroup[]>>
 
-/** A toast() call's options — the toast hook itself does not export a narrower type. */
-export type ToastFn = (options: any) => void
+/** A toast() call's options, matching the toast() helper's own parameter. */
+export type ToastFn = (options: Parameters<typeof toast>[0]) => void
 
 /** A tool call as requested by the model mid-stream, matching Message['tool_calls']. */
-export type ToolCallRequest = NonNullable<Message['tool_calls']>[number]
+export type ToolCallRequest = ToolCall

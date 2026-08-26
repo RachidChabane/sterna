@@ -1,5 +1,5 @@
-import type { Chat, Message } from '@/components/models/types'
-import type { CompletionUsage, ContextCompactedData, SternaRouteData } from '@/api/llm'
+import type { Chat, ChatGroup, Message } from '@/components/models/types'
+import type { CompletionUsage, ContextCompactedData, DoneMetadata, SternaRouteData } from '@/api/llm'
 import { getUserFriendlyErrorMessage } from '@/utils/errorMessages'
 import type { StreamCallbacksContext } from './context'
 
@@ -40,7 +40,7 @@ export function buildLifecycleCallbacks(ctx: StreamCallbacksContext) {
     if (data.generation_ids) acc.generationIds = data.generation_ids
   },
 
-  onDone: (metadata: any) => {
+  onDone: (metadata: DoneMetadata) => {
     // Capture metadata for final update (only used for final done event)
     acc.messageMetadata = metadata
     if (metadata.generation_id) acc.generationId = metadata.generation_id
@@ -60,7 +60,7 @@ export function buildLifecycleCallbacks(ctx: StreamCallbacksContext) {
 
     // Update chat to show error state
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) => {
+      prevGroups.map((group: ChatGroup) => {
         if (group.id !== activeGroupId) return group
 
         return {

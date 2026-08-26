@@ -1,21 +1,31 @@
 import type { CodingAgentResult, CodingAgentStep } from '@/api/llm'
+import type { Spark } from '@/api/sparks'
 import { CODING_AGENT_TOOLS } from './constants'
 import type { ToolCallRequest } from './types'
+import type { ToolResult, ToolExecution } from '@/components/models/types'
+
+/** A spark as returned nested inside a create_spark/update_spark tool result. */
+export type SparkFromToolResult = Pick<Spark, 'id' | 'title' | 'framework' | 'code' | 'version' | 'assets' | 'download_url'>
+
+/** Shape of a create_spark/update_spark tool's raw JSON result: `{status, spark}`. */
+interface SparkToolResultData {
+  status?: string
+  spark?: SparkFromToolResult
+}
 
 /**
  * Pull newly-created/updated sparks out of `create_spark`/`update_spark` tool
  * results. Sparks returned here are already persisted by the backend — callers
  * must not re-persist them.
  */
-export function extractSparksFromToolResults(toolCalls: ToolCallRequest[], results: any[]): any[] {
-  const sparks: any[] = []
+export function extractSparksFromToolResults(toolCalls: ToolCallRequest[], results: ToolResult[]): SparkFromToolResult[] {
+  const sparks: SparkFromToolResult[] = []
   toolCalls.forEach((tc, idx) => {
     const toolName = tc.function?.name
     if (toolName === 'create_spark' || toolName === 'update_spark') {
-      const resultEntry = results[idx]
       // Backend sends: {tool_call, result: {status, spark}, success}
-      const toolResult = resultEntry?.result
-      if (toolResult?.status === 'success' && toolResult?.spark) {
+      const toolResult = results[idx]?.result as SparkToolResultData | undefined
+      if (toolResult?.status === 'success' && toolResult.spark) {
         sparks.push({
           id: toolResult.spark.id,
           title: toolResult.spark.title,
@@ -37,17 +47,26 @@ export function extractSparksFromToolResults(toolCalls: ToolCallRequest[], resul
  * the tool result's `coding_agent_data`, falling back to the in-flight accumulated
  * Coding Agent state when the backend hasn't sent a fuller payload yet.
  */
+/** Shape of a coding-agent tool's raw JSON result: `{success, summary, files_*, coding_agent_data}`. */
+interface CodingAgentToolResultData {
+  success?: boolean
+  summary?: string
+  files_created?: string[]
+  files_modified?: string[]
+  coding_agent_data?: CodingAgentResult
+}
+
 export function buildExecutionsFromToolResults(
   toolCalls: ToolCallRequest[],
-  results: any[],
+  results: ToolResult[],
   accumulatedCodingAgentSteps: CodingAgentStep[],
   accumulatedCodingAgentResult: CodingAgentResult | null,
-): any[] {
+): ToolExecution[] {
   return toolCalls.map((tc, idx) => {
-    const result = results[idx]
+    const result = results[idx] as CodingAgentToolResultData | null
     const baseExec = {
       tool_call: tc,
-      result: result,
+      result: result as ToolResult,
       success: result?.success !== false, // Consider success if not explicitly false
       isExecuting: false, // Explicitly mark as completed
     }
@@ -60,12 +79,15 @@ export function buildExecutionsFromToolResults(
       return {
         ...baseExec,
         coding_agent_steps: [...steps],
+        // Neither a fuller coding_agent_data payload nor an accumulated result is
+        // available yet — build the partial shape the renderer already tolerates
+        // (job_id/duration_ms are absent here, same as before this was typed).
         coding_agent_result: codingData || accumulatedCodingAgentResult || {
-          success: result?.success,
+          success: result?.success ?? false,
           summary: result?.summary,
           files_created: result?.files_created || [],
           files_modified: result?.files_modified || [],
-        },
+        } as CodingAgentResult,
       }
     }
     return baseExec

@@ -4,6 +4,7 @@
 
 import { create } from 'zustand'
 import { mcpApi } from '../api/mcp'
+import { toErrorMessage } from '../utils/errorMessages'
 import type {
   MCPServer,
   MCPTool,
@@ -120,10 +121,10 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
         serversLoading: false,
         lastServersFetchTime: Date.now(),
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to fetch MCP servers:', error)
       set({
-        serversError: error.message || 'Failed to fetch servers',
+        serversError: toErrorMessage(error) || 'Failed to fetch servers',
         serversLoading: false
       })
     }
@@ -146,10 +147,10 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
         preconfiguredServersLoading: false,
         lastPreconfiguredFetchTime: Date.now(),
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to fetch preconfigured MCP servers:', error)
       set({
-        preconfiguredServersError: error.message || 'Failed to fetch preconfigured servers',
+        preconfiguredServersError: toErrorMessage(error) || 'Failed to fetch preconfigured servers',
         preconfiguredServersLoading: false
       })
     }
@@ -176,9 +177,9 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
       }))
 
       return newServer
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create MCP server:', error)
-      set({ serversError: error.message || 'Failed to create server' })
+      set({ serversError: toErrorMessage(error) || 'Failed to create server' })
       return null
     }
   },
@@ -195,9 +196,9 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
       }))
 
       return updatedServer
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to update MCP server:', error)
-      set({ serversError: error.message || 'Failed to update server' })
+      set({ serversError: toErrorMessage(error) || 'Failed to update server' })
       return null
     }
   },
@@ -215,9 +216,9 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
       }))
 
       return true
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to delete MCP server:', error)
-      set({ serversError: error.message || 'Failed to delete server' })
+      set({ serversError: toErrorMessage(error) || 'Failed to delete server' })
       return false
     }
   },
@@ -226,7 +227,7 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
     try {
       const response = await mcpApi.testConnection(serverId)
       return response.data
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to test MCP server connection:', error)
       return null
     }
@@ -243,7 +244,7 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
       }))
 
       return response.data.is_healthy
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to perform health check:', error)
       return false
     }
@@ -263,9 +264,9 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
           ...newTools
         ]
       }))
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to discover MCP tools:', error)
-      set({ toolsError: error.message || 'Failed to discover tools' })
+      set({ toolsError: toErrorMessage(error) || 'Failed to discover tools' })
     }
   },
 
@@ -279,10 +280,10 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
         tools: response.data.results,
         toolsLoading: false
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to fetch MCP tools:', error)
       set({
-        toolsError: error.message || 'Failed to fetch tools',
+        toolsError: toErrorMessage(error) || 'Failed to fetch tools',
         toolsLoading: false
       })
     }
@@ -301,7 +302,7 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
       }
 
       return approval
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to call MCP tool:', error)
       return null
     }
@@ -317,10 +318,10 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
         pendingApprovals: response.data.results,
         approvalsLoading: false
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to fetch pending approvals:', error)
       set({
-        approvalsError: error.message || 'Failed to fetch approvals',
+        approvalsError: toErrorMessage(error) || 'Failed to fetch approvals',
         approvalsLoading: false
       })
     }
@@ -337,7 +338,7 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
       }))
 
       return approvedApproval
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to approve tool:', error)
       return null
     }
@@ -354,7 +355,7 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
       }))
 
       return rejectedApproval
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to reject tool:', error)
       return null
     }
@@ -370,10 +371,10 @@ export const useMCPStore = create<MCPStore>()((set, get) => ({
         recentExecutions: response.data.results,
         executionsLoading: false
       })
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to fetch recent executions:', error)
       set({
-        executionsError: error.message || 'Failed to fetch executions',
+        executionsError: toErrorMessage(error) || 'Failed to fetch executions',
         executionsLoading: false
       })
     }

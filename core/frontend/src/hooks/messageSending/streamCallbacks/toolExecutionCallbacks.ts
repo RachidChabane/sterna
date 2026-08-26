@@ -1,4 +1,4 @@
-import type { Chat, Message } from '@/components/models/types'
+import type { Chat, Message, ChatGroup, ToolCall, ToolCallApproval, ToolResult } from '@/components/models/types'
 import { codeSessionApi } from '@/api/codeSession'
 import { useProjectPanelStore } from '@/store/projectPanelStore'
 import type { StreamCallbacksContext } from './context'
@@ -14,12 +14,12 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
   const { acc, setChatGroups, chats, activeGroupId, chatId, model, messageId } = ctx
 
   return {
-  onToolCallRequest: (approvals: any[], toolCalls: any[]) => {
+  onToolCallRequest: (approvals: ToolCallApproval[], toolCalls: ToolCall[]) => {
     // Handle tool call approval requests from the model
-    
+
 
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) => {
+      prevGroups.map((group: ChatGroup) => {
         if (group.id !== activeGroupId) return group
 
         return {
@@ -78,7 +78,7 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
     )
   },
 
-  onFileToolExecuting: (toolCalls: any[]) => {
+  onFileToolExecuting: (toolCalls: ToolCall[]) => {
     // Handle file tool execution START - show loading state
     // Also handles UPDATE when placeholder is replaced with real tool call data
     const startTime = Date.now()
@@ -86,10 +86,10 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
     // Check if this is an update to a placeholder (id: "loading" -> real id)
     const isPlaceholderUpdate = toolCalls.length > 0 &&
       toolCalls[0].id !== 'loading' &&
-      acc.accumulatedSteps.some((s: any) =>
+      acc.accumulatedSteps.some((s) =>
         s.type === 'tool_executions' &&
         s.isExecuting === true &&
-        s.executions?.some((e: any) => e.tool_call?.id === 'loading')
+        s.executions?.some((e) => e.tool_call?.id === 'loading')
       )
 
     // Mark the boundary for the next text step - any text after this tool execution
@@ -111,14 +111,15 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
     // Track in acc.accumulatedSteps for persistence
     if (isPlaceholderUpdate) {
       // Find and update the placeholder step instead of adding new one
-      const placeholderIndex = acc.accumulatedSteps.findIndex((s: any) =>
+      const placeholderIndex = acc.accumulatedSteps.findIndex((s) =>
         s.type === 'tool_executions' &&
         s.isExecuting === true &&
-        s.executions?.some((e: any) => e.tool_call?.id === 'loading')
+        s.executions?.some((e) => e.tool_call?.id === 'loading')
       )
       if (placeholderIndex !== -1) {
         // Preserve original startTime from placeholder
-        const originalStartTime = acc.accumulatedSteps[placeholderIndex].executions?.[0]?.startTime || startTime
+        const placeholderStep = acc.accumulatedSteps[placeholderIndex]
+        const originalStartTime = (placeholderStep.type === 'tool_executions' ? placeholderStep.executions?.[0]?.startTime : undefined) || startTime
         executions.forEach(e => e.startTime = originalStartTime)
         acc.accumulatedSteps[placeholderIndex] = { type: 'tool_executions', executions: [...executions], isExecuting: true }
       }
@@ -130,7 +131,7 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
 
     // Update the message with file tool executions as a new step (loading state)
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) => {
+      prevGroups.map((group: ChatGroup) => {
         if (group.id !== activeGroupId) return group
 
         return {
@@ -156,10 +157,10 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
                   const lastStep = steps[steps.length - 1]
 
                   // Check if we're updating a placeholder step (id: "loading" -> real id)
-                  const placeholderStepIndex = steps.findIndex((s: any) =>
+                  const placeholderStepIndex = steps.findIndex((s) =>
                     s.type === 'tool_executions' &&
                     s.isExecuting === true &&
-                    s.executions?.some((e: any) => e.tool_call?.id === 'loading')
+                    s.executions?.some((e) => e.tool_call?.id === 'loading')
                   )
 
                   if (placeholderStepIndex !== -1 && toolCalls[0]?.id !== 'loading') {
@@ -229,7 +230,7 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
     )
   },
 
-  onFileToolExecuted: (toolCalls: any[], results: any[]) => {
+  onFileToolExecuted: (toolCalls: ToolCall[], results: ToolResult[]) => {
     // Handle file tool execution COMPLETED - update with results
 
     // Get tool call IDs for matching against executing steps
@@ -244,21 +245,22 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
 
     // Auto-open side panel when plan/implement tools succeed
     toolCalls.forEach((tc, idx) => {
-      const result = results[idx]
-      if (tc.function?.name === 'plan_implementation' && result?.success && result?.data?.plan_id) {
-        codeSessionApi.getPlan(result.data.plan_id).then((res) => {
+      const result = results[idx] as { success?: boolean; data?: { plan_id: string } } | null
+      const planId = result?.success ? result.data?.plan_id : undefined
+      if (tc.function?.name === 'plan_implementation' && planId) {
+        codeSessionApi.getPlan(planId).then((res) => {
           const store = useProjectPanelStore.getState()
           store.addPlan(res.data)
-          store.selectPlan(result.data.plan_id)
+          store.selectPlan(planId)
           store.openPanel('plans')
         }).catch(console.error)
       }
-      if (tc.function?.name === 'implement_plan' && result?.success && result?.data?.plan_id) {
+      if (tc.function?.name === 'implement_plan' && planId) {
         // Fetch the updated plan (with implementation_branch, status, etc.)
         const store = useProjectPanelStore.getState()
-        codeSessionApi.getPlan(result.data.plan_id).then((res) => {
-          store.updatePlan(result.data.plan_id, res.data)
-          store.selectPlan(result.data.plan_id)
+        codeSessionApi.getPlan(planId).then((res) => {
+          store.updatePlan(planId, res.data)
+          store.selectPlan(planId)
           store.openPanel('plans')
         }).catch(console.error)
       }
@@ -270,16 +272,16 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
     // Update the matching tool_executions step in acc.accumulatedSteps with results
     // Match by tool_call.id to avoid race conditions with multiple concurrent tool calls
     let matchingStepIndex = acc.accumulatedSteps.findLastIndex(
-      (s: any) => s.type === 'tool_executions' && s.isExecuting === true &&
-        s.executions?.some((e: any) => executedToolCallIds.has(e.tool_call?.id))
+      (s) => s.type === 'tool_executions' && s.isExecuting === true &&
+        s.executions?.some((e) => executedToolCallIds.has(e.tool_call?.id))
     )
 
     // Fallback: if no match by real ID, try to find placeholder step (id: "loading")
     // This handles race condition where update event hasn't been processed yet
     if (matchingStepIndex === -1) {
       matchingStepIndex = acc.accumulatedSteps.findLastIndex(
-        (s: any) => s.type === 'tool_executions' && s.isExecuting === true &&
-          s.executions?.some((e: any) => e.tool_call?.id === 'loading')
+        (s) => s.type === 'tool_executions' && s.isExecuting === true &&
+          s.executions?.some((e) => e.tool_call?.id === 'loading')
       )
     }
 
@@ -304,15 +306,15 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
     )
     const currentSteps = currentMessage?.steps || []
     let matchingToolExecIndex = currentSteps.findLastIndex(
-      (s: any) => s.type === 'tool_executions' && s.isExecuting === true &&
-        s.executions?.some((e: any) => executedToolCallIds.has(e.tool_call?.id))
+      (s) => s.type === 'tool_executions' && s.isExecuting === true &&
+        s.executions?.some((e) => executedToolCallIds.has(e.tool_call?.id))
     )
 
     // Fallback: if no match by real ID, try to find placeholder step (id: "loading")
     if (matchingToolExecIndex === -1) {
       matchingToolExecIndex = currentSteps.findLastIndex(
-        (s: any) => s.type === 'tool_executions' && s.isExecuting === true &&
-          s.executions?.some((e: any) => e.tool_call?.id === 'loading')
+        (s) => s.type === 'tool_executions' && s.isExecuting === true &&
+          s.executions?.some((e) => e.tool_call?.id === 'loading')
       )
     }
 
@@ -341,7 +343,7 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
     // Helper function to update the chat groups (no timing logic inside)
     const updateWithResults = () => {
       setChatGroups(prevGroups =>
-        prevGroups.map((group: any) => {
+        prevGroups.map((group: ChatGroup) => {
           if (group.id !== activeGroupId) return group
 
           return {
@@ -365,15 +367,15 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
                     // Find and replace the tool_executions step that matches by tool_call.id
                     // This prevents race conditions when multiple tools execute concurrently
                     let matchingStepIndex = steps.findLastIndex(
-                      (s: any) => s.type === 'tool_executions' && s.isExecuting === true &&
-                        s.executions?.some((e: any) => executedToolCallIds.has(e.tool_call?.id))
+                      (s) => s.type === 'tool_executions' && s.isExecuting === true &&
+                        s.executions?.some((e) => executedToolCallIds.has(e.tool_call?.id))
                     )
 
                     // Fallback: if no match by real ID, try to find placeholder step (id: "loading")
                     if (matchingStepIndex === -1) {
                       matchingStepIndex = steps.findLastIndex(
-                        (s: any) => s.type === 'tool_executions' && s.isExecuting === true &&
-                          s.executions?.some((e: any) => e.tool_call?.id === 'loading')
+                        (s) => s.type === 'tool_executions' && s.isExecuting === true &&
+                          s.executions?.some((e) => e.tool_call?.id === 'loading')
                       )
                     }
 
@@ -390,9 +392,9 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
                       // No loading step found (rare case - state update race)
                       // Only add if we don't already have results for these tool calls
                       const existingToolIds = new Set(
-                        steps.flatMap((s: any) =>
+                        steps.flatMap((s) =>
                           s.type === 'tool_executions' && !s.isExecuting
-                            ? s.executions?.map((e: any) => e.tool_call?.id) || []
+                            ? s.executions?.map((e) => e.tool_call?.id) || []
                             : []
                         )
                       )
@@ -404,9 +406,9 @@ export function buildToolExecutionCallbacks(ctx: StreamCallbacksContext) {
 
                     // Update file_tool_executions without duplicates
                     const existingExecIds = new Set(
-                      (m.file_tool_executions || []).map((e: any) => e.tool_call?.id)
+                      (m.file_tool_executions || []).map((e) => e.tool_call?.id)
                     )
-                    const newExecutions = executions.filter((e: any) => !existingExecIds.has(e.tool_call?.id))
+                    const newExecutions = executions.filter((e) => !existingExecIds.has(e.tool_call?.id))
 
                     return {
                       ...m,

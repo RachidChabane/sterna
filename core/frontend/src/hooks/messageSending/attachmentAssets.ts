@@ -1,4 +1,4 @@
-import type { Attachment } from '@/components/models/types'
+import type { AttachmentLike } from '@/components/models/types'
 import { assetsAPI, assetToReference, getAssetTypeFromMime, type AssetReference } from '@/api/assets'
 
 /**
@@ -89,19 +89,19 @@ export function buildUnsupportedAttachmentsMessage(
  */
 export async function uploadAttachmentsAsAssets(
   chatId: string,
-  attachments: Attachment[]
-): Promise<{ enriched: Attachment[], assetRefs: AssetReference[] }> {
+  attachments: AttachmentLike[]
+): Promise<{ enriched: AttachmentLike[], assetRefs: AssetReference[] }> {
   if (attachments.length === 0) {
     return { enriched: [], assetRefs: [] }
   }
 
-  const enriched: Attachment[] = []
+  const enriched: AttachmentLike[] = []
   const assetRefs: AssetReference[] = []
 
   // Upload each attachment in parallel
-  const uploadPromises = attachments.map(async (att) => {
+  const uploadPromises = attachments.map(async (att: AttachmentLike) => {
     // Check if attachment already has an asset reference (from pre-upload)
-    const existingAssetRef = (att as any).assetRef as AssetReference | undefined
+    const existingAssetRef = att.assetRef
     if (existingAssetRef && existingAssetRef.asset_id) {
 
       return {
@@ -111,18 +111,18 @@ export async function uploadAttachmentsAsAssets(
     }
 
     // Check if attachment has assetId but no full assetRef (legacy format)
-    const existingAssetId = (att as any).assetId as string | undefined
+    const existingAssetId = att.assetId
     if (existingAssetId) {
 
       // Build a minimal asset reference from available data
       const assetRef: AssetReference = {
         type: 'asset_ref',
         asset_id: existingAssetId,
-        filename: (att as any).fileName || att.file?.name || 'unknown',
-        mime_type: (att as any).fileType || att.file?.type || 'application/octet-stream',
+        filename: att.fileName || att.file?.name || 'unknown',
+        mime_type: att.fileType || att.file?.type || 'application/octet-stream',
         asset_type: att.type === 'image' ? 'image' : 'generated',
-        size_bytes: (att as any).fileSize || att.file?.size || 0,
-        download_url: (att as any).assetUrl || `/api/workspaces/assets/${existingAssetId}/download/`,
+        size_bytes: att.fileSize || att.file?.size || 0,
+        download_url: att.assetUrl || `/api/workspaces/assets/${existingAssetId}/download/`,
       }
       return {
         enriched: att,
@@ -136,17 +136,18 @@ export async function uploadAttachmentsAsAssets(
       console.warn(`[uploadAttachmentsAsAssets] No File object for attachment, skipping upload`)
       return { enriched: att, assetRef: null }
     }
+    const file = att.file
 
     try {
-      const result = await assetsAPI.uploadFile(chatId, att.file, {
-        assetType: att.type === 'image' ? 'image' : getAssetTypeFromMime(att.file.type),
+      const result = await assetsAPI.uploadFile(chatId, file, {
+        assetType: att.type === 'image' ? 'image' : getAssetTypeFromMime(file.type),
       })
 
       if (result.success && result.asset) {
         // Mutate original attachment to add assetId/assetUrl
         // This ensures the message attachments (which reference the same objects) get updated
-        ;(att as any).assetId = result.asset.id
-        ;(att as any).assetUrl = result.asset.download_url
+        att.assetId = result.asset.id
+        att.assetUrl = result.asset.download_url
 
         // Enrich attachment with asset reference
         const enrichedAtt = {

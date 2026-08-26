@@ -10,20 +10,21 @@
  */
 
 import { useRef, useCallback, useState } from 'react'
-import type { Chat, Model, Message, MessageContentPart, Attachment } from '@/components/models/types'
+import type { Chat, ChatGroup, FileAttachment, ImageAttachment, Model, Message, MessageContentPart, Attachment, AttachmentLike, MessageAttachment } from '@/components/models/types'
 import { llmApi, type CodingAgentQuestion } from '@/api/llm'
 import { extractSparks } from '@/utils/sparkParser'
 import { DEFAULT_PARAMETERS } from '@/components/models/constants'
 import { getUserFriendlyErrorMessage } from '@/utils/errorMessages'
 import { isPDFFile, isOfficeFile } from '@/utils/fileUtils'
 import { useUsageQuotaStore } from '@/store/usageQuotaStore'
-import { conversationsAPI } from '@/api/conversations'
+import { conversationsAPI, type CreateMessageRequest } from '@/api/conversations'
 import { type AssetReference } from '@/api/assets'
 import { sparksAPI } from '@/api/sparks'
 import { useArtifactsPanelStore } from '@/store/artifactsPanelStore'
 import { codeSessionApi } from '@/api/codeSession'
 import { useSettingsStore } from '@/store/settingsStore'
 import useModelStore from '@/store/modelStore'
+import type { ModelCatalogEntry } from '@/types/models'
 import type { ApiMessage, SetChatGroups, ToastFn } from './messageSending/types'
 import { buildUnsupportedAttachmentsMessage, uploadAttachmentsAsAssets } from './messageSending/attachmentAssets'
 import { prepareApiMessagesWithAttachments } from './messageSending/attachmentPreparation'
@@ -37,7 +38,7 @@ import { useConversationTitleGeneration } from './messageSending/useConversation
 interface UseMessageSendingProps {
   chats: Chat[]
   activeGroupId: string
-  chatGroups: any[]
+  chatGroups: ChatGroup[]
   setChatGroups: SetChatGroups
   attachments: Attachment[]
   setAttachments: React.Dispatch<React.SetStateAction<Attachment[]>>
@@ -49,7 +50,7 @@ interface UseMessageSendingProps {
 
 interface UseMessageSendingReturn {
   sendToModel: (chatId: string, model: Model, messages: Message[], options?: SendToModelOptions) => Promise<void>
-  composeAndSend: (targetChatIds: string[], content: string, localAttachments: Attachment[], isToolContinuation?: boolean) => Promise<void>
+  composeAndSend: (targetChatIds: string[], content: string, localAttachments: AttachmentLike[], isToolContinuation?: boolean) => Promise<void>
   sendMessage: (content: string) => void
   sendSparkFixMessage: (chatId: string, content: string, sparkFixRequest: { spark_id: string; spark_title: string; error: string }) => Promise<void>
   sendIgniteMessage: (chatId: string, sparkIgniteRequest: { spark_id: string; spark_title: string }) => Promise<void>
@@ -119,7 +120,7 @@ export function useMessageSending({
 
     // Set loading state using functional update
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) =>
+      prevGroups.map((group: ChatGroup) =>
         group.id === activeGroupId
           ? {
               ...group,
@@ -185,7 +186,7 @@ export function useMessageSending({
 
       if (!prepared.hasSendableContent) {
         // No supported content; stop loading and bail out quickly
-        setChatGroups(prev => prev.map((g: any) => g.id === activeGroupId ? {
+        setChatGroups(prev => prev.map((g: ChatGroup) => g.id === activeGroupId ? {
           ...g,
           chats: g.chats.map((c: Chat) => c.id === chatId ? { ...c, isLoading: false } : c),
           updatedAt: new Date(),
@@ -293,7 +294,7 @@ export function useMessageSending({
       }
 
       setChatGroups(prevGroups =>
-        prevGroups.map((group: any) => {
+        prevGroups.map((group: ChatGroup) => {
           if (group.id !== activeGroupId) return group
 
           return {
@@ -369,7 +370,7 @@ export function useMessageSending({
           : undefined
 
         // Build the message payload - only include defined fields
-        const messagePayload: any = {
+        const messagePayload: CreateMessageRequest = {
           role: 'assistant',
           content: contentToPersist,
           model_id: model.model_id,
@@ -421,7 +422,7 @@ export function useMessageSending({
                 totalGenCost += genData.cost || 0
               }
 
-              const billingUpdate: any = {
+              const billingUpdate = {
                 prompt_tokens: totalGenPrompt,
                 completion_tokens: totalGenCompletion,
                 cost: totalGenCost.toFixed(6),
@@ -430,7 +431,7 @@ export function useMessageSending({
               conversationsAPI.updateMessage(activeGroupId, chatId, createdMessage.id, billingUpdate).catch(() => {})
               // Update React state so billing shows in UI immediately
               setChatGroups(prevGroups =>
-                prevGroups.map((group: any) => {
+                prevGroups.map((group: ChatGroup) => {
                   if (group.id !== activeGroupId) return group
                   return {
                     ...group,
@@ -473,20 +474,20 @@ export function useMessageSending({
         console.warn(`[sendToModel] ⚠️ No content to persist for assistant message in chat ${chatId}`)
       }
 
-    } catch (error: any) {
+    } catch (error) {
       // Clean up controller on error
       abortControllersRef.current.delete(chatId)
 
       console.error(`[sendToModel] Error for ${model.name}:`, error)
 
       // Check if it was an abort
-      if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+      if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('aborted'))) {
 
         // Save partial content to DB immediately (billing data will be patched in background)
         const contentToPersist = acc.totalContentForPersistence || acc.accumulatedContent
         if (contentToPersist.trim() || acc.allToolExecutions.length > 0) {
           // Use acc.lastUsageUpdate for immediate persistence (available from completed iterations)
-          const messagePayload: any = {
+          const messagePayload: CreateMessageRequest = {
             role: 'assistant',
             content: contentToPersist,
             model_id: model.model_id,
@@ -512,15 +513,11 @@ export function useMessageSending({
             // Query OpenRouter in background for precise billing, then PATCH
             if (acc.generationId && createdMessage?.id) {
               llmApi.getGenerationUsage(acc.generationId).then((genData) => {
-                const billingUpdate: any = {}
-                if (acc.lastUsageUpdate) {
-                  billingUpdate.prompt_tokens = acc.lastUsageUpdate.usage.prompt_tokens + genData.usage.prompt_tokens
-                  billingUpdate.completion_tokens = acc.lastUsageUpdate.usage.completion_tokens + genData.usage.completion_tokens
-                  billingUpdate.cost = ((acc.lastUsageUpdate.cost || 0) + (genData.cost || 0)).toFixed(6)
-                } else {
-                  billingUpdate.prompt_tokens = genData.usage.prompt_tokens
-                  billingUpdate.completion_tokens = genData.usage.completion_tokens
-                  billingUpdate.cost = genData.cost.toFixed(6)
+                const prior = acc.lastUsageUpdate
+                const billingUpdate = {
+                  prompt_tokens: (prior?.usage.prompt_tokens || 0) + genData.usage.prompt_tokens,
+                  completion_tokens: (prior?.usage.completion_tokens || 0) + genData.usage.completion_tokens,
+                  cost: ((prior?.cost || 0) + (genData.cost || 0)).toFixed(6),
                 }
                 // Patch DB
                 conversationsAPI.updateMessage(activeGroupId, chatId, createdMessage.id, billingUpdate).catch(
@@ -528,7 +525,7 @@ export function useMessageSending({
                 )
                 // Update React state so billing shows in UI immediately
                 setChatGroups(prevGroups =>
-                  prevGroups.map((group: any) => {
+                  prevGroups.map((group: ChatGroup) => {
                     if (group.id !== activeGroupId) return group
                     return {
                       ...group,
@@ -563,7 +560,7 @@ export function useMessageSending({
 
         // Set loading to false but don't show error message
         setChatGroups(prevGroups =>
-          prevGroups.map((group: any) =>
+          prevGroups.map((group: ChatGroup) =>
             group.id === activeGroupId
               ? {
                   ...group,
@@ -584,7 +581,7 @@ export function useMessageSending({
 
       // Add error message to chat
       setChatGroups(prevGroups =>
-        prevGroups.map((group: any) => {
+        prevGroups.map((group: ChatGroup) => {
           if (group.id !== activeGroupId) return group
 
           return {
@@ -632,7 +629,7 @@ export function useMessageSending({
   const composeAndSend = useCallback(async (
     targetChatIds: string[],
     content: string,
-    localAttachments: Attachment[],
+    localAttachments: AttachmentLike[],
     isToolContinuation: boolean = false  // Flag to bypass empty content check
   ) => {
     
@@ -661,10 +658,10 @@ export function useMessageSending({
       ? uploadAttachmentsAsAssets(primaryChatId, localAttachments)
       : Promise.resolve({ enriched: localAttachments, assetRefs: [] })
 
-    const imageAttachments = localAttachments.filter(a => a.type === 'image')
-    const fileAttachments = localAttachments.filter(a => a.type === 'file')
-    const pdfAttachments = fileAttachments.filter(f => (f as any).base64 && !(f as any).textContent && f.file && isPDFFile(f.file))
-    const officeAttachments = fileAttachments.filter(f => (f as any).base64 && !(f as any).textContent && f.file && isOfficeFile(f.file))
+    const imageAttachments = localAttachments.filter((a): a is ImageAttachment => a.type === 'image')
+    const fileAttachments = localAttachments.filter((a): a is FileAttachment => a.type === 'file')
+    const pdfAttachments = fileAttachments.filter(f => f.base64 && !f.textContent && f.file && isPDFFile(f.file))
+    const officeAttachments = fileAttachments.filter(f => f.base64 && !f.textContent && f.file && isOfficeFile(f.file))
     const hasImages = imageAttachments.length > 0
     const hasPDFs = pdfAttachments.length > 0
     const hasOfficeFiles = officeAttachments.length > 0
@@ -674,12 +671,12 @@ export function useMessageSending({
     let updatedChats: Chat[] = []
 
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) => {
+      prevGroups.map((group: ChatGroup) => {
         if (group.id !== activeGroupId) return group
 
         const updatedGroupChats = group.chats.map((chat: Chat) => {
           if (!targetChatIds.includes(chat.id)) return chat
-          if ((chat as any).disabled || chat.model === null) return chat
+          if (chat.disabled || chat.model === null) return chat
 
           const supportsVision = chat.model.input_modalities?.includes('image')
           const supportsFiles = chat.model.input_modalities?.includes('file')
@@ -692,7 +689,8 @@ export function useMessageSending({
               role: 'user',
               content: content,
               timestamp,
-              attachments: localAttachments.length > 0 ? localAttachments : undefined,
+              // Reconstructed (post-redirect) attachments never carry a real File; a freshly-composed one always does.
+              attachments: localAttachments.length > 0 ? localAttachments as MessageAttachment[] : undefined,
             }
             messages.push(userMessage)
           }
@@ -744,10 +742,10 @@ export function useMessageSending({
       assetRefs = uploadedAssetRefs
 
       // Build message content with asset references if we have any
-      let messageContent: any = content
+      let messageContent: string | Array<{ type: 'text'; text: string } | AssetReference> = content
       if (assetRefs.length > 0) {
         // Store as multipart content: text + asset references
-        const parts: any[] = []
+        const parts: Array<{ type: 'text'; text: string } | AssetReference> = []
         if (content.trim()) {
           parts.push({ type: 'text', text: content })
         }
@@ -778,19 +776,20 @@ export function useMessageSending({
     // 1. Not a tool continuation
     // 2. No existing user messages in any chat before this one
     // 3. Conversation doesn't have a custom name
-    const activeGroup = chatGroups.find((g: any) => g.id === activeGroupId)
+    const activeGroup = chatGroups.find((g: ChatGroup) => g.id === activeGroupId)
     const isFirstMessage = !isToolContinuation &&
       activeGroup &&
       !activeGroup.isCustomName &&
-      !activeGroup.chats.some((c: any) => c.messages.some((m: any) => m.role === 'user'))
+      !activeGroup.chats.some((c) => c.messages.some((m) => m.role === 'user'))
 
     // Send to targets in parallel using updated state
-    const enabledChats = updatedChats.filter(c => targetChatIds.includes(c.id) && c.model !== null && !(c as any).disabled)
+    const enabledChats = updatedChats.filter(c => targetChatIds.includes(c.id) && c.model !== null && !c.disabled)
 
     // Track each model as recently used (for "Recent Chat Models" section in dropdown)
     enabledChats.forEach(c => {
       if (c.model) {
-        addRecentChatModel(c.model.model_id, c.model as any)
+        // Model and ModelCatalogEntry are independently-typed views of the same backend record.
+        addRecentChatModel(c.model.model_id, c.model as ModelCatalogEntry)
       }
     })
 
@@ -818,7 +817,7 @@ export function useMessageSending({
 
   // Shared input entry point (synced): just call composeAndSend for all enabled chats
   const sendMessage = useCallback((content: string) => {
-    const enabledIds = chats.filter(c => c.model !== null && !(c as any).disabled).map(c => c.id)
+    const enabledIds = chats.filter(c => c.model !== null && !c.disabled).map(c => c.id)
     if (enabledIds.length === 0) return
 
     // Take a snapshot of current attachments with enriched metadata for serialization survival
@@ -828,7 +827,7 @@ export function useMessageSending({
       fileName: att.file.name,
       fileType: att.file.type,
       fileSize: att.file.size,
-    } as any))
+    }))
 
     composeAndSend(enabledIds, content, currentAttachments)
 
@@ -857,7 +856,7 @@ export function useMessageSending({
 
     // Update UI with the user message first
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) =>
+      prevGroups.map((group: ChatGroup) =>
         group.id === activeGroupId
           ? {
               ...group,
@@ -898,7 +897,7 @@ export function useMessageSending({
 
     // Update UI with the user message first
     setChatGroups(prevGroups =>
-      prevGroups.map((group: any) =>
+      prevGroups.map((group: ChatGroup) =>
         group.id === activeGroupId
           ? {
               ...group,
@@ -923,15 +922,15 @@ export function useMessageSending({
     try {
       const refreshed = await sparksAPI.get(sparkIgniteRequest.spark_id)
       if (refreshed?.is_ignited) {
-        setChatGroups((prev: any[]) =>
-          prev.map((group: any) =>
+        setChatGroups((prev) =>
+          prev.map((group: ChatGroup) =>
             group.id !== activeGroupId ? group : {
               ...group,
-              chats: group.chats.map((c: any) => ({
+              chats: group.chats.map((c: Chat) => ({
                 ...c,
-                messages: c.messages.map((m: any) => ({
+                messages: c.messages.map((m: Message) => ({
                   ...m,
-                  sparks: m.sparks?.map((s: any) =>
+                  sparks: m.sparks?.map((s) =>
                     s.id === sparkIgniteRequest.spark_id ? { ...s, is_ignited: true } : s
                   ),
                 })),

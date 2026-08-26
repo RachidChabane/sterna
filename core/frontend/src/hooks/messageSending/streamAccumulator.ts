@@ -1,4 +1,5 @@
-import type { CodingAgentResult, CodingAgentStep } from '@/api/llm'
+import type { CodingAgentResult, CodingAgentStep, DoneMetadata, SparkSummary, SternaRouteData, WebSource } from '@/api/llm'
+import type { Message, ToolExecution } from '@/components/models/types'
 
 /** Usage/cost snapshot captured from the most recent onUsageUpdate stream event. */
 interface StreamUsageSnapshot {
@@ -23,19 +24,19 @@ export interface StreamAccumulator {
   accumulatedReasoning: string
   /** Content of previous reasoning steps, for delta calculation via getReasoningDelta. */
   previousReasoningContent: string
-  accumulatedWebSources: any[]
-  allToolExecutions: any[]
-  accumulatedSparksFromTools: any[]
+  accumulatedWebSources: WebSource[]
+  allToolExecutions: ToolExecution[]
+  accumulatedSparksFromTools: SparkSummary[]
   /** Interleaved text / reasoning / tool_executions steps, tracked for persistence. */
-  accumulatedSteps: any[]
+  accumulatedSteps: NonNullable<Message['steps']>
   /** Index into accumulatedContent where the current text step's content starts. */
   currentTextStepStartIndex: number
   accumulatedImages: string[]
   accumulatedCodingAgentSteps: CodingAgentStep[]
   accumulatedCodingAgentResult: CodingAgentResult | null
-  sternaRouteData: any
+  sternaRouteData: SternaRouteData | null
   streamingMessageTimestamp: Date
-  messageMetadata: any
+  messageMetadata: DoneMetadata | null
   lastUsageUpdate: StreamUsageSnapshot | null
   /** OpenRouter generation ID, used to query precise usage after an abort. */
   generationId: string | null

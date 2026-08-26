@@ -1,4 +1,4 @@
-import type { Message, Model } from '@/components/models/types'
+import type { AttachmentLike, Message, Model } from '@/components/models/types'
 import { assetsAPI } from '@/api/assets'
 import { extractTextFromContent } from '@/utils/chatUtils'
 import { isPDFFile, isOfficeFile, formatFileSize } from '@/utils/fileUtils'
@@ -14,7 +14,7 @@ export interface AttachmentPreparationResult {
   hasSendableContent: boolean
 }
 
-function attachmentNeedsBase64Fetch(att: any): boolean {
+function attachmentNeedsBase64Fetch(att: AttachmentLike): boolean {
   const assetId = att.assetId || att.assetRef?.asset_id
   if (!assetId) return false
   if (att.type === 'image' && !att.base64) return true
@@ -27,7 +27,7 @@ function attachmentNeedsBase64Fetch(att: any): boolean {
  * data yet) — images loaded from the DB after a page reload, or files pre-uploaded
  * in the new-conversation flow. Mutates each attachment's `base64` field in place.
  */
-async function hydrateAttachmentBase64(attachments: any[]): Promise<void> {
+async function hydrateAttachmentBase64(attachments: AttachmentLike[]): Promise<void> {
   const blobToDataUrl = (blob: Blob): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -39,6 +39,7 @@ async function hydrateAttachmentBase64(attachments: any[]): Promise<void> {
   for (const att of attachments) {
     if (!attachmentNeedsBase64Fetch(att)) continue
     const assetId = att.assetId || att.assetRef?.asset_id
+    if (!assetId) continue
     try {
       const blob = await assetsAPI.download(assetId)
       if (blob) {
@@ -55,11 +56,11 @@ function buildResult(
   lastApiUserIndex: number,
   lastUserStateMsg: Message,
   model: Model,
-  attachments: any[],
+  attachments: AttachmentLike[],
 ): AttachmentPreparationResult {
   // Helper to check if attachment is a PDF (handles both File object and extracted properties)
-  const isPDF = (a: any): boolean => {
-    if (a.file && isPDFFile(a.file)) return true
+  const isPDF = (a: AttachmentLike): boolean => {
+    if (a.file instanceof File && isPDFFile(a.file)) return true
     // Fallback: check extracted properties or assetRef
     const filename = a.fileName || a.file?.name || a.assetRef?.filename || ''
     const mimeType = a.fileType || a.file?.type || a.assetRef?.mime_type || ''
@@ -67,8 +68,8 @@ function buildResult(
   }
 
   // Helper to check if attachment is an Office file
-  const isOffice = (a: any): boolean => {
-    if (a.file && isOfficeFile(a.file)) return true
+  const isOffice = (a: AttachmentLike): boolean => {
+    if (a.file instanceof File && isOfficeFile(a.file)) return true
     // Fallback: check extracted properties or assetRef
     const filename = a.fileName || a.file?.name || a.assetRef?.filename || ''
     const mimeType = a.fileType || a.file?.type || a.assetRef?.mime_type || ''
@@ -84,34 +85,34 @@ function buildResult(
     return officeMimes.includes(mimeType) || officeExtensions.some(ext => filename.toLowerCase().endsWith(ext))
   }
 
-  const imageAtts = attachments.filter((a: any) => a.type === 'image' && a.base64)
-  const pdfAtts = attachments.filter((a: any) => a.type === 'file' && a.base64 && !a.textContent && isPDF(a))
-  const officeAtts = attachments.filter((a: any) => a.type === 'file' && a.base64 && !a.textContent && isOffice(a))
-  const otherBinaryAtts = attachments.filter((a: any) => a.type === 'file' && a.base64 && !a.textContent && !isPDF(a) && !isOffice(a))
-  const textFileAtts = attachments.filter((a: any) => a.type === 'file' && a.textContent)
-  const videoAtts = attachments.filter((a: any) => a.type === 'video')
-  const audioAtts = attachments.filter((a: any) => a.type === 'audio')
+  const imageAtts = attachments.filter((a) => a.type === 'image' && a.base64)
+  const pdfAtts = attachments.filter((a) => a.type === 'file' && a.base64 && !a.textContent && isPDF(a))
+  const officeAtts = attachments.filter((a) => a.type === 'file' && a.base64 && !a.textContent && isOffice(a))
+  const otherBinaryAtts = attachments.filter((a) => a.type === 'file' && a.base64 && !a.textContent && !isPDF(a) && !isOffice(a))
+  const textFileAtts = attachments.filter((a) => a.type === 'file' && a.textContent)
+  const videoAtts = attachments.filter((a) => a.type === 'video')
+  const audioAtts = attachments.filter((a) => a.type === 'audio')
   const mediaToolAtts = [...videoAtts, ...audioAtts]
 
   // Extract File objects for file tools (workspace upload)
   // This includes ALL file attachments (PDFs, text files, video, audio) for workspace access
-  const allFileAtts = attachments.filter((a: any) =>
+  const allFileAtts = attachments.filter((a) =>
     (a.type === 'file' && a.file) ||
     (a.type === 'video' && a.file) ||
     (a.type === 'audio' && a.file)
   )
-  const uploadedFiles: File[] = allFileAtts.map((a: any) => a.file).filter((f: any) => f instanceof File)
+  const uploadedFiles: File[] = allFileAtts.map((a) => a.file).filter((f): f is File => f instanceof File)
 
   // Collect asset IDs for workspace upload — only for assets WITHOUT a real File object
   // (assets with real File objects are sent via FormData and copied by the request.FILES path)
   const workspaceAssets: { asset_id: string; filename: string }[] = attachments
-    .filter((a: any) => {
+    .filter((a) => {
       const assetId = a.assetId || a.assetRef?.asset_id
       const hasRealFile = a.file instanceof File
       return assetId && !hasRealFile && (a.type === 'file' || a.type === 'video' || a.type === 'audio')
     })
-    .map((a: any) => ({
-      asset_id: a.assetId || a.assetRef?.asset_id,
+    .map((a) => ({
+      asset_id: (a.assetId || a.assetRef?.asset_id)!,
       filename: a.fileName || a.assetRef?.filename || 'unknown',
     }))
 
@@ -128,14 +129,14 @@ function buildResult(
   const hasFileAttachments = allIncludeFiles.length > 0
 
   // Extract original typed text from the message content
-  const originalText = extractTextFromContent(lastUserStateMsg.content as any)
+  const originalText = extractTextFromContent(lastUserStateMsg.content)
 
   // Append text file contents for API only
   let apiText = originalText
   if (textFileAtts.length > 0) {
     for (const file of textFileAtts) {
       // Handle both normal attachments (file.file.name) and serialized ones (file.fileName)
-      const fileName = file.file?.name || (file as any).fileName || 'file'
+      const fileName = file.file?.name || file.fileName || 'file'
       apiText += `\n\n--- Fichier attaché: ${fileName} ---\n${file.textContent}\n--- Fin du fichier ---`
     }
   }
@@ -143,7 +144,7 @@ function buildResult(
   // Build media text references for video/audio (lightweight URL references, not base64)
   const buildMediaTextRef = (text: string): string => {
     if (mediaToolAtts.length === 0) return text
-    const lines = mediaToolAtts.map((media: any) => {
+    const lines = mediaToolAtts.map((media) => {
       const filename = media.fileName || media.file?.name || media.assetRef?.filename
       const assetId = media.assetId || media.assetRef?.asset_id
       const assetUrl = media.assetUrl || media.assetRef?.download_url
@@ -168,7 +169,7 @@ function buildResult(
     // This lets the LLM know the asset_url to use when editing user-uploaded images
     let textWithImageMetadata = apiText
     if (includeImages.length > 0) {
-      const imageMetadataLines = includeImages.map((img: any, idx: number) => {
+      const imageMetadataLines = includeImages.map((img, idx: number) => {
         const filename = img.fileName || img.file?.name || img.assetRef?.filename || `image_${idx + 1}`
         // Get asset URL from various sources, or construct from asset ID
         const assetId = img.assetId || img.assetRef?.asset_id
@@ -186,8 +187,8 @@ function buildResult(
 
     const parts = [
       { type: 'text' as const, text: textWithImageMetadata },
-      ...includeImages.map((img: any) => ({ type: 'image_url' as const, image_url: { url: img.base64 } })),
-      ...allIncludeFiles.map((f: any) => ({ type: 'image_url' as const, image_url: { url: f.base64 } })),
+      ...includeImages.map((img) => ({ type: 'image_url' as const, image_url: { url: img.base64! } })),
+      ...allIncludeFiles.map((f) => ({ type: 'image_url' as const, image_url: { url: f.base64! } })),
     ]
     apiMessages[lastApiUserIndex] = { role: 'user', content: parts }
   } else {
@@ -223,7 +224,7 @@ export function prepareApiMessagesWithAttachments(
   lastUserStateMsg: Message,
   model: Model,
 ): AttachmentPreparationResult | Promise<AttachmentPreparationResult> {
-  const attachments = (lastUserStateMsg as any).attachments || []
+  const attachments = lastUserStateMsg.attachments || []
 
   if (!attachments.some(attachmentNeedsBase64Fetch)) {
     return buildResult(apiMessages, lastApiUserIndex, lastUserStateMsg, model, attachments)

@@ -13,7 +13,7 @@ import { getAccessToken } from '../api/client'
  */
 interface PreferenceUpdate {
   key: string
-  value: any
+  value: unknown
   category: string
   timestamp: number
   retries: number
@@ -50,7 +50,7 @@ class PreferencesSyncManager {
   /**
    * Update a preference with optimistic local update + background sync
    */
-  async update(key: string, value: any, category: string = 'general'): Promise<void> {
+  async update(key: string, value: unknown, category: string = 'general'): Promise<void> {
     // Check if user is authenticated before syncing
     const accessToken = getAccessToken()
     if (!accessToken) {
@@ -147,7 +147,7 @@ class PreferencesSyncManager {
   /**
    * Handle sync error with retry logic
    */
-  private async handleSyncError(item: PreferenceUpdate, error: any): Promise<void> {
+  private async handleSyncError(item: PreferenceUpdate, error: unknown): Promise<void> {
     item.retries++
 
     if (item.retries >= SYNC_CONFIG.MAX_RETRIES) {
@@ -195,13 +195,13 @@ class PreferencesSyncManager {
   /**
    * Get a single preference by key
    */
-  async get(key: string): Promise<any | undefined> {
+  async get(key: string): Promise<unknown | undefined> {
     try {
       const pref = await preferencesApi.getPreference(key)
       // Returns null if preference doesn't exist
       if (!pref) return undefined
       return pref.preference_value
-    } catch (error: any) {
+    } catch (error) {
       console.error('[PreferencesSync] Failed to get preference:', key, error)
       throw error
     }
