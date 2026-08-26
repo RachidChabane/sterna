@@ -114,6 +114,16 @@ class PathNormalizer:
     def relative_lines(self, text: str) -> str:
         return "\n".join(self.relative(line) for line in text.split("\n"))
 
+    def is_inside(self, path: str) -> bool:
+        """Whether a path the agent touched lies within the workspace.
+
+        A relative path is resolved against the workspace and so always
+        does; an absolute one only if it descends from the root.
+        """
+        if not path.startswith("/"):
+            return True
+        return bool(self.workspace_root) and path.startswith(self.workspace_root + "/")
+
 
 ResultRenderer = Callable[[Dict[str, Any], Dict[str, Any], PathNormalizer], str]
 
@@ -298,7 +308,10 @@ class OpencodeOutputAdapter:
             content=f"Using {canonical}",
             input=tool_input,
         )
-        self._track_file_operation(canonical, tool_input)
+        # The line reports the call's outcome alongside it, so a
+        # refused or failed call never counts as a file change.
+        if state.get("status") != TOOL_STATUS_ERROR:
+            self._track_file_operation(canonical, tool_input)
         self._pending_results.append(self._build_result_step(state, tool_input, translation))
 
         # The tool call leads its step; prose the model emitted first
@@ -384,10 +397,17 @@ class OpencodeOutputAdapter:
         return released
 
     def _track_file_operation(self, canonical_tool: str, tool_input: Dict[str, Any]) -> None:
-        raw_path = tool_input.get("file_path") or tool_input.get("path") or ""
-        if not raw_path:
+        """Record a change to a workspace file.
+
+        The four file lists describe the user's workspace. A path
+        outside it — the plans directory a planning run writes into,
+        for one — is the harness's own bookkeeping, not a change the
+        user made and can review.
+        """
+        raw_path = str(tool_input.get("file_path") or tool_input.get("path") or "")
+        if not raw_path or not self._paths.is_inside(raw_path):
             return
-        path = self._paths.relative(str(raw_path))
+        path = self._paths.relative(raw_path)
 
         if canonical_tool in WRITE_TOOLS:
             if path in self.files_read:
