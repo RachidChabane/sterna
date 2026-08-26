@@ -23,6 +23,10 @@ export default defineConfig([
       globals: globals.browser,
     },
     rules: {
+      // Every occurrence of the `any` escape hatch defeats the type checker
+      // at that point in the program; the codebase carries zero of them, so
+      // this rule is a hard error rather than the recommended-config warn.
+      '@typescript-eslint/no-explicit-any': 'error',
       // no-restricted-globals (not no-restricted-syntax) for the bare
       // `fetch` identifier: it's scope-aware, so a local binding named
       // `fetch` (e.g. a destructured store action) does not trigger it —

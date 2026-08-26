@@ -1,12 +1,12 @@
 {
   "mypy_errors": 1486,
   "mypy_checked_files": 650,
-  "ts_explicit_any": 36,
+  "ts_explicit_any": 0,
   "ts_as_unknown": 17,
   "eslint_errors": 713,
   "eslint_warnings": 83,
   "eslint_files_linted": 476,
-  "eslint_config_sha256": "3ea75f263775d89eb507ae05ea70dc18616734b07f7d04e135934ed6c1c8475a",
+  "eslint_config_sha256": "0cda60950eef9f84a4f8bc9dd6db2af578b0bb80aad884550880eebad0724383",
   "knip_config_sha256": "5980548be3fd2a2be327cd76655f6b0152691d246c416defdcd3abb33f84c6a5",
   "dead_code": {
     "backend_vulture": 17,
