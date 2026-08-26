@@ -8,6 +8,7 @@
 
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { getAccessToken, handleUnauthorized } from '@/api/client'
+import { hasErrorResponse } from '@/utils/errorMessages'
 
 // Create axios instance for User Preferences microservice
 // Routes through API Gateway: /api/v1/preferences/* -> user-preferences:8002/api/v1/preferences/*
@@ -88,14 +89,14 @@ preferencesClient.interceptors.response.use(
  */
 export interface Preference {
   preference_key: string
-  preference_value: any
+  preference_value: unknown
   category?: string
   created_at?: string
   updated_at?: string
 }
 
 export interface PreferenceListResponse {
-  preferences: Record<string, any>
+  preferences: Record<string, unknown>
   count: number
 }
 
@@ -122,9 +123,9 @@ export const preferencesApi = {
     try {
       const response = await preferencesClient.get<Preference>(`/preferences/${key}`)
       return response.data
-    } catch (error: any) {
+    } catch (error) {
       // Return null for 404 (preference not found) - this is expected for new preferences
-      if (error.response?.status === 404) {
+      if (hasErrorResponse(error) && error.response?.status === 404) {
         return null
       }
       throw error
@@ -136,7 +137,7 @@ export const preferencesApi = {
    */
   async updatePreference(
     key: string,
-    value: any,
+    value: unknown,
     category?: string
   ): Promise<Preference> {
     const response = await preferencesClient.put<Preference>(`/preferences/${key}`, {

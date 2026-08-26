@@ -6,7 +6,8 @@
  */
 
 import { api } from './client'
-import type { Chat, ChatSpark, Message, ModelParameters, ChatInstructions } from '@/components/models/types'
+import { toErrorMessage, hasErrorResponse } from '../utils/errorMessages'
+import type { Chat, ChatSpark, Message, ModelParameters, ChatInstructions, ReconstructedAttachment } from '@/components/models/types'
 import type { Model, WebSource } from '@/api/llm'
 import { getDefaultModelParameters } from '@/config/modelParameters'
 import type { components } from './generated/schema'
@@ -360,12 +361,12 @@ export const conversationsAPI = {
       const response = await api.patch(`/conversations/${conversationId}/chats/${chatId}/`, data)
       
       return response.data
-    } catch (error: any) {
+    } catch (error) {
       console.error(`[conversationsAPI] ❌ Failed to update chat:`, {
         conversationId,
         chatId,
-        error: error.message,
-        status: error.response?.status,
+        error: toErrorMessage(error),
+        status: hasErrorResponse(error) ? error.response?.status : undefined,
       })
       throw error
     }
@@ -408,18 +409,19 @@ export const conversationsAPI = {
       )
       
       return response.data
-    } catch (error: any) {
+    } catch (error) {
+      const responseData = hasErrorResponse(error) ? error.response?.data : undefined
       console.error(`[conversationsAPI] ❌ Failed to create message:`, {
         conversationId,
         chatId,
-        error: error.message,
-        status: error.response?.status,
+        error: toErrorMessage(error),
+        status: hasErrorResponse(error) ? error.response?.status : undefined,
         // Log the full error response for debugging
-        validationErrors: error.response?.data,
+        validationErrors: responseData,
       })
       // Log the raw error data separately for easier reading
-      if (error.response?.data) {
-        console.error(`[conversationsAPI] Validation errors:`, JSON.stringify(error.response.data, null, 2))
+      if (responseData) {
+        console.error(`[conversationsAPI] Validation errors:`, JSON.stringify(responseData, null, 2))
       }
       throw error
     }
@@ -556,10 +558,10 @@ export function toFrontendChat(
           model: modelToUse.name,
           model_id: modelToUse.model_id,
           provider: modelToUse.provider,
-          provider_icon_slug: (modelToUse as any).provider_icon_slug,
-          provider_icon_url: (modelToUse as any).provider_icon_url,
-          model_icon_slug: (modelToUse as any).model_icon_slug,
-          model_icon_url: (modelToUse as any).model_icon_url,
+          provider_icon_slug: modelToUse.provider_icon_slug,
+          provider_icon_url: modelToUse.provider_icon_url,
+          model_icon_slug: modelToUse.model_icon_slug,
+          model_icon_url: modelToUse.model_icon_url,
         }
       } else if (messageModelId) {
         // Create minimal model metadata from what we have
@@ -616,16 +618,6 @@ interface AssetRefPart {
 /**
  * Reconstructed attachment from asset reference
  */
-interface ReconstructedAttachment {
-  id: string
-  type: 'image' | 'file' | 'video' | 'audio'
-  file: { name: string; type: string; size: number }
-  assetId: string
-  assetUrl: string
-  // For images/video/audio, the preview will be the download URL
-  preview?: string
-}
-
 /**
  * Convert API message to frontend Message format
  */
@@ -691,13 +683,13 @@ export function toFrontendMessage(apiMessage: APIMessage): Message {
   })) || []
 
   // Sanitize steps to clear any stale isExecuting flags (persisted state shouldn't be "executing")
-  const sanitizedSteps = apiMessage.steps?.map((step: any) => {
+  const sanitizedSteps = apiMessage.steps?.map((step) => {
     if (step.type === 'tool_executions') {
       return {
         ...step,
         isExecuting: false,
-        executions: step.executions?.map((exec: any) => ({
-          ...exec,
+        executions: step.executions?.map((exec) => ({
+          ...(exec as Record<string, unknown>),
           isExecuting: false,
         })),
       }
@@ -727,7 +719,7 @@ export function toFrontendMessage(apiMessage: APIMessage): Message {
     tool_call_id: apiMessage.tool_call_id || undefined,
     steps: sanitizedSteps as Message['steps'] || undefined,
     // Include reconstructed attachments if any
-    attachments: attachments.length > 0 ? attachments as any : undefined,
+    attachments: attachments.length > 0 ? attachments : undefined,
     // Include web sources from metadata
     web_sources: webSources,
     // Include sparks (interactive React components)

@@ -37,6 +37,112 @@ export type {
   CompletionResponse,
 }
 
+// A tool call requested by the model (from finish_reason=tool_calls),
+// shared by the pending-calls list, the completed-execution list, and the
+// per-step execution log in components/models/types.ts — one definition
+// for the one shape.
+export interface ToolCall {
+  id: string
+  type: 'function'
+  function: {
+    name: string
+    arguments: string
+  }
+  display_name?: string       // User-friendly tool name (added by backend _add_display_names)
+  server_icon_url?: string    // MCP server icon (added by backend for MCP tools)
+  server_icon_invert?: boolean
+}
+
+// The raw per-tool JSON payload a completed tool execution returns. Shape
+// is tool-specific and backend-controlled (success/data/coding_agent_data/
+// files_created/...); consumers narrow the fields they need at the point
+// of use rather than this type declaring every tool's schema.
+export type ToolResult = Record<string, unknown> | null
+
+export interface ToolExecution {
+  tool_call: ToolCall
+  result: ToolResult
+  success: boolean | null      // null while the tool is still executing
+  isExecuting?: boolean        // True while tool is executing
+  startTime?: number           // Timestamp when execution started (for timeout calculation)
+  // Coding Agent specific fields
+  coding_agent_steps?: CodingAgentStep[]     // Streamed execution steps
+  coding_agent_result?: CodingAgentResult    // Final execution result
+}
+
+// An MCP tool call awaiting the user's approve/reject decision.
+export interface ToolCallApproval {
+  id: string
+  tool_id: string
+  tool_name: string
+  tool_description: string
+  server_name: string
+  server_icon_url?: string
+  arguments: Record<string, unknown>
+  status: 'pending' | 'approved' | 'rejected'
+}
+
+/** A spark (interactive React component) summary as attached to a message or stream event. */
+export interface SparkSummary {
+  id: string
+  title: string
+  framework: 'react' | 'html' | 'svg' | 'markdown' | 'mermaid' | 'pdf' | 'docx' | 'ics' | 'csv' | 'xlsx'
+  code: string
+  version: number
+}
+
+/** The terminal onDone stream event's payload — final usage/cost/content metadata for the completed message. */
+export interface DoneMetadata {
+  usage: CompletionUsage
+  cost: number
+  prompt_cost: number
+  completion_cost: number
+  model: string
+  finish_reason?: string
+  reasoning_content?: string
+  images?: string[]
+  sparks?: SparkSummary[]
+  generation_id?: string
+  generation_ids?: string[]
+}
+
+/** Per-model feature toggles that shift a completion's token/cost estimate. */
+export interface ChatFeatureFlags {
+  system_prompt?: string
+  enable_mcp_tools?: boolean
+  enable_reasoning?: boolean
+  enable_file_tools?: boolean
+}
+
+export interface ModelCostEstimate {
+  model_id: string
+  model_name: string
+  cost: number | string
+  prompt_tokens: number
+  completion_tokens: number
+}
+
+export interface BatchCostEstimateResponse {
+  total_cost: number | string
+  costs: ModelCostEstimate[]
+}
+
+/** A BatchCostEstimateResponse with every Decimal-as-string field parsed to number, for display. */
+export interface NormalizedCostEstimate {
+  total_cost: number
+  costs: Array<Omit<ModelCostEstimate, 'cost'> & { cost: number }>
+}
+
+export function normalizeCostEstimate(data: BatchCostEstimateResponse): NormalizedCostEstimate {
+  return {
+    total_cost: typeof data.total_cost === 'string' ? parseFloat(data.total_cost) : data.total_cost,
+    costs: data.costs.map((c) => ({
+      ...c,
+      cost: typeof c.cost === 'string' ? parseFloat(c.cost) : c.cost,
+    })),
+  }
+}
+
 export interface Model {
   id: string                    // Backend ModelCatalog UUID (serializer includes it)
   model_id: string
@@ -112,21 +218,21 @@ export const llmApi = {
     callbacks: {
       onContent: (content: string) => void
       onReasoning?: (content: string) => void
-      onToolCallRequest?: (approvals: any[], toolCalls: any[]) => void
+      onToolCallRequest?: (approvals: ToolCallApproval[], toolCalls: ToolCall[]) => void
       onWebSources?: (sources: WebSource[]) => void
       onImage?: (imageData: string) => void
-      onFileToolExecuting?: (toolCalls: any[]) => void
-      onFileToolExecuted?: (toolCalls: any[], results: any[]) => void
+      onFileToolExecuting?: (toolCalls: ToolCall[]) => void
+      onFileToolExecuted?: (toolCalls: ToolCall[], results: ToolResult[]) => void
       onCodingAgentStep?: (step: CodingAgentStep) => void
       onCodingAgentCompleted?: (result: CodingAgentResult) => void
       onCodingAgentQuestion?: (data: CodingAgentQuestion) => void
       onContextCompacted?: (data: ContextCompactedData) => void
       onPreviewStarted?: (data: { port: number; command: string; pid: number }) => void
-      onSparks?: (sparks: Array<{ id: string; title: string; framework: 'react' | 'html' | 'svg' | 'markdown' | 'mermaid' | 'pdf' | 'docx' | 'ics' | 'csv' | 'xlsx'; code: string; version: number }>) => void
+      onSparks?: (sparks: SparkSummary[]) => void
       onSternaRoute?: (data: SternaRouteData) => void
       onGenerationId?: (generationId: string) => void
       onUsageUpdate?: (data: { usage: CompletionUsage; cost: number; prompt_cost: number; completion_cost: number; generation_id?: string; generation_ids?: string[] }) => void
-      onDone: (metadata: { usage: CompletionUsage; cost: number; prompt_cost: number; completion_cost: number; model: string; finish_reason?: string; reasoning_content?: string; images?: string[]; sparks?: Array<{ id: string; title: string; framework: 'react' | 'html' | 'svg' | 'markdown' | 'mermaid' | 'pdf' | 'docx' | 'ics' | 'csv' | 'xlsx'; code: string; version: number }>; generation_id?: string; generation_ids?: string[] }) => void
+      onDone: (metadata: DoneMetadata) => void
       onError: (error: string, detail?: string, code?: string) => void
     },
     options?: { controller?: AbortController; uploadedFiles?: File[] }
@@ -451,12 +557,12 @@ export const llmApi = {
         // Always release the reader lock
         reader.releaseLock()
       }
-    } catch (error: any) {
+    } catch (error) {
       // Clear timeout on error
       clearTimeout(timeoutId)
 
       // Handle abort - don't fire onError, caller detects via controller.signal.aborted
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         return
       }
 
@@ -494,19 +600,14 @@ export const llmApi = {
     enable_mcp_tools?: boolean
     enable_reasoning?: boolean
     enable_file_tools?: boolean
-    features_by_model?: Record<string, {
-      system_prompt?: string
-      enable_mcp_tools?: boolean
-      enable_reasoning?: boolean
-      enable_file_tools?: boolean
-    }>
+    features_by_model?: Record<string, ChatFeatureFlags>
     estimated_completion_tokens?: number
     max_new_tokens?: number
     max_new_tokens_by_model?: Record<string, number>
     files?: Array<{ filename: string; mime?: string; size?: number }>
     images?: Array<{ mime?: string; size?: number; width?: number; height?: number }>
   }) =>
-    apiClient.post('/llm/completions/estimate-batch-cost/', data),
+    apiClient.post<BatchCostEstimateResponse>('/llm/completions/estimate-batch-cost/', data),
 
   // Get rate limit info
   rateLimitInfo: (modelId: string) =>

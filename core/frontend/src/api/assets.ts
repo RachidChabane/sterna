@@ -6,6 +6,7 @@
  */
 
 import { api } from './client'
+import { getApiErrorMessage, toErrorMessage } from '../utils/errorMessages'
 
 // ============================================================================
 // Types
@@ -232,11 +233,11 @@ export const assetsAPI = {
     try {
       const response = await api.post('/workspaces/assets/upload/', request)
       return response.data
-    } catch (error: any) {
+    } catch (error) {
       console.error('[assetsAPI] Upload failed:', error)
       return {
         success: false,
-        error: error.response?.data?.error || error.message || 'Upload failed',
+        error: getApiErrorMessage(error, 'Upload failed'),
       }
     }
   },
@@ -272,11 +273,11 @@ export const assetsAPI = {
       }
 
       return await this.upload(request)
-    } catch (error: any) {
+    } catch (error) {
       console.error('[assetsAPI] uploadFile failed:', error)
       return {
         success: false,
-        error: error.message || 'Failed to process file',
+        error: toErrorMessage(error) || 'Failed to process file',
       }
     }
   },
@@ -489,9 +490,9 @@ export const assetsAPI = {
     try {
       const response = await api.post(`/workspaces/assets/${assetId}/share/`, options || {})
       return response.data
-    } catch (error: any) {
+    } catch (error) {
       console.error('[assetsAPI] Create share link failed:', error)
-      throw new Error(error.response?.data?.error || 'Failed to create share link')
+      throw new Error(getApiErrorMessage(error, 'Failed to create share link'))
     }
   },
 

@@ -4,6 +4,70 @@
  * Converts technical errors into user-friendly messages while preserving
  * technical details in console logs for debugging.
  */
+/** Shape of the JSON body the backend returns alongside 4xx/5xx responses. */
+interface ApiErrorPayload {
+  error?: string
+  detail?: string
+  message?: string
+}
+
+/**
+ * True for anything shaped like an axios error's `{ response: { data, status } }`
+ * wrapper. Checked structurally (an object with a `response` property) rather
+ * than with axios's own `isAxiosError` brand check, which only recognizes real
+ * `AxiosError` instances: a plain object built to look like one — the common
+ * shortcut in tests that reject a mocked call with `{ response: { data } }` —
+ * carries the same shape without the brand, and callers need both to work.
+ */
+export function hasErrorResponse(error: unknown): error is { response?: { data?: unknown; status?: number } } {
+  return typeof error === 'object' && error !== null && 'response' in error
+}
+
+function firstStringField(payload: ApiErrorPayload | undefined, ...keys: (keyof ApiErrorPayload)[]): string | undefined {
+  for (const key of keys) {
+    const value = payload?.[key]
+    if (typeof value === 'string' && value.length > 0) return value
+  }
+  return undefined
+}
+
+/**
+ * Returns the parsed JSON error body of an axios-shaped error, or undefined
+ * for anything else (a non-HTTP throw, a response with no body, a network
+ * error that never reached a server).
+ */
+export function getApiErrorData(error: unknown): ApiErrorPayload | undefined {
+  if (!hasErrorResponse(error)) return undefined
+  const data: unknown = error.response?.data
+  return data && typeof data === 'object' ? (data as ApiErrorPayload) : undefined
+}
+
+/**
+ * Extracts a display-safe message from an API call failure: the backend's
+ * `error`/`detail`/`message` field when present, the caught value's own
+ * message otherwise, and `fallback` only when neither yields anything.
+ */
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  const fromPayload = firstStringField(getApiErrorData(error), 'error', 'detail', 'message')
+  if (fromPayload) return fromPayload
+  return toErrorMessage(error) || fallback
+}
+
+/**
+ * Extracts a display-safe message from a caught value of unknown shape.
+ *
+ * `catch` bindings are always `unknown` under `useUnknownInCatchVariables`;
+ * this is the one place that narrows one down to a string, so call sites
+ * never need to re-derive the `instanceof Error` check themselves.
+ *
+ * @param error - The raw value caught (Error, string, or anything else thrown)
+ * @returns error.message when error is an Error, its string form otherwise
+ */
+export function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  return String(error)
+}
 
 /**
  * Convertit une erreur technique en message user-friendly

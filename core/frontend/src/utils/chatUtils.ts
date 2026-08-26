@@ -13,7 +13,7 @@ export function extractTextFromContent(content: MessageContent): string {
   if (typeof content === 'string') return content
   return content
     .filter((part) => part.type === 'text')
-    .map((part: any) => ('text' in part ? part.text : ''))
+    .map((part) => ('text' in part ? part.text : ''))
     .join(' ')
 }
 

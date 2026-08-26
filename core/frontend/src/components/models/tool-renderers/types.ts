@@ -9,27 +9,10 @@
  * bypasses the frame.
  */
 import type { ComponentType } from 'react'
-import type { CodingAgentStep, CodingAgentResult, CodingAgentQuestion } from '@/api/llm'
+import type { CodingAgentQuestion, ToolExecution } from '@/api/llm'
 
-export interface FileToolExecution {
-  tool_call: {
-    id: string
-    type: 'function'
-    function: {
-      name: string
-      arguments: string
-    }
-    display_name?: string  // User-friendly display name (from backend)
-    server_icon_url?: string  // MCP server icon URL (from backend)
-    server_icon_invert?: boolean  // Whether to invert icon in dark mode
-  }
-  result: any
-  success: boolean | null
-  isExecuting?: boolean  // True while tool is executing
-  // Coding Agent specific fields
-  coding_agent_steps?: CodingAgentStep[]  // Streamed execution steps
-  coding_agent_result?: CodingAgentResult  // Final execution result
-}
+/** A completed (or in-flight) file tool execution — the shared definition lives in api/llm.ts. */
+export type FileToolExecution = ToolExecution
 
 /** Values every renderer needs, derived once by the dispatcher. */
 export interface ToolRenderContext {

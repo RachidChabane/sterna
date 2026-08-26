@@ -14,6 +14,7 @@ type MessageContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } }
   | { type: 'file'; file: { filename: string; file_data: string } }
+  | { type: 'asset_ref'; asset_id: string; filename: string; mime_type: string; asset_type: string; width?: number; height?: number; download_url: string }
 
 export interface CompletionMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'

@@ -4,9 +4,10 @@
  */
 
 // Re-export Model and WebSource from API (source of truth for API types)
-import type { Model, WebSource } from '@/api/llm'
-import type { SparkFramework } from '@/api/sparks'
-export type { Model, WebSource }
+import type { Model, WebSource, ToolCall, ToolResult, ToolExecution, ToolCallApproval } from '@/api/llm'
+import type { SparkFramework, Spark } from '@/api/sparks'
+import type { AssetReference } from '@/api/assets'
+export type { Model, WebSource, ToolCall, ToolResult, ToolExecution, ToolCallApproval }
 
 // Message content types for multimodal support
 export type MessageContentPart =
@@ -60,6 +61,50 @@ export interface AudioAttachment {
 
 export type Attachment = ImageAttachment | FileAttachment | VideoAttachment | AudioAttachment
 
+// A message attachment as reconstructed from persisted API history: the
+// browser File object never survives a reload, so `file` carries only the
+// metadata (name/type/size) every attachment preview actually reads —
+// never the Blob-only members a freshly-composed Attachment.file has.
+export interface ReconstructedAttachment {
+  id: string
+  type: 'image' | 'file' | 'video' | 'audio'
+  file: { name: string; type: string; size: number }
+  assetId: string
+  assetUrl: string
+  preview?: string
+}
+
+export type MessageAttachment = Attachment | ReconstructedAttachment
+
+/** Called after a tool result is available (approval flow or execution), to continue the conversation with it. */
+export type ToolExecutedHandler = (toolCallId: string, toolName: string, result: Record<string, unknown> | undefined) => void
+
+/**
+ * The shape an attachment can actually have while a message is being
+ * prepared for send: a freshly composed Attachment (real File), one
+ * reconstructed from persisted API history (no File; already uploaded), or
+ * one that crossed the new-conversation sessionStorage handoff (upload
+ * in flight, failed, or done). Runtime code narrows by field presence —
+ * `file instanceof File`, `assetId` set, `uploadFailed` — rather than a
+ * discriminant, since that handoff can drop `file` and add
+ * `fileName`/`fileType`/`fileSize`/`assetRef` interchangeably.
+ */
+export interface AttachmentLike {
+  id: string
+  type: 'image' | 'file' | 'video' | 'audio'
+  file?: File | { name: string; type: string; size: number }
+  base64?: string
+  textContent?: string
+  preview?: string
+  assetId?: string
+  assetUrl?: string
+  assetRef?: AssetReference
+  fileName?: string
+  fileType?: string
+  fileSize?: number
+  uploadFailed?: boolean
+}
+
 // Message interface - used across chat components
 export interface Message {
   role: 'user' | 'assistant' | 'tool'
@@ -94,50 +139,21 @@ export interface Message {
   is_interrupted?: boolean // Alias for isInterrupted (snake_case from backend)
   is_stopped?: boolean    // True when user clicked Stop and partial content was preserved
   error?: string          // Error message when the response failed
-  attachments?: Attachment[] // Files and images attached to user messages
+  attachments?: MessageAttachment[] // Files and images attached to user messages
   reasoning_content?: string  // Full reasoning/thinking process from reasoning models
   is_reasoning?: boolean      // True while receiving reasoning chunks (streaming phase)
-  pending_approvals?: any[]   // MCP tool call approvals awaiting user decision
-  tool_calls?: Array<{        // Tool calls requested by the model (from finish_reason=tool_calls)
-    id: string
-    type: 'function'
-    function: {
-      name: string
-      arguments: string
-    }
-    display_name?: string       // User-friendly tool name (added by backend _add_display_names)
-    server_icon_url?: string    // MCP server icon (added by backend for MCP tools)
-    server_icon_invert?: boolean
-  }>
-  file_tool_executions?: Array<{  // File tool executions with their results
-    tool_call: {
-      id: string
-      type: 'function'
-      function: {
-        name: string
-        arguments: string
-      }
-      display_name?: string     // User-friendly tool name (added by backend _add_display_names)
-      server_icon_url?: string  // MCP server icon (added by backend for MCP tools)
-      server_icon_invert?: boolean
-    }
-    result: any
-    success: boolean | null      // null while the tool is still executing
-    isExecuting?: boolean        // True while tool is executing
-    startTime?: number           // Timestamp when execution started (for timeout calculation)
-  }>
+  pending_approvals?: ToolCallApproval[]   // MCP tool call approvals awaiting user decision
+  tool_calls?: ToolCall[]        // Tool calls requested by the model (from finish_reason=tool_calls)
+  file_tool_executions?: ToolExecution[]  // File tool executions with their results
   web_sources?: WebSource[]   // Web search sources/citations (URLs, titles, content)
   images?: string[]           // Generated images from image generation models (data URLs: "data:image/png;base64,...")
 
   // Sparks - interactive React components generated by AI
-  sparks?: Array<{
-    id: string
-    title: string
-    framework: SparkFramework
-    code: string
-    version: number
-    parent_id?: string | null  // ID of the parent spark (for version tracking)
-  }>
+  sparks?: Array<
+    Pick<Spark, 'id' | 'title' | 'framework' | 'code' | 'version' | 'is_ignited'> & {
+      parent_id?: string | null  // ID of the parent spark (for version tracking)
+    }
+  >
 
   // Sterna routing info (when model was auto-routed)
   sterna_route?: {
@@ -155,23 +171,7 @@ export interface Message {
     | { type: 'reasoning'; content: string; isStreaming: boolean }
     | {
         type: 'tool_executions';
-        executions: Array<{
-          tool_call: {
-            id: string
-            type: 'function'
-            function: {
-              name: string
-              arguments: string
-            }
-            display_name?: string     // User-friendly tool name (added by backend _add_display_names)
-            server_icon_url?: string  // MCP server icon (added by backend for MCP tools)
-            server_icon_invert?: boolean
-          }
-          result: any
-          success: boolean | null
-          isExecuting?: boolean  // True while tool is executing
-          startTime?: number     // Timestamp when execution started (for timeout calculation)
-        }>
+        executions: ToolExecution[]
         isExecuting?: boolean    // True while any tool in this step is executing
       }
   >

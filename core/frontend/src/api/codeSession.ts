@@ -258,9 +258,18 @@ export const codeSessionApi = {
 
   // Get branch commits
   getBranchCommits: (owner: string, repo: string, branch: string, perPage: number = 20) =>
-    apiClient.get<{ results: any[] }>(`/code-sessions/github/repos/${owner}/${repo}/commits/`, {
+    apiClient.get<{ results: GitHubCommit[] }>(`/code-sessions/github/repos/${owner}/${repo}/commits/`, {
       params: { sha: branch, per_page: perPage },
     }),
+}
+
+/** A commit as returned by GitHub's commits API, passed through unchanged by the backend proxy. */
+export interface GitHubCommit {
+  sha: string
+  commit: {
+    message: string
+    author?: { name?: string; date?: string }
+  }
 }
 
 // Helper to transform API response to store type

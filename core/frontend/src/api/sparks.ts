@@ -7,6 +7,7 @@
 
 import { api } from './client'
 import type { components } from './generated/schema'
+import { getApiErrorMessage } from '@/utils/errorMessages'
 
 // ============================================================================
 // Types
@@ -130,9 +131,9 @@ export const sparksAPI = {
     try {
       const response = await api.post('/sparks/', request)
       return response.data
-    } catch (error: any) {
+    } catch (error) {
       console.error('[sparksAPI] Create failed:', error)
-      throw new Error(error.response?.data?.error || error.message || 'Failed to create spark')
+      throw new Error(getApiErrorMessage(error, 'Failed to create spark'))
     }
   },
 
@@ -156,9 +157,9 @@ export const sparksAPI = {
     try {
       const response = await api.put(`/sparks/${sparkId}/`, request)
       return response.data
-    } catch (error: any) {
+    } catch (error) {
       console.error('[sparksAPI] Update failed:', error)
-      throw new Error(error.response?.data?.error || error.message || 'Failed to update spark')
+      throw new Error(getApiErrorMessage(error, 'Failed to update spark'))
     }
   },
 

@@ -4,11 +4,41 @@
 
 import consigliereClient from './consigliereClient'
 import { fetchStream } from './transport'
-import type { ChatGroup } from '@/components/models/types'
+import type { Chat, ChatGroup, Message } from '@/components/models/types'
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/** Lightweight, non-file metadata describing one attachment on a serialized message. */
+interface SerializedAttachmentMeta {
+  type: 'image' | 'file'
+  filename: string
+  mime?: string
+  size?: number
+  is_pdf?: boolean
+}
+
+/**
+ * A message as sent to Consigliere: timestamps and content are transport
+ * strings, and attachments are replaced by lightweight metadata (no file
+ * data) — see consigliereStore's serializeChatGroupForConsigliere.
+ */
+type ConsigliereChatMessage = Omit<Message, 'timestamp' | 'content' | 'attachments'> & {
+  timestamp: string
+  content: string
+  attachments_meta: SerializedAttachmentMeta[]
+  attachments?: undefined
+}
+
+type ConsigliereChat = Omit<Chat, 'messages'> & { messages: ConsigliereChatMessage[] }
+
+/** A ChatGroup serialized for the Consigliere analyze request (transport-safe timestamps, no file data). */
+export type ConsigliereChatGroup = Omit<ChatGroup, 'createdAt' | 'updatedAt' | 'chats'> & {
+  createdAt: string
+  updatedAt: string
+  chats: ConsigliereChat[]
+}
 
 export interface ConsigliereMessage {
   id: string
@@ -140,7 +170,7 @@ interface ConsigliereSessionSummary {
 // ============================================================================
 
 export interface AnalyzeConversationRequest {
-  chat_group: ChatGroup
+  chat_group: ConsigliereChatGroup
   current_model: string
   user_preferences?: {
     budget_preference?: 'budget' | 'balanced' | 'premium'
