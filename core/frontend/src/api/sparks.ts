@@ -6,6 +6,7 @@
  */
 
 import { api } from './client'
+import type { components } from './generated/schema'
 
 // ============================================================================
 // Types
@@ -14,7 +15,7 @@ import { api } from './client'
 /**
  * Framework types supported by Sparks
  */
-export type SparkFramework = 'react' | 'html' | 'svg' | 'markdown' | 'mermaid' | 'pdf' | 'docx' | 'ics' | 'csv' | 'xlsx'
+export type SparkFramework = components['schemas']['FrameworkEnum']
 
 /**
  * Asset referenced by a spark (image/video)
@@ -64,23 +65,12 @@ export interface SparkDefinition {
 /**
  * Request payload for creating a spark
  */
-export interface CreateSparkRequest {
-  title: string
-  framework?: SparkFramework
-  code: string
-  chat_id?: string
-  message_id?: string
-  dependencies?: string[]
-}
+export type CreateSparkRequest = components['schemas']['SparkCreate']
 
 /**
  * Request payload for updating a spark (creates new version)
  */
-export interface UpdateSparkRequest {
-  title?: string
-  code?: string
-  dependencies?: string[]
-}
+export type UpdateSparkRequest = components['schemas']['PatchedSparkUpdate']
 
 /**
  * Response from listing sparks
