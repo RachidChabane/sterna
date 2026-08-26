@@ -5,7 +5,7 @@
  * dispatcher uses to recompute `effectiveSuccess` for this one tool id,
  * and to suppress the frame's own error row in favor of this one.
  */
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -155,7 +155,7 @@ export function RunBashHeader({ execution, variant, effectiveSuccess }: ToolRend
 }
 
 // Component for displaying run_bash with command inline and collapsible output
-const RunBashDisplay = ({
+const RunBashDisplay = memo(({
   command,
   result,
   success,
@@ -216,4 +216,4 @@ const RunBashDisplay = ({
       )}
     </Collapsible>
   )
-}
+})

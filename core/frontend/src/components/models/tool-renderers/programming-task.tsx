@@ -1,5 +1,5 @@
 /** execute_programming_task body: a compact result summary with an optional code/output drill-down. */
-import { useState, useMemo } from 'react'
+import { memo, useState, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -21,7 +21,7 @@ export function ProgrammingTaskBody({ execution }: ToolRenderContext) {
 }
 
 // Component for displaying file content in a collapsible section with syntax highlighting
-const FileContentDisplay = ({ filename, content, isDark }: {
+const FileContentDisplay = memo(({ filename, content, isDark }: {
   filename: string
   content: string
   isDark: boolean
@@ -118,10 +118,10 @@ const FileContentDisplay = ({ filename, content, isDark }: {
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})
 
 // Component for displaying execute_programming_task results - compact like other tools
-const ProgrammingTaskResult = ({ result, code }: { result: any, code?: string }) => {
+const ProgrammingTaskResult = memo(({ result, code }: { result: any, code?: string }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [showCode, setShowCode] = useState(false)
   const { isDark } = useTheme()
@@ -364,4 +364,4 @@ const ProgrammingTaskResult = ({ result, code }: { result: any, code?: string })
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})

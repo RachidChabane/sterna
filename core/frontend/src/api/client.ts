@@ -31,10 +31,10 @@ const ORCHESTRATOR_TIMEOUT_MS = 0
 /**
  * Per-call override for apiClient requests slower than its 30s default:
  * document text extraction, audio transcription, LLM-backed generation.
- * These previously went through an unbounded raw `fetch()`; 30s is too
- * tight for them, so callers pass `{ timeout: LONG_RUNNING_TIMEOUT_MS }`
- * explicitly. Matches consigliereClient's own 3-minute default, set for
- * the same class of AI-generation request.
+ * 30s is too tight for them, so callers pass
+ * `{ timeout: LONG_RUNNING_TIMEOUT_MS }` explicitly. Matches
+ * consigliereClient's own 3-minute default, set for the same class of
+ * AI-generation request.
  */
 export const LONG_RUNNING_TIMEOUT_MS = 180000
 

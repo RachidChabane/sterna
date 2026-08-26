@@ -162,8 +162,8 @@ export function ExecutableCodeBlock({ code, language, className }: ExecutableCod
 
       setResult(response.data)
     } catch (error) {
-      // Don't show error if execution was aborted by user (native fetch
-      // AbortError previously; axios raises a CanceledError instead)
+      // Don't show error if execution was aborted by user (axios raises
+      // a CanceledError; a bare AbortError is also handled defensively)
       if (axios.isCancel(error) || (error instanceof Error && error.name === 'AbortError')) {
         setResult({
           output: '',

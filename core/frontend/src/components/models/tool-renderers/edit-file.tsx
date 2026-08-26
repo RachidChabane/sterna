@@ -2,7 +2,7 @@
  * edit_file body: an inline unified-diff view, matching the Coding Agent's
  * diff style.
  */
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { ChevronRight } from 'lucide-react'
@@ -22,7 +22,7 @@ export function EditFileBody({ execution, filePath }: ToolRenderContext) {
   return <EditFileDiffResult result={execution.result} filePath={filePath || undefined} args={args} />
 }
 
-const EditFileDiffResult = ({ result, filePath, args }: {
+const EditFileDiffResult = memo(({ result, filePath, args }: {
   result: any
   filePath?: string
   args?: { path?: string; old_content?: string; new_content?: string }
@@ -159,4 +159,4 @@ const EditFileDiffResult = ({ result, filePath, args }: {
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})

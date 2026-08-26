@@ -1,4 +1,5 @@
 /** update_todos body: the task checklist. */
+import { memo } from 'react'
 import { cn } from '@/lib/utils'
 import { Check } from 'lucide-react'
 import { deepParse } from './shared'
@@ -29,7 +30,7 @@ export function TodosBody({ execution }: ToolRenderContext) {
 }
 
 // Component for displaying todos inline
-const TodosDisplay = ({ result }: { result: any }) => {
+const TodosDisplay = memo(({ result }: { result: any }) => {
   const todos = parseTodosFromResult(result)
   if (todos.length === 0) return null
 
@@ -61,4 +62,4 @@ const TodosDisplay = ({ result }: { result: any }) => {
       ))}
     </div>
   )
-}
+})

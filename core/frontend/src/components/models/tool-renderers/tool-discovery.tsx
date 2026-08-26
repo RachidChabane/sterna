@@ -1,5 +1,5 @@
 /** search_available_tools: header shows a found/disabled count, body lists the tools found. */
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -62,7 +62,7 @@ export function ToolDiscoveryBody({ execution }: ToolRenderContext) {
 }
 
 // Component for displaying discovered tools list (expandable)
-const ToolDiscoveryResult = ({ result }: { result: any }) => {
+const ToolDiscoveryResult = memo(({ result }: { result: any }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const { tools } = parseToolDiscoveryResult(result)
 
@@ -127,4 +127,4 @@ const ToolDiscoveryResult = ({ result }: { result: any }) => {
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})

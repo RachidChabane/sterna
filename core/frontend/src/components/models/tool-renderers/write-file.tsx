@@ -2,7 +2,7 @@
  * write_file body: an expandable, syntax-highlighted view of the content
  * that was written.
  */
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -34,7 +34,7 @@ export function WriteFileBody({ execution, filePath }: ToolRenderContext) {
   return <WriteFileContentResult result={execution.result} filePath={filePath || undefined} args={args} />
 }
 
-const WriteFileContentResult = ({ result, filePath, args }: {
+const WriteFileContentResult = memo(({ result, filePath, args }: {
   result: any
   filePath?: string
   args?: { path?: string; content?: string }
@@ -106,4 +106,4 @@ const WriteFileContentResult = ({ result, filePath, args }: {
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})

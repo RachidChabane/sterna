@@ -1,5 +1,5 @@
 /** query_knowledge_base body: the ranked chunk results. */
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { ChevronRight, ExternalLink } from 'lucide-react'
@@ -71,7 +71,7 @@ export function KnowledgeBaseBody(context: ToolRenderContext) {
 }
 
 // Knowledge Base Results Display Component
-const KnowledgeBaseResultsDisplay = ({ data }: { data: KnowledgeBaseSearchData }) => {
+const KnowledgeBaseResultsDisplay = memo(({ data }: { data: KnowledgeBaseSearchData }) => {
   const [expandedChunks, setExpandedChunks] = useState<Set<string>>(new Set())
   const { isDark } = useTheme()
 
@@ -228,4 +228,4 @@ const KnowledgeBaseResultsDisplay = ({ data }: { data: KnowledgeBaseSearchData }
       </div>
     </div>
   )
-}
+})

@@ -1,5 +1,5 @@
 /** update_spark body: a diff between the previous and new spark code. */
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { Zap } from 'lucide-react'
@@ -14,7 +14,7 @@ export function SparkUpdateBody({ execution, effectiveSuccess }: ToolRenderConte
 }
 
 // Component for displaying spark update diff
-const SparkUpdateDiff = ({ result }: { result: any }) => {
+const SparkUpdateDiff = memo(({ result }: { result: any }) => {
   const [showFullDiff, setShowFullDiff] = useState(false)
   const { isDark } = useTheme()
 
@@ -146,4 +146,4 @@ const SparkUpdateDiff = ({ result }: { result: any }) => {
       )}
     </div>
   )
-}
+})

@@ -1,5 +1,5 @@
 /** execute_code body: collapsible stdout/stderr plus any produced artifacts. */
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -13,7 +13,7 @@ export function ExecuteCodeBody({ execution }: ToolRenderContext) {
 
 // Component for displaying execute_code results with collapsible output
 // Modern inline style matching RunBashDisplay
-const ExecuteCodeResult = ({ result }: { result: any }) => {
+const ExecuteCodeResult = memo(({ result }: { result: any }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   // Parse result if it's a JSON string
@@ -125,4 +125,4 @@ const ExecuteCodeResult = ({ result }: { result: any }) => {
       )}
     </Collapsible>
   )
-}
+})

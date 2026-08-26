@@ -1,5 +1,5 @@
 /** search_code body: the match list, grouped by file:line. */
-import { useState, useMemo } from 'react'
+import { memo, useState, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { ChevronRight } from 'lucide-react'
@@ -17,7 +17,7 @@ export function SearchCodeBody({ execution }: ToolRenderContext) {
 }
 
 // Component for displaying search_code results
-const SearchCodeResult = ({ result, pattern }: { result: any, pattern?: string }) => {
+const SearchCodeResult = memo(({ result, pattern }: { result: any, pattern?: string }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const { isDark } = useTheme()
 
@@ -114,4 +114,4 @@ const SearchCodeResult = ({ result, pattern }: { result: any, pattern?: string }
       </CollapsibleContent>
     </Collapsible>
   )
-}
+})

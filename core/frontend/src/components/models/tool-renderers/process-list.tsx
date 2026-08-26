@@ -1,4 +1,5 @@
 /** list_processes body: the running-process table. */
+import { memo } from 'react'
 import { cn } from '@/lib/utils'
 import type { ToolRenderContext } from './types'
 
@@ -8,7 +9,7 @@ export function ProcessListBody({ execution }: ToolRenderContext) {
 }
 
 // Component for displaying list_processes results
-const ProcessListDisplay = ({ result }: { result: any }) => {
+const ProcessListDisplay = memo(({ result }: { result: any }) => {
   const data = (() => {
     try {
       if (typeof result === 'string') return JSON.parse(result)
@@ -50,4 +51,4 @@ const ProcessListDisplay = ({ result }: { result: any }) => {
       ))}
     </div>
   )
-}
+})
