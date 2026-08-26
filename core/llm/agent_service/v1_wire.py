@@ -8,8 +8,10 @@ rendering of those events in seven ways:
 * token and cost figures reach a client only on the terminal `done`
   event, and they are the running totals of the whole turn rather than
   the figures of the generation that just ended,
-* each generation's cost figures are quantized to 8 decimal places as
-  they fold into those totals,
+* each generation's cost figures are quantized to 8 decimal places
+  independently as they fold into those totals; the total cost is the
+  provider-reported figure (tool charges included), so it is not the
+  arithmetic sum of the prompt and completion parts,
 * `done` reports the model, the finish reason and those totals, without
   naming the provider generations the turn spanned,
 * a round of tool calls is announced once, after the calls have run,

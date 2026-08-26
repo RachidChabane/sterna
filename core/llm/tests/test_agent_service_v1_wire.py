@@ -178,12 +178,17 @@ class V1WireShapeTests(unittest.TestCase):
         the way the V1 golden's `_post` helper does.
         """
 
+        # 1.5e-08 quantizes to 2e-08 per part while the raw total (3e-08)
+        # quantizes to itself, so the fixture discriminates independent
+        # per-field quantization -- the semantics the golden transcripts
+        # pin, where cost is the provider-reported figure -- from a
+        # sum-of-quantized-parts derivation (which would yield 4e-08).
         events = [
             UsageUpdateEvent(
                 usage=Usage(prompt_tokens=100, completion_tokens=20, total_tokens=120),
-                cost=0.1 * 3,  # 0.30000000000000004 in raw float arithmetic
-                prompt_cost=1 / 3,  # 0.3333333333333333 (16 threes)
-                completion_cost=1 / 7,  # 0.14285714285714285
+                cost=3e-08,  # raw part sum; the wire must not quantize this directly
+                prompt_cost=1.5e-08,
+                completion_cost=1.5e-08,
                 generation_id="gen-1",
                 generation_ids=["gen-1"],
             ),
@@ -191,16 +196,16 @@ class V1WireShapeTests(unittest.TestCase):
                 model="fixture/golden-model",
                 finish_reason=FinishReason.STOP,
                 usage=Usage(prompt_tokens=100, completion_tokens=20, total_tokens=120),
-                cost=0.1 * 3,
+                cost=3e-08,
             ),
         ]
 
         frames = asyncio.run(_frames_of(events))
 
         done = json.loads(frames[-1].split("data: ", 1)[1])
-        self.assertEqual(done["cost"], 0.3)
-        self.assertEqual(done["prompt_cost"], 0.33333333)
-        self.assertEqual(done["completion_cost"], 0.14285714)
+        self.assertEqual(done["prompt_cost"], 2e-08)
+        self.assertEqual(done["completion_cost"], 2e-08)
+        self.assertEqual(done["cost"], 3e-08)
 
     def test_error_frame_carries_the_message_alone(self):
         event = ErrorEvent(
