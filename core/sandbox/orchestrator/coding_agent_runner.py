@@ -1767,7 +1767,7 @@ Do NOT use ask_user for:
                     # timed-out one at this layer.
                     if not quota_exceeded and over_budget(parser, budget_usd):
                         quota_exceeded = True
-                        logger.warning(f"[CodingAgent] Budget ${budget_usd} crossed at ${parser.total_cost_usd} — stopping job")
+                        logger.warning(f"[CodingAgent] Budget ${budget_usd} crossed at ${parser.running_cost_usd} — stopping job")
                         if pid:
                             container.exec_run(terminate_command(pid), user="sandboxuser")
 

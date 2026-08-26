@@ -9,6 +9,11 @@ The adapter contract is deliberately narrow — the attributes below plus
 `ingest` — so a harness can be swapped without the progress payload
 changing shape.
 
+``total_cost_usd`` and ``total_tokens`` are the payload's usage fields,
+carrying the run's own figures once it has ended. ``running_cost_usd``
+is the separate live total `budget_guard.over_budget` reads while the
+run is still going.
+
 ``ingest`` returns whether the line produced any step. The caller adds
 one to ``step_count`` per truthy return, so ``step_count`` counts
 *output lines that produced steps* while ``total_steps`` counts the
@@ -55,6 +60,7 @@ class AgentOutputAdapter(Protocol):
     summary: Optional[str]
     total_cost_usd: float
     total_tokens: int
+    running_cost_usd: float
 
     def ingest(self, line: str) -> bool:
         """Consume one output line; report whether it produced a step."""

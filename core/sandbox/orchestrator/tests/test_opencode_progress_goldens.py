@@ -128,12 +128,15 @@ def test_implement_mode_progress_store_payloads():
     _assert_matches_golden("implement_mode_progress_store", snapshots)
 
 
-def test_usage_is_withheld_until_the_run_ends():
+def test_the_store_withholds_usage_until_the_run_ends():
     """Mid-run payloads report no usage.
 
-    opencode reports tokens and cost on every step, but the adapter
-    accrues them silently so a poll taken mid-run cannot show a partial
-    figure the chat layer would have to reconcile later.
+    opencode reports tokens and cost on every step, and the adapter
+    tracks the cost of the steps closed so far so a budget check has a
+    figure to read (`budget_guard.over_budget`). The payload the chat
+    layer polls carries neither until the run ends, so a poll taken
+    mid-run cannot show a partial figure it would have to reconcile
+    later.
     """
     snapshots = _replay("implement_mode_opencode_output.jsonl", IMPLEMENT_MODE_SNAPSHOT_TOOL)
 

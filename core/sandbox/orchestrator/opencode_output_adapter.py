@@ -35,9 +35,14 @@ Step ordering
     emitted (or the step closes without one).
 
 Usage
-    Per-step token counts and costs accumulate silently and are
-    published only when the run ends: cost as the session total, tokens
-    as the final step's own input plus output.
+    Every ``step_finish`` reports that step's token counts and its cost
+    in USD, which opencode prices from the model's catalogue entry. Cost
+    accrues into ``running_cost_usd`` as each step closes, so a budget
+    check has a real figure to read while the run is still going. The
+    payload's own usage fields are published only when the run ends —
+    ``total_cost_usd`` as the session total, ``total_tokens`` as the
+    final step's own input plus output — so a poll taken mid-run never
+    shows a partial figure the chat layer would have to reconcile.
 """
 
 import json
@@ -233,6 +238,7 @@ class OpencodeOutputAdapter:
         self.summary: Optional[str] = None
         self.total_cost_usd: float = 0.0
         self.total_tokens: int = 0
+        self.running_cost_usd: float = 0.0
 
         self._paths = PathNormalizer(workspace_path)
         self._mcp_servers: List[str] = sorted(mcp_servers or [], key=len, reverse=True)
@@ -323,6 +329,7 @@ class OpencodeOutputAdapter:
         cost = part.get("cost")
         if isinstance(cost, (int, float)):
             self._accrued_cost += float(cost)
+            self.running_cost_usd = round(self._accrued_cost, COST_PRECISION_DECIMALS)
         tokens = part.get("tokens")
         if isinstance(tokens, dict):
             self._last_step_tokens = int(tokens.get("input", 0) or 0) + int(
@@ -333,7 +340,7 @@ class OpencodeOutputAdapter:
     def _on_result(self, event: Dict[str, Any]) -> List[OpencodeStep]:
         released = self._drain(self._pending_results) + self._drain(self._pending_text)
 
-        self.total_cost_usd = round(self._accrued_cost, COST_PRECISION_DECIMALS)
+        self.total_cost_usd = self.running_cost_usd
         self.total_tokens = self._last_step_tokens
 
         error = event.get("error")
