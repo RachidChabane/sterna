@@ -16,8 +16,14 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI globally
+# Install opencode CLI globally, pinned to a specific version
 # This enables autonomous coding agent capabilities via OpenRouter
+RUN npm install -g opencode-ai@1.17.11 && \
+    npm cache clean --force
+
+# Install Claude Code CLI globally
+# Kept as the fallback the CODING_AGENT_HARNESS environment variable can
+# still select; the default harness is opencode.
 RUN npm install -g @anthropic-ai/claude-code && \
     npm cache clean --force
 

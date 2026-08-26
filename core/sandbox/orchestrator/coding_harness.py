@@ -31,7 +31,7 @@ SUPPORTED_HARNESSES = (CLAUDE_CODE, OPENCODE)
 #: Environment variable naming the harness for jobs that do not pick one.
 HARNESS_ENV_VAR = "CODING_AGENT_HARNESS"
 
-DEFAULT_HARNESS = CLAUDE_CODE
+DEFAULT_HARNESS = OPENCODE
 
 
 class AgentStep(Protocol):

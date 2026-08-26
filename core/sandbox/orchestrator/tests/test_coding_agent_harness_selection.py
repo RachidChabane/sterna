@@ -1,9 +1,9 @@
 """Which harness a job runs on, and what the runner stages for it.
 
-The opencode harness is opt-in: a job runs on Claude Code unless it, or
-the environment, asks for the other. These tests pin that default and
-the staging `_prepare_opencode_run` does, using a mock container that
-records the commands the runner issues.
+A job runs on opencode unless it, or the environment, asks for Claude
+Code instead. These tests pin that default and the staging
+`_prepare_opencode_run` does, using a mock container that records the
+commands the runner issues.
 """
 
 import asyncio
@@ -36,24 +36,24 @@ def _no_harness_in_environment(monkeypatch):
 
 
 class TestHarnessSelection:
-    def test_default_is_claude_code(self):
-        assert resolve_harness() == CLAUDE_CODE
-
-    def test_a_job_can_request_opencode(self):
-        assert resolve_harness(OPENCODE) == OPENCODE
-
-    def test_the_environment_selects_for_jobs_that_do_not(self, monkeypatch):
-        monkeypatch.setenv(coding_harness.HARNESS_ENV_VAR, OPENCODE)
+    def test_default_is_opencode(self):
         assert resolve_harness() == OPENCODE
 
-    def test_a_job_overrides_the_environment(self, monkeypatch):
-        monkeypatch.setenv(coding_harness.HARNESS_ENV_VAR, OPENCODE)
+    def test_a_job_can_request_claude_code(self):
         assert resolve_harness(CLAUDE_CODE) == CLAUDE_CODE
+
+    def test_the_environment_selects_for_jobs_that_do_not(self, monkeypatch):
+        monkeypatch.setenv(coding_harness.HARNESS_ENV_VAR, CLAUDE_CODE)
+        assert resolve_harness() == CLAUDE_CODE
+
+    def test_a_job_overrides_the_environment(self, monkeypatch):
+        monkeypatch.setenv(coding_harness.HARNESS_ENV_VAR, CLAUDE_CODE)
+        assert resolve_harness(OPENCODE) == OPENCODE
 
     def test_an_unknown_name_falls_back_rather_than_failing(self, monkeypatch):
         monkeypatch.setenv(coding_harness.HARNESS_ENV_VAR, "gpt-engineer")
-        assert resolve_harness() == CLAUDE_CODE
-        assert resolve_harness("gpt-engineer") == CLAUDE_CODE
+        assert resolve_harness() == OPENCODE
+        assert resolve_harness("gpt-engineer") == OPENCODE
 
     def test_each_harness_gets_its_own_adapter(self):
         assert isinstance(create_adapter(OPENCODE), OpencodeOutputAdapter)
