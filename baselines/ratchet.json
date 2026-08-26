@@ -5,8 +5,8 @@
   "eslint_errors": 1114,
   "eslint_warnings": 83,
   "eslint_files_linted": 476,
-  "eslint_config_sha256": "088e9031a1668aacb8163463e8c1238c82f9188075c4216b04a615e7ad4c92d4",
-  "knip_config_sha256": "9f1a3d5b1fe09f8d866ef4fdc2f3d83a4cc31c850548ef47510e6cbd56e73e45",
+  "eslint_config_sha256": "314f2788067a2cfb19a3427e808df81d915a46056812dfa8e42858de395fcd8c",
+  "knip_config_sha256": "5980548be3fd2a2be327cd76655f6b0152691d246c416defdcd3abb33f84c6a5",
   "dead_code": {
     "backend_vulture": 17,
     "backend_files_scanned": 414,

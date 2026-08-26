@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Regenerate core/frontend/src/api/generated/schema.d.ts from
+# baselines/openapi.yaml and fail if the committed file is stale.
+# Delegates to the pnpm gen:api script so the generation command has
+# exactly one definition, shared with the command a developer runs to
+# update the committed file.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+frontend_root="$repo_root/core/frontend"
+
+if ! (cd "$frontend_root" && pnpm run gen:api --check); then
+  echo "Generated API types are out of date: core/frontend/src/api/generated/schema.d.ts does not match a fresh run against baselines/openapi.yaml." >&2
+  echo "Run 'pnpm gen:api' in core/frontend and commit the result." >&2
+  exit 1
+fi
+
+echo "==> Generated API types match baselines/openapi.yaml"

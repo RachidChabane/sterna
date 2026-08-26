@@ -311,6 +311,12 @@ print(json.load(open('$ratchet_baseline'))['loc_caps']['global_new_file_max_line
 # loc_caps.files; a file that exceeds the cap without one fails here.
 # This pass scans every candidate file once, repo-wide, and counts the
 # scan itself as the loc_files_scanned denominator.
+#
+# `*/generated/*` is excluded on the same basis as `*/migrations/*` and
+# `*/dist/*` above: content mechanically produced from another
+# checked-in source (an OpenAPI schema, a migration graph, a build)
+# rather than authored, so a line-count cap meant to catch hand-written
+# god-files does not apply to it.
 echo "==> Global ${global_cap}-line cap (files without an explicit entry)"
 new_file_violations="$work_dir/new_file_violations.txt"
 : >"$new_file_violations"
@@ -341,6 +347,7 @@ done < <(find "$repo_root" \( -type f -o -type l \) \( -iname '*.py' -o -iname '
   -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.venv/*' \
   -not -path '*/migrations/*' -not -path '*/__pycache__/*' \
   -not -path '*/dist/*' -not -path '*/build/*' -not -path '*/baselines/*' \
+  -not -path '*/generated/*' \
   -print0)
 
 if [ "$loc_files_scanned" -eq 0 ]; then

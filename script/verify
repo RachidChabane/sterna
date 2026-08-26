@@ -1,28 +1,32 @@
 #!/usr/bin/env bash
 # Full deterministic verification: bootstrap, lint, typecheck, test,
-# OpenAPI schema drift, and the code-quality ratchets. e2e is not part
-# of this chain — it runs on its own via script/e2e.
+# OpenAPI schema drift, generated API types drift, and the code-quality
+# ratchets. e2e is not part of this chain — it runs on its own via
+# script/e2e.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-echo "==> [1/6] Bootstrap"
+echo "==> [1/7] Bootstrap"
 "$repo_root/script/bootstrap"
 
-echo "==> [2/6] Lint"
+echo "==> [2/7] Lint"
 "$repo_root/script/lint"
 
-echo "==> [3/6] Typecheck"
+echo "==> [3/7] Typecheck"
 "$repo_root/script/typecheck"
 
-echo "==> [4/6] Test"
+echo "==> [4/7] Test"
 "$repo_root/script/test"
 
-echo "==> [5/6] Schema diff"
+echo "==> [5/7] Schema diff"
 "$repo_root/script/schema-diff"
 
-echo "==> [6/6] Ratchet"
+echo "==> [6/7] API types diff"
+"$repo_root/script/api-types-diff"
+
+echo "==> [7/7] Ratchet"
 "$repo_root/script/ratchet"
 
 echo "==> Verify complete"
