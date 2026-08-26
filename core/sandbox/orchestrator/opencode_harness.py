@@ -30,7 +30,11 @@ A session title costs a model call unless one is supplied.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+import yaml
+
+from opencode_output_adapter import opencode_tool_name
 
 PLAN_MODE = "plan"
 
@@ -69,9 +73,111 @@ BASH_DENIED = (
 )
 
 
+#: Marks an agent as one the primary agent may delegate to.
+SUBAGENT_MODE = "subagent"
+
+#: Frontmatter delimiter in an agent definition.
+FRONTMATTER_FENCE = "---"
+
+#: Keys an imported sub-agent carries, in the vocabulary it was written in.
+IMPORTED_DESCRIPTION_KEY = "description"
+IMPORTED_ALLOWED_TOOLS_KEY = "tools"
+IMPORTED_DENIED_TOOLS_KEY = "disallowedTools"
+
+
 def agent_for_mode(mode: str) -> str:
     """opencode's built-in agent that matches a Sterna mode."""
     return PLAN_AGENT if mode == PLAN_MODE else BUILD_AGENT
+
+
+def config_home_for(ephemeral_home: str) -> str:
+    """The job's own configuration directory."""
+    return f"{ephemeral_home}/.config"
+
+
+def subagent_dir_for(ephemeral_home: str) -> str:
+    """Where opencode looks for this job's sub-agent definitions.
+
+    Agents are discovered under the configuration directory that
+    ``XDG_CONFIG_HOME`` names, and under the workspace's own
+    ``.opencode/``. ``build_env`` sets ``OPENCODE_DISABLE_PROJECT_CONFIG``,
+    which takes the workspace out of that search, so this directory is
+    the only one a job's sub-agents can be planted in.
+    """
+    return f"{config_home_for(ephemeral_home)}/opencode/agent"
+
+
+def _split_frontmatter(markdown: str) -> Tuple[Dict[str, Any], str]:
+    """The YAML frontmatter and the body of one agent definition."""
+    parts = markdown.split(FRONTMATTER_FENCE, 2)
+    if len(parts) < 3:
+        return {}, markdown.strip()
+    try:
+        frontmatter = yaml.safe_load(parts[1])
+    except yaml.YAMLError:
+        frontmatter = None
+    return (frontmatter if isinstance(frontmatter, dict) else {}), parts[2].strip()
+
+
+def _opencode_tools(names: Any) -> List[str]:
+    """The opencode tools a list of payload tool names refers to."""
+    if not isinstance(names, list):
+        return []
+    resolved = (opencode_tool_name(str(name)) for name in names)
+    return [name for name in resolved if name]
+
+
+def _subagent_permission(frontmatter: Dict[str, Any]) -> Dict[str, str]:
+    """One sub-agent's tool restrictions as opencode permission rules.
+
+    An imported sub-agent names an allowlist, a denylist, or neither. An
+    allowlist is closed with a wildcard denial so the tools it leaves
+    out stay out; a denial is applied last so a tool named on both lists
+    is denied.
+    """
+    permission: Dict[str, str] = {}
+    allowed = _opencode_tools(frontmatter.get(IMPORTED_ALLOWED_TOOLS_KEY))
+    if allowed:
+        permission[WILDCARD] = DENY
+        permission.update({name: ALLOW for name in allowed})
+    permission.update(
+        {name: DENY for name in _opencode_tools(frontmatter.get(IMPORTED_DENIED_TOOLS_KEY))}
+    )
+    return permission
+
+
+def build_subagent_definition(source_markdown: str) -> str:
+    """Rewrite one imported sub-agent as an opencode agent definition.
+
+    A sub-agent is imported in the vocabulary of the CLI it was written
+    for, which opencode does not share: it names its allowed tools as a
+    list, where opencode's agent schema accepts only an object, and
+    opencode rejects the whole configuration — failing the run, not just
+    the one agent — over the mismatch. It also names its model as a bare
+    alias, which is not a ``provider/model`` reference opencode can
+    resolve, and would in any case take the sub-agent off the model the
+    job was quoted and billed for; dropping it leaves the sub-agent on
+    the job's own model.
+
+    What survives the rewrite is the sub-agent's purpose: its
+    description, its system prompt, and its tool restrictions, the last
+    expressed as the permission rules opencode enforces. The agent's
+    name is not part of the definition — opencode takes it from the
+    file name.
+    """
+    frontmatter, body = _split_frontmatter(source_markdown)
+
+    definition: Dict[str, Any] = {}
+    description = str(frontmatter.get(IMPORTED_DESCRIPTION_KEY) or "").strip()
+    if description:
+        definition[IMPORTED_DESCRIPTION_KEY] = description
+    definition["mode"] = SUBAGENT_MODE
+    permission = _subagent_permission(frontmatter)
+    if permission:
+        definition["permission"] = permission
+
+    header = yaml.safe_dump(definition, default_flow_style=False, sort_keys=False).strip()
+    return f"{FRONTMATTER_FENCE}\n{header}\n{FRONTMATTER_FENCE}\n\n{body}\n"
 
 
 def plans_dir_for(ephemeral_home: str) -> str:
@@ -200,7 +306,7 @@ def build_env(
         {
             api_key_env_var: api_key,
             "HOME": ephemeral_home,
-            "XDG_CONFIG_HOME": f"{ephemeral_home}/.config",
+            "XDG_CONFIG_HOME": config_home_for(ephemeral_home),
             "XDG_DATA_HOME": f"{ephemeral_home}/.local/share",
             "XDG_CACHE_HOME": f"{ephemeral_home}/.cache",
             "XDG_STATE_HOME": f"{ephemeral_home}/.local/state",

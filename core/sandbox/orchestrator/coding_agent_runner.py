@@ -184,9 +184,11 @@ class CodingAgentRunner:
 
         This prevents any persistent config files from being read and
         ensures each execution starts with a clean, controlled
-        environment. opencode takes its configuration from the
-        environment, not from a file under HOME; it needs only its data
-        directory, where a planning run's plan is allowed to land.
+        environment rather than from a file under HOME, and what it does
+        read from the ephemeral home is created for it: the data
+        directory a planning run's plan lands in, and the configuration
+        directory the job's sub-agents are planted in
+        (`opencode_harness.subagent_dir_for`).
 
         Args:
             container: Docker container
@@ -195,7 +197,7 @@ class CodingAgentRunner:
         Returns:
             Path to the ephemeral home directory
         """
-        ephemeral_home = f"/tmp/claude-home-{job_id}"
+        ephemeral_home = f"/tmp/opencode-home-{job_id}"
 
         setup_cmd = f'mkdir -p "{ephemeral_home}" && chmod 700 "{ephemeral_home}"'
         result = container.exec_run(
@@ -216,6 +218,39 @@ class CodingAgentRunner:
         )
         logger.info(f"[SECURITY] Created ephemeral home directory: {ephemeral_home}")
         return ephemeral_home
+
+    def _plant_sub_agents(
+        self,
+        container,
+        ephemeral_home: str,
+        sub_agents: Optional[List[Dict[str, Any]]],
+    ) -> None:
+        """Put the job's sub-agents where opencode will discover them.
+
+        Each is rewritten into opencode's own agent format
+        (`opencode_harness.build_subagent_definition`) and named by its
+        file, which is how opencode names an agent.
+        """
+        if not sub_agents:
+            return
+        agents_dir = opencode_harness.subagent_dir_for(ephemeral_home)
+        write_cmds = [f"mkdir -p {agents_dir}"]
+        for agent_def in sub_agents:
+            name = agent_def.get("name", "unnamed")
+            definition = opencode_harness.build_subagent_definition(
+                agent_def.get("markdown", "")
+            )
+            escaped = definition.replace("'", "'\"'\"'")
+            write_cmds.append(f"printf '%s' '{escaped}' > {agents_dir}/{name}.md")
+
+        result = container.exec_run(["sh", "-c", " && ".join(write_cmds)], user="sandboxuser")
+        if result.exit_code != 0:
+            logger.warning(
+                f"[CodingAgent] Failed to write sub-agent files: "
+                f"{result.output.decode()[:200] if result.output else 'unknown'}"
+            )
+        else:
+            logger.info(f"[CodingAgent] Wrote {len(sub_agents)} sub-agent files to {agents_dir}")
 
     def _write_sandbox_file(self, container, path: str, content: str) -> None:
         """Write one file into the sandbox as the unprivileged user."""
@@ -987,42 +1022,11 @@ class CodingAgentRunner:
             logger.warning(f"[CodingAgent] Failed to load plan {plan_id}: {e}")
             return None
 
-    def _build_sub_agents_section(self, sub_agents: Optional[List[Dict[str, Any]]]) -> str:
-        """Build a CLAUDE.md section listing available sub-agents.
-
-        Parses the YAML frontmatter from each agent's markdown to extract
-        name and description.
-        """
-        if not sub_agents:
-            return ""
-
-        lines = ["\n## Available Sub-Agents\n"]
-        lines.append("You can delegate tasks to these sub-agents using the Task tool:\n")
-        for agent_def in sub_agents:
-            name = agent_def.get("name", "unnamed")
-            md = agent_def.get("markdown", "")
-            # Extract description from YAML frontmatter
-            description = ""
-            if md.startswith("---"):
-                parts = md.split("---", 2)
-                if len(parts) >= 3:
-                    try:
-                        import yaml
-                        fm = yaml.safe_load(parts[1])
-                        if isinstance(fm, dict):
-                            description = fm.get("description", "")
-                    except Exception:
-                        pass
-            lines.append(f"- **{name}**: {description}")
-        lines.append("")
-        return "\n".join(lines)
-
     async def _write_mode_claude_md(
         self,
         container,
         workspace_path: str,
         mode: str,
-        sub_agents: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[str]:
         """Write a mode-specific CLAUDE.md to the workspace root.
 
@@ -1038,8 +1042,6 @@ class CodingAgentRunner:
         check = container.exec_run(["cat", f"{workspace_path}/CLAUDE.md"], user="sandboxuser")
         if check.exit_code == 0 and check.output:
             original_content = check.output.decode("utf-8", errors="replace")
-
-        sub_agents_section = self._build_sub_agents_section(sub_agents)
 
         if mode == "plan":
             claude_md = """# PLANNING MODE — READ ONLY
@@ -1090,10 +1092,6 @@ Do NOT use `npm install -g` (global installs fail on the read-only filesystem).
 ## pip / Python
 - `pip install <package>` works (redirected to workspace via PYTHONUSERBASE).
 """
-
-        # Append sub-agents section if there are any
-        if sub_agents_section:
-            claude_md = claude_md + sub_agents_section
 
         # If auto mode and nothing to write, skip
         if not claude_md.strip():
@@ -1273,24 +1271,7 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
                 user="sandboxuser",
             )
 
-            # Write sub-agent files to ephemeral home
-            if sub_agents:
-                agents_dir = f"{ephemeral_home}/.claude/agents"
-                write_cmds = [f"mkdir -p {agents_dir}"]
-                for agent_def in sub_agents:
-                    name = agent_def.get("name", "unnamed")
-                    md = agent_def.get("markdown", "")
-                    escaped_md = md.replace("'", "'\"'\"'")
-                    write_cmds.append(f"printf '%s' '{escaped_md}' > {agents_dir}/{name}.md")
-                batch_cmd = " && ".join(write_cmds)
-                sa_result = container.exec_run(["sh", "-c", batch_cmd], user="sandboxuser")
-                if sa_result.exit_code != 0:
-                    logger.warning(
-                        f"[CodingAgent] Failed to write sub-agent files: "
-                        f"{sa_result.output.decode()[:200] if sa_result.output else 'unknown'}"
-                    )
-                else:
-                    logger.info(f"[CodingAgent] Wrote {len(sub_agents)} sub-agent files to {agents_dir}")
+            self._plant_sub_agents(container, ephemeral_home, sub_agents)
 
             if mcp_servers:
                 logger.warning(
@@ -1392,7 +1373,7 @@ Do NOT use ask_user for:
             # Write mode-specific CLAUDE.md before any filesystem restrictions.
             # opencode does not read it — see `_write_mode_claude_md`.
             original_claude_md = await self._write_mode_claude_md(
-                container, workspace_path, mode, sub_agents=sub_agents
+                container, workspace_path, mode
             )
 
             # PLAN MODE: Make workspace read-only at filesystem level.

@@ -17,10 +17,12 @@ depends on:
 
 import json
 
+import yaml
+
 import opencode_harness as harness
 
 WORKSPACE = "/workspace/chat-abc"
-EPHEMERAL_HOME = "/tmp/claude-home-job1"
+EPHEMERAL_HOME = "/tmp/opencode-home-job1"
 MODEL = "anthropic/claude-sonnet-4.5"
 
 
@@ -33,6 +35,11 @@ def _config(mode="auto", **overrides):
     )
     kwargs.update(overrides)
     return harness.build_config(**kwargs)
+
+
+def _frontmatter(definition):
+    """The YAML header of one agent definition."""
+    return yaml.safe_load(definition.split(harness.FRONTMATTER_FENCE, 2)[1])
 
 
 class TestAgentSelection:
@@ -213,6 +220,99 @@ class TestCommandLine:
         that no step of the run would ever report."""
         argv = harness.build_argv("implement")
         assert argv[argv.index("--title") + 1] == harness.SESSION_TITLE
+
+
+class TestSubAgentDefinitions:
+    """An imported sub-agent has to survive translation into opencode's
+    own agent format, or opencode rejects the whole configuration."""
+
+    def test_agents_are_planted_where_discovery_looks(self):
+        """Under the configuration directory the run's environment names.
+
+        The workspace's own ``.opencode/`` is the other place opencode
+        looks, and ``OPENCODE_DISABLE_PROJECT_CONFIG`` takes it out of
+        the search, so nothing planted there would ever be found.
+        """
+        agents_dir = harness.subagent_dir_for(EPHEMERAL_HOME)
+        env = harness.build_env(
+            config=_config(),
+            ephemeral_home=EPHEMERAL_HOME,
+            api_key="sk-or-SECRET",
+            base_env={},
+        )
+        assert agents_dir.startswith(env["XDG_CONFIG_HOME"] + "/")
+        assert agents_dir.endswith("/opencode/agent")
+
+    def test_an_allowlist_becomes_permission_rules(self):
+        """A list of tools is not a shape opencode's schema accepts."""
+        definition = harness.build_subagent_definition(
+            "---\nname: explorer\ndescription: Explores\ntools:\n- Read\n- Grep\n---\n\nExplore.\n"
+        )
+        permission = _frontmatter(definition)["permission"]
+        assert permission[harness.WILDCARD] == harness.DENY
+        assert permission["read"] == harness.ALLOW
+        assert permission["grep"] == harness.ALLOW
+        assert "write" not in permission
+
+    def test_a_denylist_becomes_permission_rules(self):
+        definition = harness.build_subagent_definition(
+            "---\nname: reviewer\ndescription: Reviews\ndisallowedTools:\n- Write\n---\n\nReview.\n"
+        )
+        permission = _frontmatter(definition)["permission"]
+        assert permission["write"] == harness.DENY
+        assert harness.WILDCARD not in permission
+
+    def test_a_tool_named_on_both_lists_stays_denied(self):
+        definition = harness.build_subagent_definition(
+            "---\ndescription: d\ntools:\n- Read\n- Write\ndisallowedTools:\n- Write\n---\n\nb\n"
+        )
+        permission = _frontmatter(definition)["permission"]
+        assert permission["read"] == harness.ALLOW
+        assert permission["write"] == harness.DENY
+
+    def test_a_tool_opencode_does_not_have_is_dropped(self):
+        definition = harness.build_subagent_definition(
+            "---\ndescription: d\ntools:\n- Read\n- NotebookEdit\n---\n\nb\n"
+        )
+        permission = _frontmatter(definition)["permission"]
+        assert permission["read"] == harness.ALLOW
+        assert "NotebookEdit" not in permission
+        assert "notebookedit" not in permission
+
+    def test_the_relay_keeps_its_opencode_name(self):
+        definition = harness.build_subagent_definition(
+            f"---\ndescription: d\ntools:\n- mcp__{harness.ASK_USER_SERVER}__{harness.ASK_USER_TOOL}\n---\n\nb\n"
+        )
+        permission = _frontmatter(definition)["permission"]
+        assert permission[harness.ASK_USER_PERMISSION] == harness.ALLOW
+
+    def test_the_model_alias_is_dropped(self):
+        """It is not a ``provider/model`` reference opencode can resolve,
+        and would take the sub-agent off the model the job was quoted
+        for. The sub-agent inherits the job's model instead."""
+        definition = harness.build_subagent_definition(
+            "---\nname: explorer\ndescription: Explores\nmodel: sonnet\n---\n\nExplore.\n"
+        )
+        assert "model" not in _frontmatter(definition)
+
+    def test_purpose_and_prompt_survive(self):
+        definition = harness.build_subagent_definition(
+            "---\nname: explorer\ndescription: Explores a subsystem\n---\n\nYou explore.\n"
+        )
+        assert _frontmatter(definition)["description"] == "Explores a subsystem"
+        assert _frontmatter(definition)["mode"] == harness.SUBAGENT_MODE
+        assert definition.endswith("You explore.\n")
+
+    def test_an_agent_without_frontmatter_is_still_a_subagent(self):
+        definition = harness.build_subagent_definition("Just a prompt.\n")
+        assert _frontmatter(definition)["mode"] == harness.SUBAGENT_MODE
+        assert definition.endswith("Just a prompt.\n")
+
+    def test_unrestricted_agents_carry_no_permission_block(self):
+        definition = harness.build_subagent_definition(
+            "---\nname: explorer\ndescription: Explores\nmaxTurns: 5\n---\n\nExplore.\n"
+        )
+        assert "permission" not in _frontmatter(definition)
 
 
 class TestWrapperSpec:

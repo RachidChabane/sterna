@@ -218,6 +218,35 @@ TOOL_TRANSLATIONS: Mapping[str, ToolTranslation] = {
     "webfetch": ToolTranslation("WebFetch", {"url": "url", "format": "format"}),
 }
 
+#: Payload tool name to the opencode tool it names, derived from
+#: `TOOL_TRANSLATIONS` so one table defines the vocabulary in both
+#: directions. Where two opencode tools share a payload name — ``edit``
+#: and ``patch`` are both ``Edit`` — the first one declared wins.
+_PAYLOAD_TO_OPENCODE: Dict[str, str] = {}
+for _opencode_name, _translation in TOOL_TRANSLATIONS.items():
+    _PAYLOAD_TO_OPENCODE.setdefault(_translation.canonical_name, _opencode_name)
+
+#: How the payload spells an MCP tool, against opencode's ``{server}_{tool}``.
+MCP_PAYLOAD_PREFIX = "mcp__"
+MCP_PAYLOAD_SEPARATOR = "__"
+
+
+def opencode_tool_name(payload_name: str) -> Optional[str]:
+    """The opencode tool a payload tool name refers to, or None.
+
+    The inverse of what `OpencodeOutputAdapter` does to a run's stream,
+    for the places that must hand opencode a tool name of its own — a
+    permission rule, say — starting from the payload's vocabulary. A
+    name with no opencode counterpart yields None rather than a guess.
+    """
+    if payload_name.startswith(MCP_PAYLOAD_PREFIX):
+        server, separator, tool = payload_name[len(MCP_PAYLOAD_PREFIX):].partition(
+            MCP_PAYLOAD_SEPARATOR
+        )
+        return f"{server}_{tool}" if separator and server and tool else None
+    return _PAYLOAD_TO_OPENCODE.get(payload_name)
+
+
 # Payload tool names that move a file, mirroring the Claude harness's
 # classification so both harnesses fill the same four file lists.
 WRITE_TOOLS = {"Write"}

@@ -20,7 +20,7 @@ from opencode_output_adapter import OpencodeOutputAdapter
 
 WORKSPACE = "/workspace/chat-abc"
 JOB_DIR = "/tmp/agents/coding-agent-job1"
-EPHEMERAL_HOME = "/tmp/claude-home-job1"
+EPHEMERAL_HOME = "/tmp/opencode-home-job1"
 
 
 @pytest.fixture(autouse=True)

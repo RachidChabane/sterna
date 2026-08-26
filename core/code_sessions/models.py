@@ -780,8 +780,8 @@ class PlanStep(models.Model):
 class SubAgent(models.Model):
     """A custom sub-agent definition that users can deploy into coding agent sandboxes.
 
-    Sub-agents are serialized as markdown files with YAML frontmatter and written
-    to the ephemeral home's ~/.claude/agents/ directory before CLI launch.
+    Sub-agents are serialized as markdown files with YAML frontmatter, which the
+    orchestrator rewrites into its harness's format and plants where it looks.
     """
 
     class PermissionMode(models.TextChoices):

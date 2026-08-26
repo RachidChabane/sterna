@@ -72,7 +72,7 @@ class TestFileTracking:
         workspace, and the plan reaches them as the run's summary."""
         adapter, _ = _run(
             _system(),
-            _tool("write", {"filePath": "/tmp/claude-home-1/plans/a.md", "content": "x"},
+            _tool("write", {"filePath": "/tmp/opencode-home-1/plans/a.md", "content": "x"},
                   output="Wrote file successfully.", metadata={"exists": False}),
             _step_finish(),
         )
