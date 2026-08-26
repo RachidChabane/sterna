@@ -5,7 +5,7 @@
   "eslint_errors": 1114,
   "eslint_warnings": 83,
   "eslint_files_linted": 476,
-  "eslint_config_sha256": "314f2788067a2cfb19a3427e808df81d915a46056812dfa8e42858de395fcd8c",
+  "eslint_config_sha256": "3ea75f263775d89eb507ae05ea70dc18616734b07f7d04e135934ed6c1c8475a",
   "knip_config_sha256": "5980548be3fd2a2be327cd76655f6b0152691d246c416defdcd3abb33f84c6a5",
   "dead_code": {
     "backend_vulture": 17,
