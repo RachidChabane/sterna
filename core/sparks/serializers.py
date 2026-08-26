@@ -136,7 +136,7 @@ class SparkListSerializer(DownloadUrlMixin, LatestDeploymentMixin, serializers.M
     assets = serializers.SerializerMethodField()
     download_url = serializers.SerializerMethodField()
     latest_deployment = serializers.SerializerMethodField()
-    chat_id = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
+    chat_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
     chat_name = serializers.SerializerMethodField()
     conversation_id = serializers.SerializerMethodField()
 
@@ -248,7 +248,7 @@ class MessageSparkSerializer(DownloadUrlMixin, LatestDeploymentMixin, serializer
     assets = serializers.SerializerMethodField()
     download_url = serializers.SerializerMethodField()
     latest_deployment = serializers.SerializerMethodField()
-    parent_id = serializers.PrimaryKeyRelatedField(source='parent', read_only=True)
+    parent_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='parent', read_only=True)
 
     class Meta:
         model = Spark
@@ -266,10 +266,10 @@ class MessageSparkSerializer(DownloadUrlMixin, LatestDeploymentMixin, serializer
 class AppSerializer(LatestDeploymentMixin, serializers.ModelSerializer):
     """Full serializer for App (detail view)."""
 
-    spark_id = serializers.PrimaryKeyRelatedField(source='spark', read_only=True)
+    spark_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='spark', read_only=True)
     spark_title = serializers.SerializerMethodField()
     spark_framework = serializers.SerializerMethodField()
-    chat_id = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
+    chat_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
     conversation_id = serializers.SerializerMethodField()
     latest_deployment = serializers.SerializerMethodField()
 
@@ -311,10 +311,10 @@ class AppSerializer(LatestDeploymentMixin, serializers.ModelSerializer):
 class AppListSerializer(serializers.ModelSerializer):
     """Lighter serializer for listing apps."""
 
-    spark_id = serializers.PrimaryKeyRelatedField(source='spark', read_only=True)
+    spark_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='spark', read_only=True)
     spark_title = serializers.SerializerMethodField()
     spark_framework = serializers.SerializerMethodField()
-    chat_id = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
+    chat_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
     conversation_id = serializers.SerializerMethodField()
 
     class Meta:

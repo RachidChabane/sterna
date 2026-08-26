@@ -1,5 +1,5 @@
 {
-  "mypy_errors": 873,
+  "mypy_errors": 670,
   "mypy_checked_files": 773,
   "ts_explicit_any": 0,
   "ts_as_unknown": 17,
@@ -9,7 +9,7 @@
   "eslint_config_sha256": "0cda60950eef9f84a4f8bc9dd6db2af578b0bb80aad884550880eebad0724383",
   "knip_config_sha256": "5980548be3fd2a2be327cd76655f6b0152691d246c416defdcd3abb33f84c6a5",
   "dead_code": {
-    "backend_vulture": 19,
+    "backend_vulture": 17,
     "backend_files_scanned": 414,
     "frontend_knip": 30,
     "frontend_files_scanned": 476

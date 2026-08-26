@@ -58,6 +58,7 @@ class MCPServerAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="Status")
     def connection_status(self, obj):
         """Display connection status with color coding."""
         if not obj.is_active:
@@ -67,8 +68,6 @@ class MCPServerAdmin(admin.ModelAdmin):
         if obj.last_error:
             return format_html('<span style="color: red;">Error</span>')
         return format_html('<span style="color: orange;">Never Connected</span>')
-
-    connection_status.short_description = "Status"
 
 
 @admin.register(MCPTool)
@@ -138,13 +137,12 @@ class MCPToolApprovalAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="Valid")
     def is_valid_status(self, obj):
         """Display whether approval is currently valid."""
         if obj.is_valid():
             return format_html('<span style="color: green;">Valid</span>')
         return format_html('<span style="color: red;">Invalid</span>')
-
-    is_valid_status.short_description = "Valid"
 
 
 @admin.register(MCPToolExecution)
@@ -198,6 +196,7 @@ class MCPToolExecutionAdmin(admin.ModelAdmin):
         ),
     )
 
+    @admin.display(description="Duration")
     def duration_display(self, obj):
         """Display duration in human-readable format."""
         if obj.duration_ms is None:
@@ -205,5 +204,3 @@ class MCPToolExecutionAdmin(admin.ModelAdmin):
         if obj.duration_ms < 1000:
             return f"{obj.duration_ms}ms"
         return f"{obj.duration_ms / 1000:.2f}s"
-
-    duration_display.short_description = "Duration"

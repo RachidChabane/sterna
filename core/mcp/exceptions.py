@@ -1,5 +1,7 @@
 """Custom exceptions for MCP integration."""
 
+from typing import Optional
+
 
 class MCPError(Exception):
     """Base exception for all MCP-related errors."""
@@ -34,7 +36,7 @@ class MCPInvalidParametersError(MCPError):
 class MCPServerError(MCPError):
     """Raised when the MCP server returns an error."""
 
-    def __init__(self, message: str, error_code: str = None):
+    def __init__(self, message: str, error_code: Optional[str] = None):
         """Initialize server error with optional error code."""
         super().__init__(message)
         self.error_code = error_code

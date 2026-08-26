@@ -1,5 +1,8 @@
 """Django models for MCP integration."""
 
+import uuid
+from typing import TYPE_CHECKING, Optional
+
 from django.contrib.auth import get_user_model
 from django.core.validators import URLValidator
 from django.db import models
@@ -7,7 +10,10 @@ from django.utils import timezone
 
 from .fields import EncryptedJSONField, EncryptedTextField
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from authentication.models import User
+
+UserModel = get_user_model()
 
 
 class MCPServer(models.Model):
@@ -53,9 +59,14 @@ class MCPServer(models.Model):
         UTILITIES = "utilities", "Utilities & Tools"
         OTHER = "other", "Other"
 
+    if TYPE_CHECKING:
+        id: int
+        user_id: Optional[uuid.UUID]
+        tools: "models.Manager[MCPTool]"
+
     # Ownership (null for preconfigured servers)
-    user = models.ForeignKey(
-        User,
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
+        UserModel,
         on_delete=models.CASCADE,
         related_name="mcp_servers",
         null=True,
@@ -64,37 +75,26 @@ class MCPServer(models.Model):
     )
 
     # Basic info
-    name = models.CharField(
+    name: models.CharField = models.CharField(
         max_length=200,
         help_text="Human-readable name for this server",
     )
-    description = models.TextField(
-        blank=True,
-        help_text="Optional description of what this server provides",
-    )
-    icon_url = models.URLField(
-        blank=True,
-        null=True,
-        help_text="URL for the server icon (for display in UI)",
-    )
-    icon_invert_in_dark_mode = models.BooleanField(
+    description: models.TextField = models.TextField(blank=True, help_text="Optional description of what this server provides")
+    icon_url: models.URLField = models.URLField(blank=True, null=True, help_text="URL for the server icon (for display in UI)")
+    icon_invert_in_dark_mode: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether to invert the icon color in dark mode (for dark/black icons)",
     )
-    docs_url = models.URLField(
-        blank=True,
-        null=True,
-        help_text="URL to documentation or source code for this MCP server",
-    )
-    is_preconfigured = models.BooleanField(
+    docs_url: models.URLField = models.URLField(blank=True, null=True, help_text="URL to documentation or source code for this MCP server")
+    is_preconfigured: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether this is a system-wide preconfigured server (not user-created)",
     )
-    is_official = models.BooleanField(
+    is_official: models.BooleanField = models.BooleanField(
         default=True,
         help_text="Whether this is an official MCP server from the service provider (False = community/unofficial)",
     )
-    category = models.CharField(
+    category: models.CharField = models.CharField(
         max_length=20,
         choices=Category.choices,
         default=Category.OTHER,
@@ -102,7 +102,7 @@ class MCPServer(models.Model):
     )
 
     # Connection details
-    transport_type = models.CharField(
+    transport_type: models.CharField = models.CharField(
         max_length=20,
         choices=TransportType.choices,
         default=TransportType.WEBSOCKET,
@@ -110,7 +110,7 @@ class MCPServer(models.Model):
     )
 
     # WebSocket connection
-    url = models.CharField(
+    url: models.CharField = models.CharField(
         max_length=500,
         blank=True,
         validators=[URLValidator(schemes=["ws", "wss"])],
@@ -118,19 +118,19 @@ class MCPServer(models.Model):
     )
 
     # Stdio connection (legacy - use npm_package instead)
-    command = models.CharField(
+    command: models.CharField = models.CharField(
         max_length=500,
         blank=True,
         help_text="Command to run for stdio transport (legacy, use npm_package instead)",
     )
-    working_directory = models.CharField(
+    working_directory: models.CharField = models.CharField(
         max_length=500,
         blank=True,
         help_text="Working directory for stdio process",
     )
 
     # NPM package for sandboxed execution (NEW - preferred for stdio)
-    npm_package = models.CharField(
+    npm_package: models.CharField = models.CharField(
         max_length=200,
         blank=True,
         help_text="NPM package name (e.g., '@modelcontextprotocol/server-github'). Required for stdio transport.",
@@ -158,18 +158,18 @@ class MCPServer(models.Model):
     )
 
     # Remote server configuration (for HTTP/SSE transport)
-    remote_url = models.URLField(
+    remote_url: models.URLField = models.URLField(
         blank=True,
         null=True,
         help_text="URL for remote MCP servers (HTTP/SSE transport)",
     )
-    auth_type = models.CharField(
+    auth_type: models.CharField = models.CharField(
         max_length=20,
         choices=AuthType.choices,
         default=AuthType.NONE,
         help_text="Authentication type for remote servers",
     )
-    auth_header_name = models.CharField(
+    auth_header_name: models.CharField = models.CharField(
         max_length=100,
         default="Authorization",
         help_text="HTTP header name for authentication (e.g., Authorization, X-API-Key)",
@@ -181,7 +181,7 @@ class MCPServer(models.Model):
         blank=True,
         help_text="Cached OAuth server metadata from /.well-known/oauth-authorization-server",
     )
-    oauth_client_id = models.CharField(
+    oauth_client_id: models.CharField = models.CharField(
         max_length=500,
         blank=True,
         help_text="OAuth client ID (from dynamic registration or manual entry)",
@@ -201,7 +201,7 @@ class MCPServer(models.Model):
         default='',
         help_text="OAuth refresh token (encrypted at rest)",
     )
-    oauth_token_expires_at = models.DateTimeField(
+    oauth_token_expires_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When the OAuth access token expires",
@@ -212,7 +212,7 @@ class MCPServer(models.Model):
         help_text="OAuth scopes granted during authorization",
     )
     # Temporary fields for OAuth flow (cleared after completion)
-    oauth_state = models.CharField(
+    oauth_state: models.CharField = models.CharField(
         max_length=100,
         blank=True,
         help_text="Temporary state parameter for OAuth flow (CSRF protection)",
@@ -224,32 +224,24 @@ class MCPServer(models.Model):
     )
 
     # Status
-    is_active = models.BooleanField(
+    is_active: models.BooleanField = models.BooleanField(
         default=True,
         help_text="Whether this server is currently enabled",
     )
-    last_connected = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Last successful connection timestamp",
-    )
-    last_health_check = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Last health check attempt timestamp",
-    )
-    connection_healthy = models.BooleanField(
+    last_connected: models.DateTimeField = models.DateTimeField(null=True, blank=True, help_text="Last successful connection timestamp")
+    last_health_check: models.DateTimeField = models.DateTimeField(null=True, blank=True, help_text="Last health check attempt timestamp")
+    connection_healthy: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether the last health check was successful",
     )
-    last_error = models.TextField(
+    last_error: models.TextField = models.TextField(
         blank=True,
         help_text="Last connection error message",
     )
 
     # Metadata
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         """Model metadata."""
@@ -465,8 +457,7 @@ class MCPServer(models.Model):
             'oauth_state', 'oauth_pkce_verifier'
         ])
 
-    def store_oauth_tokens(self, access_token: str, refresh_token: str = '',
-                          expires_in: int = None, scopes: list = None):
+    def store_oauth_tokens(self, access_token: str, refresh_token: str = '', expires_in: Optional[int] = None, scopes: Optional[list] = None):
         """Store OAuth tokens after successful authorization."""
         self.oauth_access_token = access_token
         if refresh_token:
@@ -494,7 +485,7 @@ class MCPTool(models.Model):
     """
 
     # Association
-    server = models.ForeignKey(
+    server: "models.ForeignKey[MCPServer, MCPServer]" = models.ForeignKey(
         MCPServer,
         on_delete=models.CASCADE,
         related_name="tools",
@@ -502,11 +493,11 @@ class MCPTool(models.Model):
     )
 
     # Tool definition (from MCP protocol)
-    name = models.CharField(
+    name: models.CharField = models.CharField(
         max_length=200,
         help_text="Tool name (unique per server)",
     )
-    description = models.TextField(
+    description: models.TextField = models.TextField(
         help_text="What this tool does",
     )
     input_schema = models.JSONField(
@@ -521,8 +512,8 @@ class MCPTool(models.Model):
     )
 
     # Cache management
-    discovered_at = models.DateTimeField(auto_now_add=True)
-    last_refreshed = models.DateTimeField(auto_now=True)
+    discovered_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    last_refreshed: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         """Model metadata."""
@@ -560,14 +551,17 @@ class MCPToolApproval(models.Model):
         SESSION = "session", "Current Session"
         PERMANENT = "permanent", "Always Allow"
 
+    if TYPE_CHECKING:
+        executions: "models.Manager[MCPToolExecution]"
+
     # Who and what
-    user = models.ForeignKey(
-        User,
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
+        UserModel,
         on_delete=models.CASCADE,
         related_name="mcp_approvals",
         help_text="User making the approval decision",
     )
-    tool = models.ForeignKey(
+    tool: "models.ForeignKey[MCPTool, MCPTool]" = models.ForeignKey(
         MCPTool,
         on_delete=models.CASCADE,
         related_name="approvals",
@@ -575,7 +569,7 @@ class MCPToolApproval(models.Model):
     )
 
     # Context
-    session_id = models.CharField(
+    session_id: models.CharField = models.CharField(
         max_length=100,
         blank=True,
         help_text="Associated chat session ID",
@@ -585,13 +579,13 @@ class MCPToolApproval(models.Model):
     )
 
     # Decision
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=ApprovalStatus.choices,
         default=ApprovalStatus.PENDING,
         help_text="Approval status",
     )
-    scope = models.CharField(
+    scope: models.CharField = models.CharField(
         max_length=20,
         choices=ApprovalScope.choices,
         default=ApprovalScope.ONCE,
@@ -599,13 +593,13 @@ class MCPToolApproval(models.Model):
     )
 
     # Metadata
-    requested_at = models.DateTimeField(auto_now_add=True)
-    decided_at = models.DateTimeField(
+    requested_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    decided_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When the approval decision was made",
     )
-    expires_at = models.DateTimeField(
+    expires_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When this approval expires (for session scope)",
@@ -677,13 +671,13 @@ class MCPToolExecution(models.Model):
         CANCELLED = "cancelled", "Cancelled"
 
     # Association
-    tool = models.ForeignKey(
+    tool: "models.ForeignKey[MCPTool, MCPTool]" = models.ForeignKey(
         MCPTool,
         on_delete=models.CASCADE,
         related_name="executions",
         help_text="Tool that was executed",
     )
-    approval = models.ForeignKey(
+    approval: "models.ForeignKey[Optional[MCPToolApproval], Optional[MCPToolApproval]]" = models.ForeignKey(
         MCPToolApproval,
         on_delete=models.SET_NULL,
         null=True,
@@ -691,7 +685,7 @@ class MCPToolExecution(models.Model):
         related_name="executions",
         help_text="Associated approval (if required)",
     )
-    session_id = models.CharField(
+    session_id: models.CharField = models.CharField(
         max_length=100,
         blank=True,
         help_text="Associated chat session ID",
@@ -701,7 +695,7 @@ class MCPToolExecution(models.Model):
     arguments = models.JSONField(
         help_text="Arguments passed to the tool",
     )
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=ExecutionStatus.choices,
         default=ExecutionStatus.PENDING,
@@ -714,19 +708,19 @@ class MCPToolExecution(models.Model):
         blank=True,
         help_text="Tool output (if successful)",
     )
-    error_message = models.TextField(
+    error_message: models.TextField = models.TextField(
         blank=True,
         help_text="Error message (if failed)",
     )
 
     # Timing
-    started_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(
+    started_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    completed_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When execution completed (success or failure)",
     )
-    duration_ms = models.IntegerField(
+    duration_ms: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Execution duration in milliseconds",
@@ -803,15 +797,15 @@ class MCPDiscoverySearch(models.Model):
     """
 
     # Who searched
-    user = models.ForeignKey(
-        User,
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
+        UserModel,
         on_delete=models.CASCADE,
         related_name="mcp_discovery_searches",
         help_text="User who performed the search",
     )
 
     # Search query
-    query = models.CharField(
+    query: models.CharField = models.CharField(
         max_length=500,
         help_text="The search query/description",
     )
@@ -827,7 +821,7 @@ class MCPDiscoverySearch(models.Model):
     )
 
     # Metadata
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         """Model metadata."""

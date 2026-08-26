@@ -4,9 +4,7 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
-
-from django.contrib.auth import get_user_model
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from .exceptions import MCPError
 from .models import MCPTool, MCPToolApproval, MCPToolExecution
@@ -17,7 +15,9 @@ from .utils import (
     sanitize_tool_result,
 )
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from authentication.models import User
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,7 +26,7 @@ class ToolOrchestrator(ABC):
 
     def __init__(
         self,
-        user: User,
+        user: "User",
         session_id: str,
         max_iterations: int = 10,
     ):
@@ -109,8 +109,8 @@ class FunctionCallingOrchestrator(ToolOrchestrator):
 
         # Track state
         conversation_messages = messages.copy()
-        all_tool_executions = []
-        total_cost = 0
+        all_tool_executions: List[MCPToolExecution] = []
+        total_cost: float = 0
         total_usage = {
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -384,7 +384,7 @@ class FunctionCallingOrchestrator(ToolOrchestrator):
 # Factory function to create appropriate orchestrator
 def create_orchestrator(
     model_id: str,
-    user: User,
+    user: "User",
     session_id: str,
     max_iterations: int = 10,
 ) -> ToolOrchestrator:

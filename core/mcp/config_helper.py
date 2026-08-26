@@ -34,9 +34,9 @@ class ConfigHelp:
     server_name: str
     env_vars: list[ConfigRequirement]
     auth_info: Optional[str] = None
-    setup_steps: list[str] = None
+    setup_steps: Optional[list[str]] = None
     docs_url: Optional[str] = None
-    allowed_domains: list[str] = None  # Domains the server needs to access
+    allowed_domains: Optional[list[str]] = None  # Domains the server needs to access
     auth_type: Optional[str] = None  # none, api_key, bearer, oauth
     compatibility_warning: Optional[str] = None  # Warning if server may not work in cloud
     raw_readme: Optional[str] = None  # For debugging
@@ -486,10 +486,10 @@ Return ONLY valid JSON.
             content = re.sub(r"^```(?:json)?\n?", "", content)
             content = re.sub(r"\n?```$", "", content)
 
-        parsed = json.loads(content)
+        parsed_data = json.loads(content)
 
         env_vars = []
-        for ev in parsed.get("env_vars", []):
+        for ev in parsed_data.get("env_vars", []):
             env_vars.append(ConfigRequirement(
                 name=ev.get("name", ""),
                 label=ev.get("label", ev.get("name", "")),
@@ -503,12 +503,12 @@ Return ONLY valid JSON.
         return ConfigHelp(
             server_name=server_name,
             env_vars=env_vars,
-            auth_info=parsed.get("auth_info"),
-            setup_steps=parsed.get("setup_steps", []),
-            docs_url=parsed.get("docs_url"),
+            auth_info=parsed_data.get("auth_info"),
+            setup_steps=parsed_data.get("setup_steps", []),
+            docs_url=parsed_data.get("docs_url"),
             allowed_domains=[domain] if domain else [],
-            auth_type=parsed.get("auth_type"),
-            compatibility_warning=parsed.get("compatibility_warning"),
+            auth_type=parsed_data.get("auth_type"),
+            compatibility_warning=parsed_data.get("compatibility_warning"),
         )
 
     except json.JSONDecodeError as e:

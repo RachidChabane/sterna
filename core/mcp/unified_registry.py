@@ -152,7 +152,7 @@ class UnifiedMCPRegistry:
 
     def __init__(
         self,
-        orchestrator_url: str = None,
+        orchestrator_url: Optional[str] = None,
         tool_cache_ttl_seconds: int = 300,  # 5 minutes
     ):
         self.orchestrator_url = orchestrator_url or getattr(
@@ -320,7 +320,7 @@ class UnifiedMCPRegistry:
             True if refresh succeeded, False otherwise
         """
         try:
-            from .oauth import DynamicOAuthManager
+            from .oauth import DynamicOAuthManager  # type: ignore[attr-defined]
             oauth_manager = DynamicOAuthManager()
             success = await oauth_manager.refresh_server_token(server)
             if success:
@@ -370,7 +370,7 @@ class UnifiedMCPRegistry:
                     # For OAuth servers, update auth_config in case token was refreshed
                     if server_info.auth_type == 'oauth' and instance.http_client:
                         # Update the HTTP client's auth config with fresh token
-                        instance.http_client.auth_config = server_info.auth_config
+                        instance.http_client.auth_config = server_info.auth_config or {}
                         instance.info.auth_config = server_info.auth_config
                     return instance
 
@@ -553,7 +553,7 @@ class UnifiedMCPRegistry:
                     return instance.tools
 
         # Discover tools via MCP protocol
-        tools_response = []
+        tools_response: List[Dict[str, Any]] = []
 
         if instance.websocket_client:
             tool_defs = await instance.websocket_client.list_tools()
@@ -561,7 +561,7 @@ class UnifiedMCPRegistry:
                 {
                     "name": t.name,
                     "description": t.description,
-                    "inputSchema": t.input_schema,
+                    "inputSchema": t.inputSchema,
                 }
                 for t in tool_defs
             ]
@@ -573,7 +573,7 @@ class UnifiedMCPRegistry:
                     {
                         "name": t.name,
                         "description": t.description,
-                        "inputSchema": t.input_schema,
+                        "inputSchema": t.inputSchema,
                     }
                     for t in tool_defs
                 ]

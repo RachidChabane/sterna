@@ -1,7 +1,7 @@
 """Encrypted model fields for storing sensitive data."""
 
 import json
-from typing import Any
+from typing import Any, Optional
 
 from cryptography.fernet import Fernet, MultiFernet, InvalidToken
 from django.conf import settings
@@ -139,7 +139,7 @@ class EncryptedTextField(models.TextField):
             logger.warning("Failed to decrypt field value - may be legacy unencrypted data")
             return value
 
-    def to_python(self, value: Any) -> str:
+    def to_python(self, value: Any) -> Optional[str]:
         """Convert value to Python string.
 
         Args:
@@ -190,7 +190,7 @@ class EncryptedJSONField(models.JSONField):
             self._fernet = _build_cipher()
         return self._fernet
 
-    def get_prep_value(self, value: Any) -> str:
+    def get_prep_value(self, value: Any) -> Optional[str]:
         """Encrypt JSON value before saving to database.
 
         Args:
@@ -209,7 +209,7 @@ class EncryptedJSONField(models.JSONField):
         encrypted = self.fernet.encrypt(json_str.encode())
         return encrypted.decode()
 
-    def from_db_value(self, value: Any, expression, connection) -> dict:
+    def from_db_value(self, value: Any, expression, connection) -> Optional[dict[Any, Any]]:
         """Decrypt JSON value when reading from database.
 
         Args:
@@ -244,7 +244,7 @@ class EncryptedJSONField(models.JSONField):
                 logger.error("Failed to parse JSON field value")
                 return {}
 
-    def to_python(self, value: Any) -> dict:
+    def to_python(self, value: Any) -> Optional[dict[Any, Any]]:
         """Convert value to Python dict.
 
         Args:
