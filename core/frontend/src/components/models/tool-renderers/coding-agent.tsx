@@ -4,7 +4,9 @@
  * entirely (no ToolFrame).
  */
 import { CodingAgentDisplay } from '../CodingAgentDisplay'
+import { isRecord, asString, asNumber, asStringArray } from './shared'
 import type { ToolRenderContext } from './types'
+import type { CodingAgentResult, CodingAgentStep } from '@/api/llm'
 
 export function CodingAgentStandalone({
   execution,
@@ -13,36 +15,51 @@ export function CodingAgentStandalone({
   pendingCodingAgentQuestion,
   onAnswerCodingAgentQuestion,
 }: ToolRenderContext) {
-  let codingResult: any = undefined
-  let codingSteps: any[] = []
+  let codingResult: CodingAgentResult | undefined = undefined
+  let codingSteps: CodingAgentStep[] = []
+  // Tri-state: `undefined` means the parsed blob didn't carry a recognizable
+  // success flag at all (distinct from an explicit `false`) — drives the
+  // 'pending' vs 'failed' distinction in agentStatus below.
+  let parsedSuccess: boolean | undefined = undefined
 
   if (execution.coding_agent_result) {
     codingResult = execution.coding_agent_result
+    parsedSuccess = execution.coding_agent_result.success
   } else if (execution.result) {
     try {
-      const parsed = typeof execution.result === 'string'
+      const raw: unknown = typeof execution.result === 'string'
         ? JSON.parse(execution.result)
         : execution.result
 
       // Handle potential nested result wrapper from LangChain agent
       // Structure might be: { result: { success, data: { ... } } }
       // Or: { success, data: { ... } }
-      const unwrapped = parsed.result || parsed
-      const data = unwrapped.data || unwrapped
+      const parsed = isRecord(raw) ? raw : {}
+      const unwrapped = isRecord(parsed.result) ? parsed.result : parsed
+      const data = isRecord(unwrapped.data) ? unwrapped.data : unwrapped
+
+      const successValue = unwrapped.success ?? data.success ?? parsed.success
+      parsedSuccess = typeof successValue === 'boolean' ? successValue : undefined
 
       codingResult = {
-        job_id: data.job_id || unwrapped.job_id || parsed.job_id,
-        success: unwrapped.success ?? data.success ?? parsed.success,
-        summary: data.summary || unwrapped.summary || parsed.summary,
-        files_created: data.files_created || unwrapped.files_created || parsed.files_created || [],
-        files_modified: data.files_modified || unwrapped.files_modified || parsed.files_modified || [],
-        error: unwrapped.error || data.error || parsed.error,
-        duration_ms: data.duration_ms || unwrapped.duration_ms || parsed.duration_ms || 0,
-        total_tokens: data.total_tokens || unwrapped.total_tokens || parsed.total_tokens,
+        job_id: asString(data.job_id ?? unwrapped.job_id ?? parsed.job_id) || '',
+        success: parsedSuccess ?? false,
+        summary: asString(data.summary ?? unwrapped.summary ?? parsed.summary),
+        files_created: asStringArray(data.files_created ?? unwrapped.files_created ?? parsed.files_created) || [],
+        files_modified: asStringArray(data.files_modified ?? unwrapped.files_modified ?? parsed.files_modified) || [],
+        error: asString(unwrapped.error ?? data.error ?? parsed.error),
+        duration_ms: asNumber(data.duration_ms ?? unwrapped.duration_ms ?? parsed.duration_ms) || 0,
+        total_tokens: asNumber(data.total_tokens ?? unwrapped.total_tokens ?? parsed.total_tokens),
       }
-      codingSteps = data.steps || unwrapped.steps || parsed.steps || []
+      // Steps come from a loosely-shaped LangChain agent blob (like `result`
+      // above): pass them through as-is rather than dropping entries that
+      // don't carry every canonical field, matching how CodingAgentDisplay
+      // itself treats this same data (see its `as ExtendedStep[]` cast).
+      const rawSteps = data.steps ?? unwrapped.steps ?? parsed.steps
+      codingSteps = Array.isArray(rawSteps) ? (rawSteps as CodingAgentStep[]) : []
     } catch {
       // Parsing failed
+      parsedSuccess = undefined
     }
   }
 
@@ -52,9 +69,9 @@ export function CodingAgentStandalone({
 
   const agentStatus = execution.isExecuting
     ? 'running'
-    : codingResult?.success
+    : parsedSuccess
       ? 'completed'
-      : codingResult?.success === false
+      : parsedSuccess === false
         ? 'failed'
         : 'pending'
 

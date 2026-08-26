@@ -54,7 +54,7 @@ export function useMessageMutations({
     const toRemove = new Set<number>([userMessageIndex, assistantMessageIndex])
     for (let i = userMessageIndex + 1; i < assistantMessageIndex; i++) {
       const m = messages[i]
-      if (m.role === 'assistant' && (m as any).isUnsupported) toRemove.add(i)
+      if (m.role === 'assistant' && m.isUnsupported) toRemove.add(i)
     }
     const updatedMessages = messages.filter((_, idx) => !toRemove.has(idx))
 

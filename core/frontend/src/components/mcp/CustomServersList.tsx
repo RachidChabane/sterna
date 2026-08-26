@@ -326,17 +326,17 @@ export function CustomServersList({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-40">
-                      <DropdownMenuItem onClick={(e) => handleDiscoverTools(server, e as any)}>
+                      <DropdownMenuItem onClick={(e) => handleDiscoverTools(server, e)}>
                         <RefreshCw className="w-3.5 h-3.5 mr-2" />
                         Refresh Tools
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => handleEditClick(server, e as any)}>
+                      <DropdownMenuItem onClick={(e) => handleEditClick(server, e)}>
                         <Pencil className="w-3.5 h-3.5 mr-2" />
                         Edit
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        onClick={(e) => handleDeleteClick(server, e as any)}
+                        onClick={(e) => handleDeleteClick(server, e)}
                         className="text-red-500 focus:text-red-500"
                       >
                         <Trash2 className="w-3.5 h-3.5 mr-2" />

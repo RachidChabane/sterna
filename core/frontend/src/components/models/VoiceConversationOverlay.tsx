@@ -51,10 +51,10 @@ function extractToolAction(message: Message | undefined): { isExecuting: boolean
   // Find tool_executions steps
   for (const step of message.steps) {
     if (step.type === 'tool_executions' && step.executions?.length > 0) {
-      const isExecuting = step.executions.some((e: any) => e.isExecuting === true)
+      const isExecuting = step.executions.some((e) => e.isExecuting === true)
       if (isExecuting || step.isExecuting) {
         // Get action description from first executing tool
-        const exec = step.executions.find((e: any) => e.isExecuting) || step.executions[0]
+        const exec = step.executions.find((e) => e.isExecuting) || step.executions[0]
         const displayName = exec?.tool_call?.display_name
         const toolName = exec?.tool_call?.function?.name || ''
 
@@ -518,8 +518,8 @@ export function VoiceConversationOverlay({
     }
     if (Array.isArray(message.content)) {
       return message.content
-        .filter((part: any) => part.type === 'text')
-        .map((part: any) => part.text)
+        .filter((part): part is Extract<typeof part, { type: 'text' }> => part.type === 'text')
+        .map((part) => part.text)
         .join('\n')
     }
     return ''

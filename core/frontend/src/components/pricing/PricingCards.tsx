@@ -7,7 +7,7 @@ import { billingApi } from '@/api/billing'
 import { subscriptionApi } from '@/api/subscription'
 import type { SubscriptionPlan } from '@/api/types'
 import { useAuthStore } from '@/store/authStore'
-import { TIERS, yearlyTotal, type TierSlug } from '@/lib/pricingData'
+import { TIERS, yearlyTotal, type Tier, type TierSlug } from '@/lib/pricingData'
 import { getApiErrorData } from '@/utils/errorMessages'
 
 interface PricingCardsProps {
@@ -29,13 +29,13 @@ export function PricingCards({ billing }: PricingCardsProps) {
       .catch(() => {})
   }, [user])
 
-  const displayPrice = (slug: TierSlug, monthlyPrice: number) => {
-    if (monthlyPrice === 0) return '$0'
+  const displayPrice = (tier: Tier) => {
+    if (tier.monthlyPrice === 0) return '$0'
     if (billing === 'yearly') {
-      const perMonth = Math.floor(yearlyTotal({ slug, monthlyPrice } as any) / 12)
+      const perMonth = Math.floor(yearlyTotal(tier) / 12)
       return `$${perMonth}`
     }
-    return `$${monthlyPrice}`
+    return `$${tier.monthlyPrice}`
   }
 
   // Plan changes for users with an active paid subscription (including
@@ -111,7 +111,7 @@ export function PricingCards({ billing }: PricingCardsProps) {
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
       {TIERS.map((tier) => {
         const isCurrent = currentPlan?.name === tier.slug
-        const price = displayPrice(tier.slug, tier.monthlyPrice)
+        const price = displayPrice(tier)
 
         return (
           <div

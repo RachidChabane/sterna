@@ -4,7 +4,21 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { isRecord, asString, asNumber } from './shared'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
+
+interface SearchCodeMatch {
+  file?: string
+  path?: string
+  line?: number
+  line_number?: number
+  content?: string
+  text?: string
+  is_match?: boolean
+}
+
+const isSearchCodeMatch = (val: unknown): val is SearchCodeMatch => isRecord(val)
 
 export function SearchCodeBody({ execution }: ToolRenderContext) {
   if (!execution.result || execution.isExecuting) return null
@@ -17,23 +31,24 @@ export function SearchCodeBody({ execution }: ToolRenderContext) {
 }
 
 // Component for displaying search_code results
-const SearchCodeResult = memo(({ result, pattern }: { result: any, pattern?: string }) => {
+const SearchCodeResult = memo(({ result, pattern }: { result: ToolResult, pattern?: string }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const { isDark } = useTheme()
 
   // Parse result
   const parsed = useMemo(() => {
-    let data = result
+    let data: unknown = result
     if (typeof data === 'string') {
-      try { data = JSON.parse(data) } catch { return { matches: [], total: 0, error: null } }
+      try { data = JSON.parse(data) } catch { return { matches: [] as SearchCodeMatch[], total: 0, error: null as string | null } }
     }
     // Unwrap nested result
-    data = data?.result || data
-    data = data?.data || data
+    data = (isRecord(data) ? data.result : undefined) || data
+    data = (isRecord(data) ? data.data : undefined) || data
 
-    const matches = data?.matches || []
-    const total = data?.total_matches || data?.total || matches.length
-    const error = data?.error || null
+    const rawMatches = isRecord(data) ? data.matches : undefined
+    const matches = Array.isArray(rawMatches) ? rawMatches.filter(isSearchCodeMatch) : []
+    const total = (isRecord(data) ? asNumber(data.total_matches) ?? asNumber(data.total) : undefined) ?? matches.length
+    const error = (isRecord(data) ? asString(data.error) : undefined) || null
 
     return { matches, total, error }
   }, [result])
@@ -75,7 +90,7 @@ const SearchCodeResult = memo(({ result, pattern }: { result: any, pattern?: str
           isDark ? "border-border/60 bg-card/50" : "border-border bg-white"
         )}>
           <div className="text-[11px] font-mono leading-[1.6]">
-            {matches.map((match: any, idx: number) => {
+            {matches.map((match, idx) => {
               const file = match.file || match.path || ''
               const lineNum = match.line || match.line_number
               const content = match.content || match.text || ''

@@ -1,10 +1,28 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useAgentRoster } from '../useAgentRoster'
+import type { DragEndEvent } from '@dnd-kit/core'
+
+const EMPTY_RECT = { width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0 }
+
+/** A minimal but fully-typed dnd-kit DragEndEvent — only `active.id`/`over.id` matter to handleDragEnd. */
+function makeDragEndEvent(activeId: string, overId: string): DragEndEvent {
+  return {
+    activatorEvent: new Event('pointerup'),
+    active: { id: activeId, data: { current: undefined }, rect: { current: { initial: null, translated: null } } },
+    collisions: null,
+    delta: { x: 0, y: 0 },
+    over: { id: overId, rect: EMPTY_RECT, disabled: false, data: { current: undefined } },
+  }
+}
+
+interface MockVoiceRoomState {
+  recommendedVoices: { voice_id: string; name: string }[]
+}
 
 vi.mock('@/store/voiceRoomStore', () => ({
-  default: (selector?: (state: any) => any) => {
-    const state = { recommendedVoices: [{ voice_id: 'v1', name: 'Voice One' }, { voice_id: 'v2', name: 'Voice Two' }] }
+  default: (selector?: (state: MockVoiceRoomState) => unknown) => {
+    const state: MockVoiceRoomState = { recommendedVoices: [{ voice_id: 'v1', name: 'Voice One' }, { voice_id: 'v2', name: 'Voice Two' }] }
     return selector ? selector(state) : state
   },
 }))
@@ -81,7 +99,7 @@ describe('useAgentRoster', () => {
     const [firstId, secondId] = result.current.agents.map((a) => a.id)
 
     act(() => {
-      result.current.handleDragEnd({ active: { id: firstId }, over: { id: secondId } } as any)
+      result.current.handleDragEnd(makeDragEndEvent(firstId, secondId))
     })
 
     expect(result.current.agents.map((a) => a.id)).toEqual([secondId, firstId])

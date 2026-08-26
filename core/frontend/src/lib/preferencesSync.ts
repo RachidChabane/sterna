@@ -181,7 +181,7 @@ class PreferencesSyncManager {
   /**
    * Load all preferences from backend
    */
-  async loadAll(category?: string): Promise<Record<string, any>> {
+  async loadAll(category?: string): Promise<Record<string, unknown>> {
     try {
       const response = await preferencesApi.getAllPreferences(category)
       
@@ -210,7 +210,7 @@ class PreferencesSyncManager {
   /**
    * Sync local data to backend (for migration)
    */
-  async syncLocalToBackend(localData: Record<string, any>, category: string): Promise<void> {
+  async syncLocalToBackend(localData: Record<string, unknown>, category: string): Promise<void> {
     if (Object.keys(localData).length === 0) {
       return
     }

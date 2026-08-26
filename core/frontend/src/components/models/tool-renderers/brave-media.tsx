@@ -1,15 +1,33 @@
 /** brave_image_search / brave_video_search body: the media carousel, when enabled and present. */
-import { BraveSearchMediaCarousel } from '../BraveSearchMediaCarousel'
+import { BraveSearchMediaCarousel, type MediaItem } from '../BraveSearchMediaCarousel'
+import { isRecord } from './shared'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
+
+/** One entry in a Brave Search `results` array — the fields this renderer reads. */
+interface BraveResultItem {
+  thumbnail?: { src?: string }
+  url?: string
+  page_url?: string
+  properties?: { url?: string; title?: string; domain?: string; width?: number; height?: number }
+  title?: string
+  source?: string
+  creator?: string
+  author?: string
+  duration?: string
+  view_count?: number
+}
+
+const isBraveResultItem = (val: unknown): val is BraveResultItem => isRecord(val)
 
 // Extract media items from Brave Search results
-const extractBraveSearchMedia = (toolName: string, executionResult: any) => {
+const extractBraveSearchMedia = (toolName: string, executionResult: ToolResult): MediaItem[] | null => {
   // The executionResult is {tool_call, result, success}
   // We need to access result.result or result directly
-  let braveResult = executionResult
+  let braveResult: unknown = executionResult
 
   // If executionResult has a nested result property, use that
-  if (executionResult && typeof executionResult === 'object' && 'result' in executionResult) {
+  if (isRecord(executionResult) && 'result' in executionResult) {
     braveResult = executionResult.result
   }
 
@@ -24,15 +42,16 @@ const extractBraveSearchMedia = (toolName: string, executionResult: any) => {
   }
 
   // Check if this is a Brave Search result with media
-  if (!braveResult || !braveResult.results || !Array.isArray(braveResult.results)) {
+  if (!isRecord(braveResult) || !Array.isArray(braveResult.results)) {
     return null
   }
+  const results: BraveResultItem[] = braveResult.results.filter(isBraveResultItem)
 
-  const items: any[] = []
+  const items: MediaItem[] = []
 
   // Extract images
   if (toolName === 'brave_image_search') {
-    braveResult.results.forEach((item: any) => {
+    results.forEach((item) => {
       if (item.thumbnail && item.thumbnail.src) {
         items.push({
           type: 'image',
@@ -49,7 +68,7 @@ const extractBraveSearchMedia = (toolName: string, executionResult: any) => {
 
   // Extract videos
   if (toolName === 'brave_video_search') {
-    braveResult.results.forEach((item: any) => {
+    results.forEach((item) => {
       if (item.thumbnail && item.thumbnail.src) {
         items.push({
           type: 'video',

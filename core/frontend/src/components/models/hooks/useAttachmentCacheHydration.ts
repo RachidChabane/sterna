@@ -15,7 +15,7 @@ function needsHydration(att: Attachment): boolean {
   }
   if (att.type === 'image') {
     // After refresh, images may miss base64/preview (sanitized). Try to hydrate.
-    return !(att as any).base64 && !(att as any).preview
+    return !att.base64 && !att.preview
   }
   return false
 }

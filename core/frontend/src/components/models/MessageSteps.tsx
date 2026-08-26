@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useRef, memo } from 'react'
-import { ChevronDown, ChevronRight, Code2, Info, HelpCircle, MapPin, MessageCircle, Newspaper, Video, Image as ImageIcon, Navigation, Globe, Sparkles, Cpu } from 'lucide-react'
+import { ChevronDown, ChevronRight, Code2, Info, HelpCircle, MapPin, MessageCircle, Newspaper, Video, Image as ImageIcon, Navigation, Globe, Sparkles, Cpu, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
@@ -29,10 +29,12 @@ import { VideoPlayer } from '@/components/videos/VideoPlayer'
 import { formatModelId } from '@/utils/modelNames'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
-import { useBraveSearchMedia, useEnrichedResults } from '@/hooks/useToolEnrichments'
+import { useBraveSearchMedia, useEnrichedResults, type EnrichedResults, type BraveMediaGroup } from '@/hooks/useToolEnrichments'
 import { cn } from '@/lib/utils'
 import { useStreamingText } from '@/hooks/useStreamingText'
 import type { Model, Message } from './types'
+import type { ToolResult, CodingAgentResult } from '@/api/llm'
+import { isRecord, asString, asNumber } from './tool-renderers/shared'
 
 import { WAITING_MESSAGES } from '@/constants/waitingMessages'
 
@@ -44,28 +46,49 @@ const getWaitingMessage = (elapsed: number): string | null => {
 }
 
 
+/** One entry in a `tool_executions` step. */
+interface StepToolExecution {
+  tool_call: {
+    id: string
+    type: 'function'
+    function: {
+      name: string
+      arguments: string
+    }
+    display_name?: string  // User-friendly display name from backend
+  }
+  result: ToolResult
+  success: boolean | null  // null when executing
+  isExecuting?: boolean  // True while tool is executing
+  startTime?: number  // Timestamp when execution started (persisted across reloads)
+}
+
+/** A `tool_executions` step, as it appears in `MessageStepsProps['steps']`. */
+interface ToolExecutionsStep {
+  type: 'tool_executions'
+  executions: StepToolExecution[]
+  isExecuting?: boolean  // True while any tool is executing
+}
+
+/** One row rendered by `ToolExecutionsGroup`/`MasterToolSection`: the executions from one
+ * `tool_executions` step, plus the {{ACTION: ...}} description that preceded it (if any). */
+interface ToolGroup {
+  executions: StepToolExecution[]
+  actionDescription: string | null
+  isExecuting?: boolean
+}
+
+/** One entry of a `master_tool_section` step (see `groupAllToolsBeforeAnswer`). */
+type MasterItem =
+  | { type: 'tool_group'; groups: ToolGroup[] }
+  | { type: 'reasoning'; content: string; isStreaming: boolean }
+  | { type: 'text'; content: string }
+
 interface MessageStepsProps {
   steps: Array<
     | { type: 'text'; content: string }
     | { type: 'reasoning'; content: string; isStreaming: boolean }
-    | {
-        type: 'tool_executions';
-        executions: Array<{
-          tool_call: {
-            id: string
-            type: 'function'
-            function: {
-              name: string
-              arguments: string
-            }
-            display_name?: string  // User-friendly display name from backend
-          }
-          result: any
-          success: boolean | null  // null when executing
-          isExecuting?: boolean  // True while tool is executing
-        }>
-        isExecuting?: boolean  // True while any tool is executing
-      }
+    | ToolExecutionsStep
   >
   isInterrupted?: boolean
   isStreaming?: boolean
@@ -90,31 +113,30 @@ export function MessageSteps({ steps, isInterrupted, isStreaming, chatId, conver
   const groupedSteps = groupAllToolsBeforeAnswer(groupConsecutiveToolExecutions(steps))
 
   // Extract generated images from all tool executions to display at the very end
+  const isToolExecutionsStep = (step: MessageStepsProps['steps'][number]): step is ToolExecutionsStep =>
+    step.type === 'tool_executions'
+
   const generatedImages = steps
-    .filter((step): step is { type: 'tool_executions'; executions: any[]; isExecuting?: boolean } =>
-      step.type === 'tool_executions'
-    )
+    .filter(isToolExecutionsStep)
     .flatMap(step => step.executions)
-    .filter((e: any) => {
+    .filter((e) => {
       const toolName = e.tool_call?.function?.name
       return (toolName === 'generate_image' || toolName === 'edit_image') && e.success !== false && !e.isExecuting
     })
-    .map((e: any) => extractGeneratedImage(e.result))
+    .map((e) => extractGeneratedImage(e.result))
     .filter((img): img is NonNullable<typeof img> => img !== null)
 
   // Extract generated videos from all tool executions to display at the very end
   // Include all video generation tools: generate_video, animate_image, animate_character
   const VIDEO_TOOLS = ['generate_video', 'animate_image', 'animate_character']
   const generatedVideos = steps
-    .filter((step): step is { type: 'tool_executions'; executions: any[]; isExecuting?: boolean } =>
-      step.type === 'tool_executions'
-    )
+    .filter(isToolExecutionsStep)
     .flatMap(step => step.executions)
-    .filter((e: any) => {
+    .filter((e) => {
       const toolName = e.tool_call?.function?.name
       return VIDEO_TOOLS.includes(toolName) && e.success !== false && !e.isExecuting
     })
-    .map((e: any) => extractGeneratedVideo(e.result))
+    .map((e) => extractGeneratedVideo(e.result))
     .filter((vid): vid is NonNullable<typeof vid> => vid !== null)
 
   // Get image URLs for the preview modal
@@ -315,14 +337,14 @@ function EnrichedResultsTabs({
   enrichedResults,
   braveSearchMedia
 }: {
-  enrichedResults: any
-  braveSearchMedia: any[]
+  enrichedResults: EnrichedResults | null
+  braveSearchMedia: BraveMediaGroup[]
 }) {
   const [activeTab, setActiveTab] = useState<string | null>(null)
   const [isExpanded, setIsExpanded] = useState(true)
 
   // Build available sections
-  const sections: Array<{ id: string; label: string; icon: any; count?: number; priority: number }> = []
+  const sections: Array<{ id: string; label: string; icon: LucideIcon; count?: number; priority: number }> = []
 
   // Media (images/videos) get highest priority - they're visual and should be shown first
   braveSearchMedia.forEach((media, index) => {
@@ -507,7 +529,7 @@ function CollapsibleEnrichment({
   children
 }: {
   title: string
-  icon: any
+  icon: LucideIcon
   count?: number
   defaultExpanded?: boolean
   children: React.ReactNode
@@ -547,17 +569,13 @@ const FILE_SYSTEM_TOOLS = new Set([
 type GroupedStep =
   | { type: 'text'; content: string }
   | { type: 'reasoning'; content: string; isStreaming: boolean }
-  | { type: 'tool_executions'; executions: any[]; isExecuting?: boolean }
-  | { type: 'tool_executions_group'; groups: Array<{ executions: any[]; actionDescription: string | null; isExecuting?: boolean }> }
-  | { type: 'master_tool_section'; items: Array<
-      | { type: 'tool_group'; groups: Array<{ executions: any[]; actionDescription: string | null; isExecuting?: boolean }> }
-      | { type: 'reasoning'; content: string; isStreaming: boolean }
-      | { type: 'text'; content: string }
-    > }
+  | ToolExecutionsStep
+  | { type: 'tool_executions_group'; groups: ToolGroup[] }
+  | { type: 'master_tool_section'; items: MasterItem[] }
 
-function groupConsecutiveToolExecutions(steps: any[]): GroupedStep[] {
+function groupConsecutiveToolExecutions(steps: MessageStepsProps['steps']): GroupedStep[] {
   const result: GroupedStep[] = []
-  let currentToolGroup: Array<{ executions: any[]; actionDescription: string | null; isExecuting?: boolean }> = []
+  let currentToolGroup: ToolGroup[] = []
   let lastActionDescription: string | null = null
 
   for (let i = 0; i < steps.length; i++) {
@@ -628,11 +646,6 @@ function groupAllToolsBeforeAnswer(steps: GroupedStep[]): GroupedStep[] {
   }
 
   // Collect tool execution groups, reasoning blocks, AND text steps BETWEEN first and last tool
-  type MasterItem =
-    | { type: 'tool_group'; groups: Array<{ executions: any[]; actionDescription: string | null; isExecuting?: boolean }> }
-    | { type: 'reasoning'; content: string; isStreaming: boolean }
-    | { type: 'text'; content: string }
-
   const items: MasterItem[] = []
 
   // Only include items from firstToolGroupIndex to lastToolGroupIndex (inclusive)
@@ -704,13 +717,13 @@ const extractActionTag = (text: string): [string, string | null] => {
 }
 
 // Fallback: Generate action description based on tool names (for models that don't support the format)
-const getFallbackActionDescription = (executions: Array<any>): string => {
+const getFallbackActionDescription = (executions: StepToolExecution[]): string => {
   const toolCount = executions.length
 
   if (toolCount === 0) return 'Running tools'
 
   // Get display name from execution if available, otherwise use function name
-  const getDisplayName = (execution: any): string => {
+  const getDisplayName = (execution: StepToolExecution): string => {
     // Prefer backend-provided display_name
     if (execution?.tool_call?.display_name) {
       return execution.tool_call.display_name
@@ -719,7 +732,7 @@ const getFallbackActionDescription = (executions: Array<any>): string => {
   }
 
   // Convert tool name to gerund form
-  const toGerund = (execution: any): string => {
+  const toGerund = (execution: StepToolExecution): string => {
     // If we have a display_name from backend, use it directly with "Using" prefix
     const displayName = execution?.tool_call?.display_name
     if (displayName) {
@@ -792,29 +805,23 @@ const getToolDisplayName = (toolName: string): string => {
     .join(' ')
 }
 
-interface ToolExecutionGroup {
-  executions: any[]
-  actionDescription: string | null
-  isExecuting?: boolean
-}
-
-function ToolExecutionsGroup({ groups, onOpenIDE, chatId }: { groups: ToolExecutionGroup[]; onOpenIDE: () => void; chatId?: string }) {
+function ToolExecutionsGroup({ groups, onOpenIDE, chatId }: { groups: ToolGroup[]; onOpenIDE: () => void; chatId?: string }) {
   const [isExpanded, setIsExpanded] = useState(false) // Collapsed by default
   const [waitingMessage, setWaitingMessage] = useState<string | null>(null)
 
   // Flatten all executions for counting
   const allExecutions = groups.flatMap(g => g.executions)
   const totalSteps = groups.length
-  const isExecuting = allExecutions.some((e: any) => e.isExecuting === true)
+  const isExecuting = allExecutions.some((e) => e.isExecuting === true)
   const failedCount = allExecutions.filter(e => e.success === false).length
 
   // Check if any tool interacts with the file system
-  const hasFileSystemTools = allExecutions.some((e: any) =>
+  const hasFileSystemTools = allExecutions.some((e) =>
     FILE_SYSTEM_TOOLS.has(e.tool_call?.function?.name)
   )
 
   // Get startTime from executions (persisted across reloads)
-  const startTime = allExecutions.find((e: any) => e.startTime)?.startTime
+  const startTime = allExecutions.find((e) => e.startTime)?.startTime
 
   // Track execution time and update waiting message based on psychology-based phases
   useEffect(() => {
@@ -912,7 +919,7 @@ function ToolExecutionsGroup({ groups, onOpenIDE, chatId }: { groups: ToolExecut
 
 // Individual step within a group - render content directly without collapsible wrapper
 function ToolExecutionStep({ executions, actionDescription, isGroupExecuting, onOpenIDE, chatId }: {
-  executions: any[]
+  executions: StepToolExecution[]
   actionDescription: string | null
   isGroupExecuting?: boolean
   onOpenIDE?: () => void
@@ -926,13 +933,9 @@ function ToolExecutionStep({ executions, actionDescription, isGroupExecuting, on
 }
 
 // Master section that groups ALL tool executions, reasoning, and text before the answer
-type MasterItem =
-  | { type: 'tool_group'; groups: Array<{ executions: any[]; actionDescription: string | null; isExecuting?: boolean }> }
-  | { type: 'reasoning'; content: string; isStreaming: boolean }
-  | { type: 'text'; content: string }
 
 // Helper to extract image data from tool execution result
-const extractGeneratedImage = (result: any): {
+const extractGeneratedImage = (result: ToolResult): {
   asset_id: string
   width?: number
   height?: number
@@ -943,25 +946,26 @@ const extractGeneratedImage = (result: any): {
 } | null => {
   if (!result) return null
   try {
-    let data = result
+    let data: unknown = result
     if (typeof data === 'string') {
       data = JSON.parse(data)
     }
     // Unwrap nested result
-    data = data?.result || data
+    data = (isRecord(data) ? data.result : undefined) || data
+    const dataRecord = isRecord(data) ? data : undefined
     // Check for error status
-    if (data?.status === 'error') return null
+    if (dataRecord?.status === 'error') return null
     // Extract image data
-    const imageData = data?.image
-    if (imageData?.asset_id) {
+    const imageData = dataRecord ? dataRecord.image : undefined
+    if (isRecord(imageData) && typeof imageData.asset_id === 'string') {
       return {
         asset_id: imageData.asset_id,
-        width: imageData.width,
-        height: imageData.height,
-        model: data.model,
-        generation_time_ms: data.generation_time_ms,
-        name: imageData.name,
-        description: imageData.description,
+        width: asNumber(imageData.width),
+        height: asNumber(imageData.height),
+        model: asString(dataRecord?.model),
+        generation_time_ms: asNumber(dataRecord?.generation_time_ms),
+        name: asString(imageData.name),
+        description: asString(imageData.description),
       }
     }
     return null
@@ -971,7 +975,7 @@ const extractGeneratedImage = (result: any): {
 }
 
 // Helper to extract video data from tool execution result
-const extractGeneratedVideo = (result: any): {
+const extractGeneratedVideo = (result: ToolResult): {
   asset_id: string
   width?: number
   height?: number
@@ -982,25 +986,26 @@ const extractGeneratedVideo = (result: any): {
 } | null => {
   if (!result) return null
   try {
-    let data = result
+    let data: unknown = result
     if (typeof data === 'string') {
       data = JSON.parse(data)
     }
     // Unwrap nested result
-    data = data?.result || data
+    data = (isRecord(data) ? data.result : undefined) || data
+    const dataRecord = isRecord(data) ? data : undefined
     // Check for error status
-    if (data?.status === 'error') return null
+    if (dataRecord?.status === 'error') return null
     // Extract video data
-    const videoData = data?.video
-    if (videoData?.asset_id) {
+    const videoData = dataRecord ? dataRecord.video : undefined
+    if (isRecord(videoData) && typeof videoData.asset_id === 'string') {
       return {
         asset_id: videoData.asset_id,
-        width: videoData.width,
-        height: videoData.height,
-        duration_seconds: videoData.duration_seconds,
-        model: data.model,
-        generation_time_ms: data.generation_time_ms,
-        prompt: data.prompt,
+        width: asNumber(videoData.width),
+        height: asNumber(videoData.height),
+        duration_seconds: asNumber(videoData.duration_seconds),
+        model: asString(dataRecord?.model),
+        generation_time_ms: asNumber(dataRecord?.generation_time_ms),
+        prompt: asString(dataRecord?.prompt),
       }
     }
     return null
@@ -1021,17 +1026,18 @@ function MasterToolSection({ items, onOpenIDE, isInterrupted, chatId }: {
   const isMobile = useUIStore((state) => state.isMobile)
 
   // Extract tool groups for counting and status
-  const toolGroups = items.filter(item => item.type === 'tool_group') as Array<{ type: 'tool_group'; groups: Array<{ executions: any[]; actionDescription: string | null; isExecuting?: boolean }> }>
+  const isToolGroupItem = (item: MasterItem): item is { type: 'tool_group'; groups: ToolGroup[] } => item.type === 'tool_group'
+  const toolGroups = items.filter(isToolGroupItem)
   const allExecutions = toolGroups.flatMap(tg => tg.groups.flatMap(g => g.executions))
   const totalSteps = toolGroups.reduce((sum, tg) => sum + tg.groups.length, 0)
-  const isExecuting = allExecutions.some((e: any) => e.isExecuting === true)
+  const isExecuting = allExecutions.some((e) => e.isExecuting === true)
   const failedCount = allExecutions.filter(e => e.success === false).length
 
   // Find the currently executing tool's action description
   const getCurrentActionDescription = (): string | null => {
     for (const toolGroup of toolGroups) {
       for (const group of toolGroup.groups) {
-        if (group.isExecuting || group.executions.some((e: any) => e.isExecuting)) {
+        if (group.isExecuting || group.executions.some((e) => e.isExecuting)) {
           return group.actionDescription || getFallbackActionDescription(group.executions)
         }
       }
@@ -1041,12 +1047,12 @@ function MasterToolSection({ items, onOpenIDE, isInterrupted, chatId }: {
   const currentAction = isExecuting ? getCurrentActionDescription() : null
 
   // Check if any tool interacts with the file system
-  const hasFileSystemTools = allExecutions.some((e: any) =>
+  const hasFileSystemTools = allExecutions.some((e) =>
     FILE_SYSTEM_TOOLS.has(e.tool_call?.function?.name)
   )
 
   // Get startTime from executions (persisted across reloads)
-  const startTime = allExecutions.find((e: any) => e.startTime)?.startTime
+  const startTime = allExecutions.find((e) => e.startTime)?.startTime
 
   // Track execution time and update waiting message based on psychology-based phases
   useEffect(() => {

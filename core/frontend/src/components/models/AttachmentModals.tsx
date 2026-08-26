@@ -158,7 +158,7 @@ export function AttachmentModals({
       onOpenTextFile({
         id: f.id,
         type: 'file',
-        file: f.file || ({} as any),
+        file: f.file || new File([], 'file'),
         base64: undefined,
         textContent: existingContent
       })
@@ -178,7 +178,7 @@ export function AttachmentModals({
           onOpenTextFile({
             id: f.id,
             type: 'file',
-            file: f.file || ({} as any),
+            file: f.file || new File([], 'file'),
             base64: undefined,
             textContent: text
           })
@@ -266,10 +266,10 @@ export function AttachmentModals({
                         const cached = cachedAttachments[img.id]
                         // Priority: base64 (local) > loaded blob URL (from API) > cached
                         // Note: Direct download URLs don't work because browser doesn't send auth headers
-                        const assetId = (img as any).assetId || img.id  // id is set to asset_id during reconstruction
+                        const assetId = img.assetId || img.id  // id is set to asset_id during reconstruction
                         const blobUrl = assetId ? loadedBlobUrls[assetId] : null
                         const src = img.base64 || blobUrl || cached?.base64
-                        const alt = (img as any).file?.name || cached?.name || 'image'
+                        const alt = img.file?.name || cached?.name || 'image'
                         const isLoading = assetId ? loadingAssetIds.has(assetId) : false
                         const needsLoad = !src && assetId && !isLoading
 
@@ -288,10 +288,10 @@ export function AttachmentModals({
                               // Hydrate images with priority: base64 > loaded blob URL > cached
                               const hydrated = imageAtts.map((img) => {
                                 const c = cachedAttachments[img.id]
-                                const imgAssetId = (img as any).assetId || img.id
+                                const imgAssetId = img.assetId || img.id
                                 const imgBlobUrl = imgAssetId ? loadedBlobUrls[imgAssetId] : null
                                 const imgSrc = img.base64 || imgBlobUrl || c?.base64 || ''
-                                const imgAlt = (img as any).file?.name || c?.name || 'image'
+                                const imgAlt = img.file?.name || c?.name || 'image'
                                 return { src: imgSrc, alt: imgAlt }
                               }).filter(it => it.src)
                               onOpenImageGallery(hydrated, i)
@@ -479,7 +479,7 @@ export function AttachmentModals({
                         const extension = getFileExtension(name)
                         const sizeStr = formatFileSize((f.file?.size ?? cached?.size) || 0)
                         // Use loaded blob URL from API (direct URLs don't work due to auth)
-                        const assetId = (f as any).assetId || f.id
+                        const assetId = f.assetId || f.id
                         const blobUrl = assetId ? loadedBlobUrls[assetId] : null
                         const isPdf = extension.toLowerCase() === 'pdf' || (!!(f.base64 || cached?.base64) && !(f.textContent || cached?.textContent))
                         const isAssetLoading = assetId ? loadingAssetIds.has(assetId) : false

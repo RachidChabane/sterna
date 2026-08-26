@@ -7,8 +7,9 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { parseDiffLines } from './shared'
+import { parseDiffLines, deepParse, isRecord, asString } from './shared'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
 
 const MAX_VISIBLE_LINES = 15
 
@@ -23,26 +24,21 @@ export function EditFileBody({ execution, filePath }: ToolRenderContext) {
 }
 
 const EditFileDiffResult = memo(({ result, filePath, args }: {
-  result: any
+  result: ToolResult
   filePath?: string
   args?: { path?: string; old_content?: string; new_content?: string }
 }) => {
   const [showFullDiff, setShowFullDiff] = useState(false)
   const { isDark } = useTheme()
 
-  // Parse result - handles nested JSON strings
-  const parseResult = (r: any): any => {
-    if (typeof r === 'string') {
-      try { return parseResult(JSON.parse(r)) } catch { return r }
-    }
-    return r
-  }
-
-  const parsedResult = parseResult(result)
-  const actualResult = parsedResult?.result || parsedResult
-
   // Extract diff - could be in various places
-  let diff = actualResult?.diff || actualResult?.data?.diff || parsedResult?.data?.diff || parsedResult?.diff
+  const diffOf = (v: unknown): string | undefined => (isRecord(v) ? asString(v.diff) : undefined)
+  const dataOf = (v: unknown): unknown => (isRecord(v) ? v.data : undefined)
+
+  const parsedResult = deepParse(result)
+  const actualResult = (isRecord(parsedResult) ? parsedResult.result : undefined) || parsedResult
+
+  let diff = diffOf(actualResult) || diffOf(dataOf(actualResult)) || diffOf(dataOf(parsedResult)) || diffOf(parsedResult)
 
   // If no diff from result, generate one from args
   if (!diff && args?.old_content && args?.new_content) {

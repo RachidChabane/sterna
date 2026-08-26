@@ -2,8 +2,9 @@
 import { memo } from 'react'
 import { cn } from '@/lib/utils'
 import { Check } from 'lucide-react'
-import { deepParse } from './shared'
+import { deepParse, isRecord } from './shared'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
 
 // Interface for todo items
 interface TodoItem {
@@ -13,13 +14,17 @@ interface TodoItem {
   status: 'pending' | 'in_progress' | 'completed'
 }
 
+const isTodoItem = (val: unknown): val is TodoItem =>
+  isRecord(val) && (typeof val.text === 'string' || typeof val.content === 'string')
+
 // Parse todos from update_todos result
-const parseTodosFromResult = (result: any): TodoItem[] => {
+const parseTodosFromResult = (result: ToolResult): TodoItem[] => {
   const data = deepParse(result)
-  const inner = data?.result ? deepParse(data.result) : data
-  const todos = inner?.data?.todos || inner?.todos
+  const inner = isRecord(data) && data.result ? deepParse(data.result) : data
+  const nestedData = isRecord(inner) ? inner.data : undefined
+  const todos = (isRecord(nestedData) ? nestedData.todos : undefined) ?? (isRecord(inner) ? inner.todos : undefined)
   if (Array.isArray(todos)) {
-    return todos.filter((t: TodoItem) => t.text || t.content)
+    return todos.filter(isTodoItem)
   }
   return []
 }
@@ -30,7 +35,7 @@ export function TodosBody({ execution }: ToolRenderContext) {
 }
 
 // Component for displaying todos inline
-const TodosDisplay = memo(({ result }: { result: any }) => {
+const TodosDisplay = memo(({ result }: { result: ToolResult }) => {
   const todos = parseTodosFromResult(result)
   if (todos.length === 0) return null
 

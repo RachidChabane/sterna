@@ -16,7 +16,7 @@ test.describe('Billing flows (mocked Stripe)', () => {
   test('free user → click Upgrade → posts checkout-session and redirects @smoke', async ({
     page,
   }) => {
-    let body: any = null
+    let body: unknown = null
     await page.route('**/api/billing/checkout-session/', async (route) => {
       body = route.request().postDataJSON()
       await route.fulfill({

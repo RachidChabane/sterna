@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import { ProjectStatusSidePanel } from '../ProjectStatusSidePanel'
 import { useProjectPanelStore, type AgentPlan } from '@/store/projectPanelStore'
+import type { RepoStatusResponse } from '@/api/codeSession'
 
 const getRepoStatus = vi.fn()
 const getIssues = vi.fn()
@@ -30,7 +31,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 vi.mock('@/store/conversationStore', () => ({
-  useConversationStore: (selector: (s: any) => any) => selector({ activeConversation: null }),
+  useConversationStore: (selector: (s: { activeConversation: null }) => unknown) => selector({ activeConversation: null }),
 }))
 
 vi.mock('@/api/conversations', () => ({
@@ -105,7 +106,7 @@ describe('ProjectStatusSidePanel — repo status card', () => {
   })
 
   it('shows a loading state (not the false connect prompt) while the repo status fetch is still in flight', async () => {
-    const { promise, resolve } = pendingPromise<{ data: any }>()
+    const { promise, resolve } = pendingPromise<{ data: RepoStatusResponse }>()
     getRepoStatus.mockReturnValue(promise)
 
     render(<ProjectStatusSidePanel conversationId="conv-1" chatId="chat-1" />)

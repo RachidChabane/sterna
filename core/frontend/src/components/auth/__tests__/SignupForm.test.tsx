@@ -32,7 +32,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 vi.mock('@/hooks/use-toast', () => ({
-  toast: (...args: any[]) => mockToast(...args),
+  toast: (...args: unknown[]) => mockToast(...args),
   useToast: () => ({ toast: mockToast }),
 }))
 
@@ -57,7 +57,7 @@ vi.mock('@/api/endpoints', () => ({
   authApi: {
     googleAuth: vi.fn(),
     // Backend-issued OAuth state nonce (task-19, 1b8ec2a)
-    requestOAuthState: (...args: any[]) => mockRequestOAuthState(...args),
+    requestOAuthState: (...args: unknown[]) => mockRequestOAuthState(...args),
   },
 }))
 

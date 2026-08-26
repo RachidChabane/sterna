@@ -5,25 +5,26 @@
  * path (bad/missing args) falls through to the generic header exactly
  * like an unrecognized tool would.
  */
-import { deepParse } from './shared'
+import { deepParse, isRecord } from './shared'
 import { GenericHeader } from './generic'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
 
 // Extract line count from read_file result
-const getReadLineCount = (result: any): number | null => {
+const getReadLineCount = (result: ToolResult): number | null => {
   if (!result) return null
   try {
-    let data = deepParse(result)
+    let data: unknown = deepParse(result)
 
     // Navigate nested structures: result.result.data or result.data
-    if (data?.result) data = deepParse(data.result)
-    if (data?.data) data = deepParse(data.data)
+    if (isRecord(data) && data.result) data = deepParse(data.result)
+    if (isRecord(data) && data.data) data = deepParse(data.data)
 
     // Check for lines field from backend
-    if (typeof data?.lines === 'number') return data.lines
+    if (isRecord(data) && typeof data.lines === 'number') return data.lines
 
     // Count lines in content as fallback
-    const content = data?.content
+    const content = isRecord(data) ? data.content : undefined
     if (typeof content === 'string') {
       return content.split('\n').length
     }

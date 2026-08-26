@@ -32,6 +32,7 @@ import { MAX_CHATS } from './constants'
 import type { Chat, Model, Attachment } from './types'
 import type { FeatureState } from './GlobalFeatureToggles'
 import { useVerificationGuard } from '@/components/auth/VerificationGate'
+import type { MCPServer } from '@/api/mcp'
 
 interface ChatGridProps {
   chats: Chat[]
@@ -82,7 +83,7 @@ interface ChatGridProps {
   knowledgeBaseState?: FeatureState
   onToggleKnowledgeBase?: () => void
   hasKnowledgeBaseSupport?: boolean
-  activeServers?: any[]
+  activeServers?: MCPServer[]
 
 }
 

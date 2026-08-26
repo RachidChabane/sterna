@@ -2,7 +2,7 @@ import apiClient from './client'
 import type { ClonedRepo, AgentPlan, CreatedPR } from '@/store/projectPanelStore'
 
 // Response types
-interface RepoStatusResponse {
+export interface RepoStatusResponse {
   has_repo: boolean
   id?: string
   full_name?: string | null

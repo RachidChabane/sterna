@@ -5,7 +5,7 @@
  * Follows the same minimalist design as CodeBlock.
  */
 
-import { useState, useRef } from 'react'
+import { useState, useRef, type HTMLAttributes } from 'react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { Check, Copy, Play, Loader2, ChevronDown, ChevronRight, StopCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -30,7 +30,7 @@ interface ExecutionResult {
   error: string | null
   exit_code: number
   execution_time: number
-  artifacts: any[]
+  artifacts: unknown[]
 }
 
 // Map language aliases
@@ -192,7 +192,7 @@ export function ExecutableCodeBlock({ code, language, className }: ExecutableCod
   }
 
   // Custom Pre component
-  const CustomPre = ({ children, ...props }: any) => (
+  const CustomPre = ({ children, ...props }: HTMLAttributes<HTMLPreElement>) => (
     <pre {...props} style={{ ...props.style, margin: 0, padding: 0, background: 'transparent' }}>
       {children}
     </pre>

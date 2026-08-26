@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef } from 'react'
-import type { OpenFile } from '../types'
+import type { OpenFile, FileNode } from '../types'
 
 // Lightweight file metadata for storage (no content)
 interface FileMetadata {
@@ -36,7 +36,7 @@ interface UseIDEStateProps {
   openFiles: OpenFile[]
   activeFilePath: string | null
   selectedPath: string | null
-  fileTree: any[]
+  fileTree: FileNode[]
 }
 
 interface UseIDEStateReturn {
@@ -50,10 +50,10 @@ const DEBOUNCE_DELAY = 500 // Save state 500ms after last change
 /**
  * Recursively collects all open directory paths from the file tree
  */
-function collectOpenDirectoryPaths(nodes: any[]): string[] {
+function collectOpenDirectoryPaths(nodes: FileNode[]): string[] {
   const openPaths: string[] = []
 
-  const traverse = (nodes: any[]) => {
+  const traverse = (nodes: FileNode[]) => {
     nodes.forEach(node => {
       if (node.type === 'directory' && node.isOpen) {
         openPaths.push(node.path)

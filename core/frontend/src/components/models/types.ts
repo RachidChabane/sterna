@@ -79,6 +79,13 @@ export type MessageAttachment = Attachment | ReconstructedAttachment
 /** Called after a tool result is available (approval flow or execution), to continue the conversation with it. */
 export type ToolExecutedHandler = (toolCallId: string, toolName: string, result: Record<string, unknown> | undefined) => void
 
+/** A single-model cost estimate as displayed inline while composing a message (ChatPanel/MessageInput). */
+export interface CostEstimate {
+  cost?: number
+  prompt_tokens?: number
+  completion_tokens?: number
+}
+
 /**
  * The shape an attachment can actually have while a message is being
  * prepared for send: a freshly composed Attachment (real File), one

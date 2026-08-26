@@ -3,8 +3,17 @@ import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { sanitizeOutput } from './shared'
+import { sanitizeOutput, isRecord, asString, asNumber } from './shared'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
+
+interface ExecuteCodeArtifact {
+  url: string
+  filename: string
+}
+
+const isExecuteCodeArtifact = (val: unknown): val is ExecuteCodeArtifact =>
+  isRecord(val) && typeof val.url === 'string' && typeof val.filename === 'string'
 
 export function ExecuteCodeBody({ execution }: ToolRenderContext) {
   if (!execution.result || execution.isExecuting) return null
@@ -13,11 +22,11 @@ export function ExecuteCodeBody({ execution }: ToolRenderContext) {
 
 // Component for displaying execute_code results with collapsible output
 // Modern inline style matching RunBashDisplay
-const ExecuteCodeResult = memo(({ result }: { result: any }) => {
+const ExecuteCodeResult = memo(({ result }: { result: ToolResult }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   // Parse result if it's a JSON string
-  let parsedResult = result
+  let parsedResult: unknown = result
   if (typeof result === 'string') {
     try {
       parsedResult = JSON.parse(result)
@@ -27,8 +36,14 @@ const ExecuteCodeResult = memo(({ result }: { result: any }) => {
   }
 
   // Extract the actual execution result (it's nested in result.result)
-  const executionResult = parsedResult?.result || parsedResult
-  const { output, error, exit_code, execution_time, artifacts } = executionResult
+  const executionResult = (isRecord(parsedResult) && isRecord(parsedResult.result) ? parsedResult.result : parsedResult)
+  const output = isRecord(executionResult) ? asString(executionResult.output) : undefined
+  const error = isRecord(executionResult) ? asString(executionResult.error) : undefined
+  const exit_code = isRecord(executionResult) ? asNumber(executionResult.exit_code) : undefined
+  const execution_time = isRecord(executionResult) ? asNumber(executionResult.execution_time) : undefined
+  const artifacts = isRecord(executionResult) && Array.isArray(executionResult.artifacts)
+    ? executionResult.artifacts.filter(isExecuteCodeArtifact)
+    : undefined
 
   // Get orchestrator URL from environment (routes through API Gateway)
   const orchestratorUrl = import.meta.env.VITE_ORCHESTRATOR_URL || 'http://localhost:8080/api/v1/sandbox'
@@ -76,7 +91,7 @@ const ExecuteCodeResult = memo(({ result }: { result: any }) => {
             {/* Artifacts (images, plots) */}
             {artifacts && artifacts.length > 0 && (
               <div className="space-y-2 mb-2">
-                {artifacts.map((artifact: any, index: number) => {
+                {artifacts.map((artifact, index) => {
                   const fullUrl = `${orchestratorUrl}${artifact.url}`
                   const filename = artifact.filename
                   return (

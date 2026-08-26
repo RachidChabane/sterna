@@ -125,7 +125,7 @@ describe('ApiKeyStep', () => {
   it('tests API connection', async () => {
     const onNext = vi.fn();
     // Two calls on success: connection test, then saving the key to settings
-    (api.post as any).mockResolvedValue({ data: { success: true } });
+    vi.mocked(api.post).mockResolvedValue({ data: { success: true } });
 
     render(<ApiKeyStep onNext={onNext} />);
 
@@ -272,7 +272,7 @@ describe('SampleEvaluationStep', () => {
 
   it('runs sample evaluation', async () => {
     const onNext = vi.fn();
-    (api.post as any).mockResolvedValueOnce({
+    vi.mocked(api.post).mockResolvedValueOnce({
       data: {
         score: 85,
         latency: 1500,

@@ -3,8 +3,25 @@
  * Renderer-specific helpers stay colocated with their renderer instead.
  */
 
+/** Narrows an `unknown` tool-result value to a plain object whose fields can be probed. */
+export const isRecord = (val: unknown): val is Record<string, unknown> =>
+  typeof val === 'object' && val !== null && !Array.isArray(val)
+
+// Loosely-typed field extractors for values pulled out of a parsed tool result
+// blob (`Record<string, unknown>`), where the field may be absent, of the
+// wrong type, or nested under one of several legacy shapes.
+export const asString = (val: unknown): string | undefined => (typeof val === 'string' ? val : undefined)
+export const asNumber = (val: unknown): number | undefined => (typeof val === 'number' ? val : undefined)
+export const asStringArray = (val: unknown): string[] | undefined =>
+  Array.isArray(val) && val.every((v) => typeof v === 'string') ? val : undefined
+
+/** Walks a chain of object keys through unknown data, short-circuiting on the
+ * first hop that isn't a plain object — the unknown-shaped equivalent of `a?.b?.c`. */
+export const getPath = (val: unknown, ...path: string[]): unknown =>
+  path.reduce<unknown>((acc, key) => (isRecord(acc) ? acc[key] : undefined), val)
+
 // Parse nested JSON/object structures
-export const deepParse = (val: any): any => {
+export const deepParse = (val: unknown): unknown => {
   if (typeof val === 'string') {
     try { return deepParse(JSON.parse(val)) } catch { return val }
   }
@@ -12,7 +29,7 @@ export const deepParse = (val: any): any => {
 }
 
 // Helper to try parsing a value as JSON if it's a string
-export const tryParseJSON = (value: any): any => {
+export const tryParseJSON = (value: unknown): unknown => {
   if (typeof value !== 'string') return value
   try {
     return JSON.parse(value)

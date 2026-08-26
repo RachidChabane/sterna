@@ -378,7 +378,7 @@ export function ConsigliereModal() {
             analysisStepMessage={analysisStepMessage}
             currentModel={currentModel}
             favorites={favorites}
-            chatGroup={currentSession?.chat_group_data as any}
+            chatGroup={currentSession?.chat_group_data}
             onGenerateAnalysis={handleGenerateAnalysis}
             onRegenerateAnalysis={handleRegenerateAnalysis}
             onCancelAnalysis={cancelAnalysis}

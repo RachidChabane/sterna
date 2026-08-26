@@ -32,8 +32,13 @@ export function buildChatResponsesText(messages: Message[]): string {
   return assistant.map((m) => extractTextFromContent(m.content)).join('\n\n---\n\n')
 }
 
+type ChatMessageMetadata = Pick<
+  Message,
+  'model' | 'model_id' | 'provider' | 'timestamp' | 'cost' | 'prompt_cost' | 'completion_cost' | 'latency' | 'tokens'
+>
+
 // Build a single-chat metadata array (assistant messages only)
-export function buildChatMetadata(messages: Message[]): any[] {
+export function buildChatMetadata(messages: Message[]): ChatMessageMetadata[] {
   const assistant = messages.filter((m) => m.role === 'assistant')
   return assistant.map((m) => ({
     model: m.model,

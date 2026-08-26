@@ -10,7 +10,9 @@ import { getCodeTheme } from '@/constants/codeThemes'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { isRecord, asString } from './shared'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
 
 const getLanguage = (fname: string): string => {
   const ext = fname.split('.').pop()?.toLowerCase() || ''
@@ -35,7 +37,7 @@ export function WriteFileBody({ execution, filePath }: ToolRenderContext) {
 }
 
 const WriteFileContentResult = memo(({ result, filePath, args }: {
-  result: any
+  result: ToolResult
   filePath?: string
   args?: { path?: string; content?: string }
 }) => {
@@ -50,8 +52,9 @@ const WriteFileContentResult = memo(({ result, filePath, args }: {
   // If no content in args, try to extract from result
   if (!content && result) {
     try {
-      const parsed = typeof result === 'string' ? JSON.parse(result) : result
-      content = parsed?.data?.content || parsed?.content || ''
+      const parsed: unknown = typeof result === 'string' ? JSON.parse(result) : result
+      const data = isRecord(parsed) ? parsed.data : undefined
+      content = (isRecord(data) ? asString(data.content) : undefined) || (isRecord(parsed) ? asString(parsed.content) : undefined) || ''
     } catch {
       // ignore
     }

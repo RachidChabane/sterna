@@ -9,6 +9,7 @@
  * - Model info stats (cost, tokens)
  */
 
+import type { HTMLAttributes } from 'react'
 import { Button } from '@/components/ui/button'
 import { hasErrorResponse } from '@/utils/errorMessages'
 import { Badge } from '@/components/ui/badge'
@@ -107,7 +108,7 @@ interface ChatHeaderProps {
 
   // Drag and drop
   dragHandleRef?: (element: HTMLElement | null) => void
-  dragHandleProps?: Record<string, any>
+  dragHandleProps?: HTMLAttributes<HTMLElement>
 
   // State
   messages: Message[]

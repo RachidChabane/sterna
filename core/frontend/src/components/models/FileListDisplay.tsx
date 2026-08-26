@@ -9,6 +9,8 @@ import React, { useState, useMemo } from 'react'
 import { ChevronRight, ChevronDown, Folder } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FileIcon } from '@/components/sandbox/FileIcon'
+import { isRecord, asString, asNumber } from './tool-renderers/shared'
+import type { ToolResult } from '@/api/llm'
 
 interface FileEntry {
   name: string
@@ -23,13 +25,19 @@ interface TreeNode {
 }
 
 interface FileListDisplayProps {
-  result: any
+  result: ToolResult
   className?: string
 }
 
+const toFileEntry = (f: unknown): FileEntry => ({
+  name: typeof f === 'string' ? f : asString(isRecord(f) ? f.name : undefined) || '',
+  type: (isRecord(f) && f.type === 'directory') ? 'directory' : 'file',
+  path: isRecord(f) ? asString(f.path) : undefined,
+})
+
 // Parse the result to extract file entries
-const parseFileList = (result: any): { path: string, files: FileEntry[], depth: number } | null => {
-  let data = result
+const parseFileList = (result: ToolResult): { path: string, files: FileEntry[], depth: number } | null => {
+  let data: unknown = result
 
   // Parse if string
   if (typeof data === 'string') {
@@ -37,25 +45,22 @@ const parseFileList = (result: any): { path: string, files: FileEntry[], depth: 
   }
 
   // Extract nested structures
-  if (data?.result) data = data.result
+  if (isRecord(data) && data.result) data = data.result
   if (typeof data === 'string') {
     try { data = JSON.parse(data) } catch { return null }
   }
-  if (data?.data) data = data.data
+  if (isRecord(data) && data.data) data = data.data
 
-  const path = data?.path || '/workspace'
-  const depth = data?.depth || 1
+  const path = (isRecord(data) ? asString(data.path) : undefined) || '/workspace'
+  const depth = (isRecord(data) ? asNumber(data.depth) : undefined) || 1
 
   // Handle files array
-  if (data?.files && Array.isArray(data.files)) {
+  const files = isRecord(data) ? data.files : undefined
+  if (Array.isArray(files)) {
     return {
       path,
       depth,
-      files: data.files.map((f: any) => ({
-        name: typeof f === 'string' ? f : f.name,
-        type: (typeof f === 'object' && f.type === 'directory') ? 'directory' : 'file',
-        path: typeof f === 'object' ? f.path : undefined
-      }))
+      files: files.map(toFileEntry)
     }
   }
 

@@ -4,28 +4,109 @@
  * Utilities for extracting enriched results (infobox, FAQ, discussions, news, videos)
  * from Brave Search Pro API responses.
  */
+import { isRecord } from '@/components/models/tool-renderers/shared'
+import type { MediaItem } from '@/components/models/BraveSearchMediaCarousel'
 
-interface EnrichedResults {
-  infobox?: any
-  faq?: any
-  discussions: any[]
-  locations: any[]
-  news_results: any[]
-  videos_results: any[]
-  web_results: any[]
+/** A tool execution's raw payload — the shape every extractor unwraps before reading fields. */
+export interface ToolExecutionLike {
+  result: unknown
 }
 
+/** Brave Search infobox — mirrors InfoboxDisplay's `infobox` prop shape. */
+interface BraveInfobox {
+  title?: string
+  description?: string
+  long_desc?: string
+  images?: Array<{ url: string; title?: string }>
+  data?: Array<{ label: string; value: string }>
+  url?: string
+  ratings?: Array<{
+    ratingValue?: number
+    bestRating?: number
+    reviewCount?: number
+    profile?: string
+    is_tripadvisor?: boolean
+  }>
+  profiles?: Array<{ name: string; url: string; long_name?: string }>
+}
+
+/** Brave Search FAQ block — mirrors FAQDisplay's `faq` prop shape. */
+interface BraveFaq {
+  results?: Array<{ question: string; answer: string; url?: string }>
+}
+
+/** A Brave Search discussion result — mirrors DiscussionsDisplay's `discussions` item shape. */
+interface Discussion {
+  title: string
+  url: string
+  description?: string
+  forum?: { name: string; url: string }
+  num_comments?: number
+  score?: number
+  published_date?: string
+}
+
+/** A map location (Brave local search or Google Maps) — mirrors LocationsMap's `locations` item shape. */
+export interface EnrichedLocation {
+  id?: string
+  title: string
+  address?: string
+  coordinates?: { latitude: number; longitude: number }
+  rating?: number
+  phone?: string
+  opening_hours?: string
+  url?: string
+  thumbnail?: string
+  image?: string
+  icon_category?: string
+}
+
+/** A Brave Search news article — mirrors NewsClusterDisplay's `news` item shape. */
+interface NewsArticle {
+  title: string
+  url: string
+  description?: string
+  thumbnail?: { src: string }
+  age?: string
+  source?: { name: string; favicon?: string }
+  published_date?: string
+}
+
+/** A Brave Search web result — mirrors WebResultsDisplay's `results` item shape. */
+interface WebResult {
+  title: string
+  url: string
+  description?: string
+  thumbnail?: { src: string }
+}
+
+export interface EnrichedResults {
+  infobox?: BraveInfobox
+  faq?: BraveFaq
+  discussions: Discussion[]
+  locations: EnrichedLocation[]
+  news_results: NewsArticle[]
+  videos_results?: MediaItem[]
+  web_results: WebResult[]
+}
+
+const isDiscussion = (val: unknown): val is Discussion => isRecord(val)
+const isEnrichedLocation = (val: unknown): val is EnrichedLocation => isRecord(val)
+const isNewsArticle = (val: unknown): val is NewsArticle => isRecord(val)
+const isWebResult = (val: unknown): val is WebResult => isRecord(val)
+
 /**
- * Extract enriched results from a Brave web search execution
+ * Unwraps a tool execution's possibly-nested, possibly-JSON-string `result`
+ * payload into a plain object, or `undefined` if it isn't one.
  */
-export const extractEnrichedResults = (execution: any): EnrichedResults | null => {
-  let result = execution.result
+const unwrapResult = (execution: ToolExecutionLike): Record<string, unknown> | undefined => {
+  let result: unknown = execution.result
 
   // Extract nested result if present - may be double-nested
-  if (result && typeof result === 'object' && 'result' in result) {
+  if (isRecord(result) && 'result' in result) {
     result = result.result
     // Check for double-nesting
-    if (result && typeof result === 'object' && 'result' in result && !('results' in result)) {
+    if (isRecord(result) && 'result' in result && !('results' in result)) {
       result = result.result
     }
   }
@@ -34,18 +115,28 @@ export const extractEnrichedResults = (execution: any): EnrichedResults | null =
   if (typeof result === 'string') {
     try {
       result = JSON.parse(result)
-    } catch (e) {
-      return null
+    } catch {
+      return undefined
     }
   }
 
+  return isRecord(result) ? result : undefined
+}
+
+/**
+ * Extract enriched results from a Brave web search execution
+ */
+export const extractEnrichedResults = (execution: ToolExecutionLike): EnrichedResults | null => {
+  const result = unwrapResult(execution)
+  if (!result) return null
+
   // Check if this is an enriched web search result (ONLY with real enrichments, not just web results)
-  const hasEnrichments = result && (
+  const hasEnrichments = Boolean(
     result.infobox ||
     result.faq ||
-    (result.discussions && result.discussions.length > 0) ||
-    (result.locations && result.locations.length > 0) ||
-    (result.news_results && result.news_results.length > 0)
+    (Array.isArray(result.discussions) && result.discussions.length > 0) ||
+    (Array.isArray(result.locations) && result.locations.length > 0) ||
+    (Array.isArray(result.news_results) && result.news_results.length > 0)
   )
 
   if (!hasEnrichments) {
@@ -53,25 +144,40 @@ export const extractEnrichedResults = (execution: any): EnrichedResults | null =
   }
 
   // Normalize videos_results to match MediaItem format using shared normalizer
-  const normalizedVideos = (result.videos_results || [])
+  const rawVideos = Array.isArray(result.videos_results) ? result.videos_results.filter(isRawVideoItem) : []
+  const normalizedVideos = rawVideos
     .map(normalizeVideoItem)
-    .filter((item: any) => item.thumbnail) // Only include videos with valid thumbnails
+    .filter((item) => item.thumbnail) // Only include videos with valid thumbnails
 
   return {
-    infobox: result.infobox,
-    faq: result.faq,
-    discussions: result.discussions || [],
-    locations: result.locations || [],
-    news_results: result.news_results || [],
+    infobox: isRecord(result.infobox) ? (result.infobox as BraveInfobox) : undefined,
+    faq: isRecord(result.faq) ? (result.faq as BraveFaq) : undefined,
+    discussions: Array.isArray(result.discussions) ? result.discussions.filter(isDiscussion) : [],
+    locations: Array.isArray(result.locations) ? result.locations.filter(isEnrichedLocation) : [],
+    news_results: Array.isArray(result.news_results) ? result.news_results.filter(isNewsArticle) : [],
     videos_results: normalizedVideos,
-    web_results: result.results || []  // Standard web search results
+    web_results: Array.isArray(result.results) ? result.results.filter(isWebResult) : []  // Standard web search results
   }
 }
+
+/** One item in a Brave `videos_results` array — the fields this extractor reads. */
+interface RawVideoItem {
+  thumbnail?: { src?: string }
+  url?: string
+  page_url?: string
+  title?: string
+  creator?: string
+  author?: string
+  duration?: string
+  view_count?: number
+}
+
+const isRawVideoItem = (val: unknown): val is RawVideoItem => isRecord(val)
 
 /**
  * Normalize a single video item to MediaItem format
  */
-const normalizeVideoItem = (item: any) => ({
+const normalizeVideoItem = (item: RawVideoItem): MediaItem => ({
   type: 'video' as const,
   thumbnail: item.thumbnail?.src || '',
   url: item.url || item.page_url || '',
@@ -81,42 +187,34 @@ const normalizeVideoItem = (item: any) => ({
   views: item.view_count ? `${item.view_count} views` : undefined
 })
 
+/** One item in a Brave image-search `results` array — the fields this extractor reads. */
+interface RawImageItem {
+  thumbnail?: { src?: string; original?: string }
+  image?: { url?: string; width?: number; height?: number }
+  properties?: { url?: string; title?: string; domain?: string; width?: number; height?: number }
+  url?: string
+  title?: string
+  source?: string
+}
+
+const isRawImageItem = (val: unknown): val is RawImageItem => isRecord(val)
+
 /**
  * Extract media items (images/videos) from Brave Search results
  */
-export const extractBraveSearchMedia = (toolName: string, executionResult: any) => {
-  // The executionResult is {tool_call, result, success}
-  let braveResult = executionResult
-
-  // Extract nested result if present - may be double-nested
-  if (executionResult && typeof executionResult === 'object' && 'result' in executionResult) {
-    braveResult = executionResult.result
-
-    // Check for double-nesting: result.result contains the actual data
-    if (braveResult && typeof braveResult === 'object' && 'result' in braveResult && !('results' in braveResult)) {
-      braveResult = braveResult.result
-    }
-  }
-
-  // Parse result if it's a JSON string
-  if (typeof braveResult === 'string') {
-    try {
-      braveResult = JSON.parse(braveResult)
-    } catch (e) {
-      return null
-    }
-  }
+export const extractBraveSearchMedia = (toolName: string, execution: ToolExecutionLike): MediaItem[] | null => {
+  const braveResult = unwrapResult(execution)
 
   // Check if this is a Brave Search result with media
-  if (!braveResult || !braveResult.results || !Array.isArray(braveResult.results)) {
+  if (!braveResult || !Array.isArray(braveResult.results)) {
     return null
   }
 
-  const items: any[] = []
+  const items: MediaItem[] = []
 
   // Extract images
   if (toolName === 'brave_image_search') {
-    braveResult.results.forEach((item: any) => {
+    braveResult.results.filter(isRawImageItem).forEach((item) => {
       // Try multiple thumbnail locations (Brave API structure may vary)
       const thumbnailSrc = item.thumbnail?.src || item.thumbnail?.original || item.image?.url || item.properties?.url
       if (thumbnailSrc) {
@@ -135,8 +233,8 @@ export const extractBraveSearchMedia = (toolName: string, executionResult: any) 
 
   // Extract videos
   if (toolName === 'brave_video_search') {
-    braveResult.results.forEach((item: any) => {
-      if (item.thumbnail && item.thumbnail.src) {
+    braveResult.results.filter(isRawVideoItem).forEach((item) => {
+      if (item.thumbnail?.src) {
         items.push(normalizeVideoItem(item))
       }
     })
@@ -148,31 +246,10 @@ export const extractBraveSearchMedia = (toolName: string, executionResult: any) 
 /**
  * Extract locations from Brave local search
  */
-export const extractLocalSearchLocations = (execution: any) => {
-  let result = execution.result
+export const extractLocalSearchLocations = (execution: ToolExecutionLike): EnrichedLocation[] | null => {
+  const result = unwrapResult(execution)
+  if (!result || !Array.isArray(result.results)) return null
 
-  // Extract nested result - may be double-nested
-  if (result && typeof result === 'object' && 'result' in result) {
-    result = result.result
-    // Check for double-nesting
-    if (result && typeof result === 'object' && 'result' in result && !('results' in result)) {
-      result = result.result
-    }
-  }
-
-  // Parse if string
-  if (typeof result === 'string') {
-    try {
-      result = JSON.parse(result)
-    } catch (e) {
-      return null
-    }
-  }
-
-  if (result && result.results) {
-    const locationsWithGPS = result.results.filter((loc: any) => loc.coordinates)
-    return locationsWithGPS.length > 0 ? locationsWithGPS : null
-  }
-
-  return null
+  const locationsWithGPS = result.results.filter(isEnrichedLocation).filter((loc) => loc.coordinates)
+  return locationsWithGPS.length > 0 ? locationsWithGPS : null
 }

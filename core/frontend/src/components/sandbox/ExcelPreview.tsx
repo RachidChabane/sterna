@@ -17,6 +17,9 @@ import { readExcel, updateCell, batchUpdateCells, type CellUpdate } from '@/api/
 import { useToast } from '@/hooks/use-toast'
 import { toErrorMessage } from '@/utils/errorMessages'
 
+/** A single spreadsheet cell's value, as the backend's JSON-serialized `readExcel` response carries it. */
+type ExcelCellValue = string | number | boolean | null
+
 interface ExcelPreviewProps {
   fileName: string
   filePath: string
@@ -27,8 +30,8 @@ interface ExcelPreviewProps {
 
 export function ExcelPreview({ fileName, filePath, content, userId, projectId }: ExcelPreviewProps) {
   const { toast } = useToast()
-  const [sheetData, setSheetData] = useState<any[][]>([])
-  const [sheetFormulas, setSheetFormulas] = useState<any[][]>([])
+  const [sheetData, setSheetData] = useState<ExcelCellValue[][]>([])
+  const [sheetFormulas, setSheetFormulas] = useState<(string | null)[][]>([])
   const [sheetNames, setSheetNames] = useState<string[]>([])
   const [activeSheet, setActiveSheet] = useState(0)
   const [columnWidths, setColumnWidths] = useState<Record<number, number>>({})

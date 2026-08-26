@@ -3,6 +3,7 @@ import useModelStore from '@/store/modelStore'
 import useVoiceRoomStore from '@/store/voiceRoomStore'
 import { VOICE_ROOM_ALLOWED_MODELS } from './constants'
 import type { AgentFormData, VoiceSettingsFormState } from './types'
+import type { TTSProviderId } from '@/types/voiceRoom'
 
 /**
  * Owns TTS provider selection, TTS model loading/validation, the allowed-model
@@ -29,7 +30,7 @@ export function useTtsProviderModels(
   } = useVoiceRoomStore()
 
   // Provider state - default to first available provider
-  const [selectedProvider, setSelectedProvider] = useState<string>('')
+  const [selectedProvider, setSelectedProvider] = useState<TTSProviderId | ''>('')
 
   // Refs for tracking validation state
   const prevProviderRef = useRef<string>('')
@@ -86,8 +87,8 @@ export function useTtsProviderModels(
       prevProviderRef.current = selectedProvider
     }
 
-    fetchTTSModels(selectedProvider as any)
-    fetchRecommendedVoices(selectedProvider as any)
+    fetchTTSModels(selectedProvider)
+    fetchRecommendedVoices(selectedProvider)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, selectedProvider])
 
@@ -168,9 +169,17 @@ export function useTtsProviderModels(
     )
   }, [allModels])
 
+  // Callers (form population, step components) work with plain strings —
+  // `ttsProviders[].id` and dropdown values are always a real TTSProviderId
+  // (or '' to clear) by construction, so this narrows at the one boundary
+  // where untyped string input meets the provider-typed state.
+  const setSelectedProviderFromString = useCallback((v: string) => {
+    setSelectedProvider(v as TTSProviderId | '')
+  }, [])
+
   return {
     selectedProvider,
-    setSelectedProvider,
+    setSelectedProvider: setSelectedProviderFromString,
     resetVoiceValidation,
     ttsProviders,
     ttsModels,

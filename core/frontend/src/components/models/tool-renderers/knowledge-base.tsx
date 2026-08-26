@@ -5,7 +5,9 @@ import { useTheme } from '@/hooks/useTheme'
 import { ChevronRight, ExternalLink } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { TypeBadge } from '@/lib/type-badges'
+import { isRecord, asString, asNumber } from './shared'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
 
 // Knowledge Base result type
 interface KnowledgeBaseResult {
@@ -29,11 +31,11 @@ interface KnowledgeBaseSearchData {
 }
 
 // Extract knowledge base results from tool result
-const extractKnowledgeBaseResults = (executionResult: any): KnowledgeBaseSearchData | null => {
-  let result = executionResult
+const extractKnowledgeBaseResults = (executionResult: ToolResult): KnowledgeBaseSearchData | null => {
+  let result: unknown = executionResult
 
   // If executionResult has a nested result property, use that
-  if (executionResult && typeof executionResult === 'object' && 'result' in executionResult) {
+  if (isRecord(executionResult) && 'result' in executionResult) {
     result = executionResult.result
   }
 
@@ -48,15 +50,15 @@ const extractKnowledgeBaseResults = (executionResult: any): KnowledgeBaseSearchD
   }
 
   // Check if this is a valid knowledge base result
-  if (!result || typeof result !== 'object' || !result.results || !Array.isArray(result.results)) {
+  if (!isRecord(result) || !Array.isArray(result.results)) {
     return null
   }
 
   return {
-    query: result.query || '',
-    total_results: result.total_results || result.results.length,
-    results: result.results,
-    formatted_text: result.formatted_text || '',
+    query: asString(result.query) || '',
+    total_results: asNumber(result.total_results) || result.results.length,
+    results: result.results as KnowledgeBaseResult[],
+    formatted_text: asString(result.formatted_text) || '',
   }
 }
 

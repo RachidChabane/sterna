@@ -6,6 +6,18 @@ import { extractTextFromContent } from '@/utils/chatUtils'
 
 const STORAGE_BASE_KEY = 'chat-groups'
 
+/** Shape of a `ChatGroup` as persisted to localStorage, before date deserialization. */
+type StoredChatGroup = Omit<ChatGroup, 'createdAt' | 'updatedAt'> & {
+  createdAt: string
+  updatedAt: string
+}
+
+function isStoredChatGroup(value: unknown): value is StoredChatGroup {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Record<string, unknown>
+  return typeof record.createdAt === 'string' && typeof record.updatedAt === 'string'
+}
+
 function getCurrentUserId(): string | null {
   try {
     const auth = localStorage.getItem('auth-storage')
@@ -30,10 +42,11 @@ function loadConversations(): ChatGroup[] {
     const stored = localStorage.getItem(getStorageKey())
     if (!stored) return []
 
-    const parsed = JSON.parse(stored)
+    const parsed: unknown = JSON.parse(stored)
+    if (!Array.isArray(parsed)) return []
 
     // Deserialize dates
-    return parsed.map((group: any) => ({
+    return parsed.filter(isStoredChatGroup).map((group) => ({
       ...group,
       createdAt: new Date(group.createdAt),
       updatedAt: new Date(group.updatedAt),

@@ -11,12 +11,14 @@ import { useMemo } from 'react'
 import {
   extractEnrichedResults,
   extractBraveSearchMedia,
-  extractLocalSearchLocations
+  extractLocalSearchLocations,
+  type EnrichedResults as BraveEnrichedResults
 } from '@/utils/braveSearchExtractors'
 import {
   extractGeocodeLocations,
   extractNearbyPlaces,
-  extractDirections
+  extractDirections,
+  type DirectionsData
 } from '@/utils/googleMapsExtractors'
 import type { MediaItem } from '@/components/models/BraveSearchMediaCarousel'
 
@@ -41,93 +43,12 @@ interface Step {
   executions?: ToolExecution[]
 }
 
-/** Brave Search infobox — mirrors InfoboxDisplay's `infobox` prop shape. */
-interface BraveInfobox {
-  title?: string
-  description?: string
-  long_desc?: string
-  images?: Array<{ url: string; title?: string }>
-  data?: Array<{ label: string; value: string }>
-  url?: string
-  ratings?: Array<{
-    ratingValue?: number
-    bestRating?: number
-    reviewCount?: number
-    profile?: string
-    is_tripadvisor?: boolean
-  }>
-  profiles?: Array<{ name: string; url: string; long_name?: string }>
-}
-
-/** Brave Search FAQ block — mirrors FAQDisplay's `faq` prop shape. */
-interface BraveFaq {
-  results?: Array<{ question: string; answer: string; url?: string }>
-}
-
-/** A Brave Search discussion result — mirrors DiscussionsDisplay's `discussions` item shape. */
-interface Discussion {
-  title: string
-  url: string
-  description?: string
-  forum?: { name: string; url: string }
-  num_comments?: number
-  score?: number
-  published_date?: string
-}
-
-/** A map location (Brave local search or Google Maps) — mirrors LocationsMap's `locations` item shape. */
-interface EnrichedLocation {
-  id?: string
-  title: string
-  address?: string
-  coordinates?: { latitude: number; longitude: number }
-  rating?: number
-  phone?: string
-  opening_hours?: string
-  url?: string
-  thumbnail?: string
-  image?: string
-  icon_category?: string
-}
-
-/** A Brave Search news article — mirrors NewsClusterDisplay's `news` item shape. */
-interface NewsArticle {
-  title: string
-  url: string
-  description?: string
-  thumbnail?: { src: string }
-  age?: string
-  source?: { name: string; favicon?: string }
-  published_date?: string
-}
-
-/** A Brave Search web result — mirrors WebResultsDisplay's `results` item shape. */
-interface WebResult {
-  title: string
-  url: string
-  description?: string
-  thumbnail?: { src: string }
-}
-
-/** Google Maps directions/route — mirrors DirectionsMap's `directions` prop shape. */
-interface DirectionsData {
-  summary: string
-  distance: string
-  duration: string
-  start_address: string
-  end_address: string
-  polyline: string
-  steps: Array<{ instruction: string; distance: string; duration: string }>
-}
-
-export interface EnrichedResults {
-  infobox?: BraveInfobox
-  faq?: BraveFaq
-  discussions: Discussion[]
-  locations: EnrichedLocation[]
-  news_results: NewsArticle[]
-  videos_results?: MediaItem[]
-  web_results: WebResult[]
+/**
+ * Enrichments extracted from a step's tool executions: the Brave Search shape
+ * (infobox/faq/discussions/locations/news/web results) plus the Google Maps
+ * directions field only this hook's `get_directions` handling populates.
+ */
+export interface EnrichedResults extends BraveEnrichedResults {
   directions?: DirectionsData
 }
 

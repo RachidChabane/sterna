@@ -9,8 +9,9 @@ import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { tryParseJSON, sanitizeOutput } from './shared'
+import { tryParseJSON, sanitizeOutput, isRecord } from './shared'
 import type { ToolRenderContext, FileToolExecution } from './types'
+import type { ToolResult } from '@/api/llm'
 
 // Helper to extract output from a string that looks like JSON but may be malformed
 // Tries to find "output": "..." pattern and extract the value
@@ -51,7 +52,7 @@ const extractOutputFromString = (str: string): string | null => {
 }
 
 // Helper to extract bash output from various result formats
-const extractBashOutput = (result: any): { output: string, error: string, exitCode?: number } => {
+const extractBashOutput = (result: ToolResult | string | undefined): { output: string, error: string, exitCode?: number } => {
   // Handle null/undefined
   if (!result) return { output: '', error: '' }
 
@@ -65,17 +66,17 @@ const extractBashOutput = (result: any): { output: string, error: string, exitCo
   }
 
   // Parse if string
-  let data = tryParseJSON(result)
+  let data: unknown = tryParseJSON(result)
 
   // Handle double-encoded JSON
   data = tryParseJSON(data)
 
   // Navigate through possible nested structures
   // Structure might be: { result: { data: { output } } } or { data: { output } } or { output }
-  if (data?.result) {
+  if (isRecord(data) && data.result) {
     data = tryParseJSON(data.result)
   }
-  if (data?.data) {
+  if (isRecord(data) && data.data) {
     data = tryParseJSON(data.data)
   }
 
@@ -91,7 +92,7 @@ const extractBashOutput = (result: any): { output: string, error: string, exitCo
     return { output: data, error: '' }
   }
 
-  if (typeof data === 'object' && data !== null) {
+  if (isRecord(data)) {
     const output = typeof data.output === 'string' ? data.output : ''
     const error = typeof data.error === 'string' ? data.error : ''
     const exitCode = typeof data.exit_code === 'number' ? data.exit_code : undefined
@@ -163,7 +164,7 @@ const RunBashDisplay = memo(({
   variant = 'chat'
 }: {
   command: string
-  result: any
+  result: ToolResult
   success?: boolean | null
   isExecuting?: boolean
   variant?: 'chat' | 'code'

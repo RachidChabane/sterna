@@ -47,7 +47,7 @@ describe('OnboardingWizard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useNavigate as any).mockReturnValue(mockNavigate);
+    vi.mocked(useNavigate).mockReturnValue(mockNavigate);
 
     // Reset the onboarding stores
     useOnboardingStore.setState({

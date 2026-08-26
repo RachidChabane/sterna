@@ -3,34 +3,42 @@ import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { deepParse, isRecord, asNumber } from './shared'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
+
+interface DiscoveredTool {
+  status?: string
+  server_icon?: string
+  server_icon_invert?: boolean
+  display_name?: string
+  name?: string
+  requires?: string
+  requires_connection?: string
+  description?: string
+}
+
+const isDiscoveredTool = (val: unknown): val is DiscoveredTool => isRecord(val)
 
 // Helper to parse tool discovery result
-const parseToolDiscoveryResult = (result: any) => {
-  // Recursively parse JSON strings
-  const parseJson = (val: any): any => {
-    if (typeof val === 'string') {
-      try { return parseJson(JSON.parse(val)) } catch { return val }
-    }
-    return val
-  }
-
+const parseToolDiscoveryResult = (result: ToolResult) => {
   // Unwrap nested result structures
-  const unwrap = (obj: any): any => {
-    if (!obj || typeof obj !== 'object') return obj
+  const unwrap = (obj: unknown): unknown => {
+    if (!isRecord(obj)) return obj
     // Try common wrapper patterns
     if (obj.result) return unwrap(obj.result)
     if (obj.data) return unwrap(obj.data)
     return obj
   }
 
-  const parsed = parseJson(result)
+  const parsed = deepParse(result)
   const toolsData = unwrap(parsed)
 
   // Extract found count - check multiple possible field names
-  const foundCount = toolsData?.found || toolsData?.total || (toolsData?.tools?.length ?? 0)
-  const availableCount = toolsData?.available ?? foundCount
-  const tools = toolsData?.tools || []
+  const rawTools = isRecord(toolsData) ? toolsData.tools : undefined
+  const tools: DiscoveredTool[] = Array.isArray(rawTools) ? rawTools.filter(isDiscoveredTool) : []
+  const foundCount = (isRecord(toolsData) ? asNumber(toolsData.found) ?? asNumber(toolsData.total) : undefined) ?? tools.length
+  const availableCount = (isRecord(toolsData) ? asNumber(toolsData.available) : undefined) ?? foundCount
   const disabledCount = foundCount - availableCount
 
   return { foundCount, availableCount, tools, disabledCount }
@@ -62,7 +70,7 @@ export function ToolDiscoveryBody({ execution }: ToolRenderContext) {
 }
 
 // Component for displaying discovered tools list (expandable)
-const ToolDiscoveryResult = memo(({ result }: { result: any }) => {
+const ToolDiscoveryResult = memo(({ result }: { result: ToolResult }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const { tools } = parseToolDiscoveryResult(result)
 
@@ -80,10 +88,11 @@ const ToolDiscoveryResult = memo(({ result }: { result: any }) => {
 
       <CollapsibleContent>
         <div className="mt-1.5 space-y-1.5 pl-3 border-l border-border/40 max-h-[300px] overflow-y-auto">
-          {tools.map((tool: any, index: number) => {
+          {tools.map((tool, index) => {
             const isDisabled = tool.status === 'disabled'
             const isNotConnected = tool.status === 'not_connected'
             const isUnavailable = isDisabled || isNotConnected
+            const requiresConnection = tool.requires_connection
             return (
               <div key={index} className="text-xs">
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -102,16 +111,16 @@ const ToolDiscoveryResult = memo(({ result }: { result: any }) => {
                       Requires: {tool.requires}
                     </span>
                   )}
-                  {isNotConnected && tool.requires_connection && (
+                  {isNotConnected && requiresConnection && (
                     <a
-                      href={`/connectors?server=${encodeURIComponent(tool.requires_connection)}`}
+                      href={`/connectors?server=${encodeURIComponent(requiresConnection)}`}
                       className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] hover:bg-blue-500/30 transition-colors cursor-pointer"
                       onClick={(e) => {
                         e.preventDefault()
-                        window.location.href = `/connectors?server=${encodeURIComponent(tool.requires_connection)}`
+                        window.location.href = `/connectors?server=${encodeURIComponent(requiresConnection)}`
                       }}
                     >
-                      Connect: {tool.requires_connection}
+                      Connect: {requiresConnection}
                     </a>
                   )}
                 </div>

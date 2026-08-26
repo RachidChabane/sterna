@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { parseCSV } from '@/utils/csv'
 import * as pdfjsLib from 'pdfjs-dist'
+import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import * as XLSX from 'xlsx'
 import { fetchStream } from '@/api/transport'
 
@@ -357,13 +358,13 @@ function ICSPreview({ code, compact = false }: { code: string; compact?: boolean
 function PDFPreview({ url, compact = false }: { url: string; compact?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [pdf, setPdf] = useState<any>(null)
+  const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageCount, setPageCount] = useState(0)
   const [scale, setScale] = useState<number | null>(null) // null = fit-to-width
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const renderTaskRef = useRef<any>(null)
+  const renderTaskRef = useRef<RenderTask | null>(null)
 
   // Load the PDF document — fetch bytes ourselves to avoid CORS issues with presigned URLs
   useEffect(() => {
@@ -435,7 +436,7 @@ function PDFPreview({ url, compact = false }: { url: string; compact?: boolean }
           renderTaskRef.current.cancel?.()
         }
 
-        const task = page.render({ canvasContext: ctx, viewport })
+        const task = page.render({ canvas, canvasContext: ctx, viewport })
         renderTaskRef.current = task
 
         await task.promise
@@ -458,7 +459,7 @@ function PDFPreview({ url, compact = false }: { url: string; compact?: boolean }
     if (!containerRef.current || scale !== null) return
     const observer = new ResizeObserver(() => {
       // Re-trigger render by toggling a dummy state
-      setPdf((p: any) => p) // force re-render
+      setPdf((p) => p) // force re-render
     })
     observer.observe(containerRef.current)
     return () => observer.disconnect()
@@ -579,27 +580,28 @@ function XlsxPreview({ downloadUrl, compact = false }: { downloadUrl: string; co
 
   // Parse active sheet data
   const { headers, rows, totalRows, totalCols } = useMemo(() => {
-    if (!workbook) return { headers: [] as string[], rows: [] as any[][], totalRows: 0, totalCols: 0 }
+    const empty = { headers: [] as string[], rows: [] as unknown[][], totalRows: 0, totalCols: 0 }
+    if (!workbook) return empty
 
     const sheetName = workbook.SheetNames[activeSheet]
     const sheet = workbook.Sheets[sheetName]
-    if (!sheet) return { headers: [] as string[], rows: [] as any[][], totalRows: 0, totalCols: 0 }
+    if (!sheet) return empty
 
-    const jsonData = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 })
-    if (jsonData.length === 0) return { headers: [] as string[], rows: [] as any[][], totalRows: 0, totalCols: 0 }
+    const jsonData = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 })
+    if (jsonData.length === 0) return empty
 
     const maxCols = 26 // A-Z cap
-    const allCols = Math.max(0, ...jsonData.map(r => (r as any[]).length))
+    const allCols = Math.max(0, ...jsonData.map(r => r.length))
     const displayCols = Math.min(allCols, maxCols)
 
-    const headerRow = (jsonData[0] as any[]) || []
+    const headerRow = jsonData[0] || []
     const hdrs = Array.from({ length: displayCols }, (_, i) =>
       headerRow[i] != null ? String(headerRow[i]) : `Column ${i + 1}`
     )
 
     const maxRows = compact ? 5 : 50
     const dataRows = jsonData.slice(1, 1 + maxRows).map(r =>
-      Array.from({ length: displayCols }, (_, i) => (r as any[])[i] ?? '')
+      Array.from({ length: displayCols }, (_, i) => r[i] ?? '')
     )
 
     return {
@@ -694,7 +696,7 @@ function XlsxPreview({ downloadUrl, compact = false }: { downloadUrl: string; co
           <tbody>
             {rows.map((row, rIdx) => (
               <tr key={rIdx} className="border-b border-border/20 hover:bg-muted/30 transition-colors">
-                {row.map((cell: any, cIdx: number) => (
+                {row.map((cell, cIdx) => (
                   <td
                     key={cIdx}
                     className={cn(

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, memo, type HTMLAttributes } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/hooks/use-toast'
@@ -9,7 +9,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useAuthModalStore } from '@/store/authModalStore'
 import { getAuthModalVariant } from '@/lib/sessionDetection'
 import { revokeImagePreview } from '@/utils/imageUtils'
-import type { Model, Message, Filters, ModelParameters, Chat, Attachment, FileAttachment } from './types'
+import type { Model, Message, Filters, ModelParameters, Chat, Attachment, FileAttachment, CostEstimate, ToolExecutedHandler } from './types'
 
 import { ChatHeader } from './ChatHeader'
 import { MessageInput } from './MessageInput'
@@ -44,14 +44,14 @@ interface ChatPanelProps {
   canMoveLeft?: boolean
   canMoveRight?: boolean
   dragHandleRef?: (element: HTMLElement | null) => void
-  dragHandleProps?: Record<string, any>
+  dragHandleProps?: HTMLAttributes<HTMLElement>
   showFilters?: boolean
   onToggleFilters?: () => void
   hasActiveFilters?: boolean
   filters?: Filters
   onFiltersChange?: (filters: Filters) => void
   providers?: string[]
-  onEstimateCost?: (text: string, attachments?: Attachment[]) => Promise<any>
+  onEstimateCost?: (text: string, attachments?: Attachment[]) => Promise<CostEstimate | undefined>
   parameters?: ModelParameters
   onParametersChange?: (parameters: ModelParameters) => void
   currentChatId?: string
@@ -67,7 +67,7 @@ interface ChatPanelProps {
   hideHeaderActions?: boolean
   inputPlaceholder?: string
   onClearChat?: (deleteWorkspace?: boolean) => void
-  onToolExecuted?: (toolCallId: string, toolName: string, result: any) => void
+  onToolExecuted?: ToolExecutedHandler
   isClearingChat?: boolean
   recentModelIds?: string[]
   // Filter-related props (optional, for use in ModelComparisonPage context)
@@ -173,7 +173,7 @@ function ChatPanelComponent({
   // TTS (Text-to-Speech) hook
   const { speak, stop: stopSpeaking, isSpeaking, isLoading: isTTSLoading, isSupported: isTTSSupported } = useTTS()
 
-  const [estimatedCost, setEstimatedCost] = useState<any>(null)
+  const [estimatedCost, setEstimatedCost] = useState<CostEstimate | null>(null)
   const [showParametersDialog, setShowParametersDialog] = useState(false)
   const [loadingEstimate, setLoadingEstimate] = useState(false)
   const [showClearDialog, setShowClearDialog] = useState(false)
@@ -228,7 +228,7 @@ function ChatPanelComponent({
         if (att.type === 'image') {
           revokeImagePreview(att.preview)
         } else if (att.type === 'video' || att.type === 'audio') {
-          URL.revokeObjectURL((att as any).preview)
+          URL.revokeObjectURL(att.preview)
         }
       })
       clearAttachments()
@@ -240,7 +240,7 @@ function ChatPanelComponent({
     setLoadingEstimate(true)
     try {
       const result = await onEstimateCost(text, attachments)
-      setEstimatedCost(result)
+      setEstimatedCost(result ?? null)
     } catch (error) {
       console.error('Failed to estimate cost:', error)
       toast({ title: 'Estimation failed', description: 'Failed to estimate cost for this message', variant: 'destructive' })

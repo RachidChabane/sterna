@@ -3,6 +3,7 @@ import { renderHook, act } from '@testing-library/react'
 import { useRoomSubmission, type RoomFormSnapshot, type RoomFormResetSetters } from '../useRoomSubmission'
 import { DEFAULT_VOICE_SETTINGS, createDefaultAgent } from '../constants'
 import type { AgentFormData } from '../types'
+import type { VoiceRoom } from '@/types/voiceRoom'
 
 const toast = vi.fn()
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast }) }))
@@ -104,7 +105,17 @@ describe('useRoomSubmission — handleSubmit', () => {
 
   it('calls updateRoom (with agent ids preserved) when editing an existing room', async () => {
     updateRoom.mockResolvedValue({ id: 'room-1', name: 'My Room' })
-    const roomToEdit = { id: 'room-1' } as any
+    // Only `.id` is read by handleSubmit's edit path; the rest just satisfies VoiceRoom's shape.
+    const roomToEdit: VoiceRoom = {
+      id: 'room-1',
+      name: 'My Room',
+      user_id: 'user-1',
+      agents: [],
+      language: 'en',
+      max_response_tokens: 500,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    }
     const form = baseForm({ isEditMode: true, roomToEdit })
     const { result } = renderHook(() => useRoomSubmission(form, noopSetters(), vi.fn()))
 

@@ -46,6 +46,8 @@ import { ModelDetailsModal } from './ModelDetailsModal'
 import { removeProviderPrefix } from '@/lib/model-utils'
 import type { ModelCatalogEntry } from '@/types/models'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { isRecord, asString, asNumber } from './tool-renderers/shared'
+import type { ToolResult } from '@/api/llm'
 
 // =============================================================================
 // COMMON DISPLAY SCHEMA
@@ -81,10 +83,16 @@ interface ToolConfig {
   itemsKey: string
   countKey: string
   pageUrl: string  // Link to the full page for this resource type
-  adapter: (item: any) => DisplayItem
-  stats?: (data: any) => Array<{ label: string; value: string | number }>
-  // Custom renderer component for special displays (e.g., models with icons and modals)
-  CustomRenderer?: React.ComponentType<{ rawData: any; isDark: boolean }>
+  // `item`/`data` are the tool's raw backend JSON — each registry entry below
+  // casts to its own tool-specific shape (declared next to that entry) as the
+  // first line of the function body, since every tool's data differs.
+  adapter: (item: unknown) => DisplayItem
+  stats?: (data: unknown) => Array<{ label: string; value: string | number }>
+  // Custom renderer component for special displays (e.g., models with icons and modals).
+  // Each entry that sets one wraps its concrete renderer (which takes a
+  // tool-specific `rawData` type) in a shim that casts to it — see the
+  // per-tool `RawData` interfaces below.
+  CustomRenderer?: React.ComponentType<{ rawData: unknown; isDark: boolean }>
 }
 
 // =============================================================================
@@ -773,6 +781,81 @@ const UpdateCodingAgentRenderer = ({ rawData, isDark }: { rawData: UpdateCodingA
   )
 }
 
+// =============================================================================
+// PER-TOOL ITEM/STATS SHAPES
+// Each registry entry below narrows `adapter`'s `item` and `stats`' `data`
+// to the tool's own backend response shape (bivariant method params on
+// ToolConfig make this sound — see the interface's comment above).
+// =============================================================================
+
+interface SparkListItem {
+  id: string
+  title: string
+  framework?: DisplayItem['framework']
+  version?: number
+  notable_deps?: string[]
+  created_at?: string
+}
+interface SparkListStats {
+  framework_breakdown?: { react?: number; html?: number; svg?: number }
+}
+
+interface GeneratedImageListItem {
+  id: string
+  filename: string
+  prompt?: string
+  orientation?: string
+  dimensions?: string
+  size_kb?: number
+}
+interface GeneratedImageListStats {
+  total_size_mb?: number
+}
+
+interface GeneratedVideoListItem {
+  id: string
+  filename: string
+  prompt?: string
+  duration_str?: string
+  dimensions?: string
+  size_mb?: number
+}
+interface GeneratedVideoListStats {
+  total_size_mb?: number
+  total_duration_seconds?: number
+}
+
+interface VoiceRoomListItem {
+  id: string
+  name: string
+  description?: string
+  agent_count: number
+}
+interface VoiceRoomListStats {
+  total_agents?: number
+}
+
+interface McpServerListItem {
+  id?: string
+  name: string
+  description?: string
+  icon_url?: string
+  is_connected?: boolean
+  is_official?: boolean
+}
+interface McpServerListStats {
+  connected_count?: number
+}
+
+interface CompareModelsListStats {
+  preset_label?: string
+  best_model?: { name?: string }
+}
+
+interface UpdateCodingAgentListStats {
+  agent?: { name?: string }
+}
+
 const TOOL_REGISTRY: Record<string, ToolConfig> = {
   list_sparks: {
     icon: Zap,
@@ -781,17 +864,21 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     itemsKey: 'sparks',
     countKey: 'total_sparks',
     pageUrl: '/creations?tab=sparks',
-    adapter: (item) => ({
-      id: item.id,
-      title: item.title,
-      framework: item.framework,  // Renderer will show framework-specific icon
-      badges: [
-        ...(item.version > 1 ? [{ label: `v${item.version}` }] : []),
-        ...(item.notable_deps?.includes('recharts') ? [{ label: 'Charts', color: 'text-emerald-500' }] : []),
-      ],
-      metadata: item.created_at ? [{ label: 'Created', value: item.created_at }] : undefined,
-    }),
-    stats: (data) => {
+    adapter: (raw) => {
+      const item = raw as SparkListItem
+      return {
+        id: item.id,
+        title: item.title,
+        framework: item.framework,  // Renderer will show framework-specific icon
+        badges: [
+          ...(item.version && item.version > 1 ? [{ label: `v${item.version}` }] : []),
+          ...(item.notable_deps?.includes('recharts') ? [{ label: 'Charts', color: 'text-emerald-500' }] : []),
+        ],
+        metadata: item.created_at ? [{ label: 'Created', value: item.created_at }] : undefined,
+      }
+    },
+    stats: (raw) => {
+      const data = raw as SparkListStats
       const fb = data.framework_breakdown
       if (!fb) return []
       const stats: Array<{ label: string; value: string | number }> = []
@@ -809,17 +896,23 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     itemsKey: 'images',
     countKey: 'total_images',
     pageUrl: '/creations?tab=images',
-    adapter: (item) => ({
-      id: item.id,
-      title: item.filename,
-      subtitle: item.prompt ? `"${item.prompt}"` : undefined,
-      icon: item.orientation ? getOrientationIcon(item.orientation) : undefined,
-      badges: item.dimensions ? [{ label: item.dimensions }] : [],
-      metadata: [
-        ...(item.size_kb ? [{ label: 'Size', value: `${item.size_kb.toFixed(0)} KB` }] : []),
-      ],
-    }),
-    stats: (data) => data.total_size_mb ? [{ label: 'Total', value: `${data.total_size_mb.toFixed(1)} MB` }] : [],
+    adapter: (raw) => {
+      const item = raw as GeneratedImageListItem
+      return {
+        id: item.id,
+        title: item.filename,
+        subtitle: item.prompt ? `"${item.prompt}"` : undefined,
+        icon: item.orientation ? getOrientationIcon(item.orientation) : undefined,
+        badges: item.dimensions ? [{ label: item.dimensions }] : [],
+        metadata: [
+          ...(item.size_kb ? [{ label: 'Size', value: `${item.size_kb.toFixed(0)} KB` }] : []),
+        ],
+      }
+    },
+    stats: (raw) => {
+      const data = raw as GeneratedImageListStats
+      return data.total_size_mb ? [{ label: 'Total', value: `${data.total_size_mb.toFixed(1)} MB` }] : []
+    },
   },
 
   list_generated_videos: {
@@ -829,18 +922,22 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     itemsKey: 'videos',
     countKey: 'total_videos',
     pageUrl: '/creations?tab=videos',
-    adapter: (item) => ({
-      id: item.id,
-      title: item.filename,
-      subtitle: item.prompt ? `"${item.prompt}"` : undefined,
-      icon: Film,
-      badges: [
-        ...(item.duration_str ? [{ label: item.duration_str }] : []),
-        ...(item.dimensions ? [{ label: item.dimensions }] : []),
-      ],
-      metadata: item.size_mb ? [{ label: 'Size', value: `${item.size_mb.toFixed(1)} MB` }] : undefined,
-    }),
-    stats: (data) => {
+    adapter: (raw) => {
+      const item = raw as GeneratedVideoListItem
+      return {
+        id: item.id,
+        title: item.filename,
+        subtitle: item.prompt ? `"${item.prompt}"` : undefined,
+        icon: Film,
+        badges: [
+          ...(item.duration_str ? [{ label: item.duration_str }] : []),
+          ...(item.dimensions ? [{ label: item.dimensions }] : []),
+        ],
+        metadata: item.size_mb ? [{ label: 'Size', value: `${item.size_mb.toFixed(1)} MB` }] : undefined,
+      }
+    },
+    stats: (raw) => {
+      const data = raw as GeneratedVideoListStats
       const stats: Array<{ label: string; value: string | number }> = []
       if (data.total_size_mb) stats.push({ label: 'Total', value: `${data.total_size_mb.toFixed(1)} MB` })
       if (data.total_duration_seconds) {
@@ -858,15 +955,21 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     itemsKey: 'rooms',
     countKey: 'total_rooms',
     pageUrl: '/voice-rooms',
-    adapter: (item) => ({
-      id: item.id,
-      title: item.name,
-      subtitle: item.description,
-      icon: Mic2,
-      iconColor: 'text-cyan-500',
-      badges: [{ label: `${item.agent_count} agent${item.agent_count !== 1 ? 's' : ''}` }],
-    }),
-    stats: (data) => data.total_agents ? [{ label: 'Total agents', value: data.total_agents }] : [],
+    adapter: (raw) => {
+      const item = raw as VoiceRoomListItem
+      return {
+        id: item.id,
+        title: item.name,
+        subtitle: item.description,
+        icon: Mic2,
+        iconColor: 'text-cyan-500',
+        badges: [{ label: `${item.agent_count} agent${item.agent_count !== 1 ? 's' : ''}` }],
+      }
+    },
+    stats: (raw) => {
+      const data = raw as VoiceRoomListStats
+      return data.total_agents ? [{ label: 'Total agents', value: data.total_agents }] : []
+    },
   },
 
   list_mcp_servers: {
@@ -876,17 +979,23 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     itemsKey: 'servers',
     countKey: 'total_servers',
     pageUrl: '/connectors',
-    adapter: (item) => ({
-      id: item.id || item.name,
-      title: item.name,
-      subtitle: item.description,
-      icon: item.icon_url || Server,
-      badges: [
-        ...(item.is_connected ? [{ label: 'Connected', color: 'text-emerald-500' }] : []),
-        ...(item.is_official ? [{ label: 'Official', color: 'text-blue-500' }] : []),
-      ],
-    }),
-    stats: (data) => data.connected_count !== undefined ? [{ label: 'Connected', value: data.connected_count }] : [],
+    adapter: (raw) => {
+      const item = raw as McpServerListItem
+      return {
+        id: item.id || item.name,
+        title: item.name,
+        subtitle: item.description,
+        icon: item.icon_url || Server,
+        badges: [
+          ...(item.is_connected ? [{ label: 'Connected', color: 'text-emerald-500' }] : []),
+          ...(item.is_official ? [{ label: 'Official', color: 'text-blue-500' }] : []),
+        ],
+      }
+    },
+    stats: (raw) => {
+      const data = raw as McpServerListStats
+      return data.connected_count !== undefined ? [{ label: 'Connected', value: data.connected_count }] : []
+    },
   },
 
   list_available_models: {
@@ -896,14 +1005,18 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     itemsKey: 'models',
     countKey: 'total_models',
     pageUrl: '/models',
-    CustomRenderer: ModelsListRenderer,
-    adapter: (item) => ({
-      id: item.id || item.name,
-      title: item.name,
-      subtitle: item.provider,
-      icon: Cpu,
-    }),
-    stats: (data) => {
+    CustomRenderer: ({ rawData, isDark }) => <ModelsListRenderer rawData={rawData as ModelsRawData} isDark={isDark} />,
+    adapter: (raw) => {
+      const item = raw as ModelsRawData['models'][number]
+      return {
+        id: item.id || item.name,
+        title: item.name,
+        subtitle: item.provider,
+        icon: Cpu,
+      }
+    },
+    stats: (raw) => {
+      const data = raw as ModelsRawData
       const stats: Array<{ label: string; value: string | number }> = []
       const caps = data.capability_counts
       if (caps) {
@@ -922,14 +1035,18 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     itemsKey: 'models',
     countKey: 'total_compared',
     pageUrl: '/models',
-    CustomRenderer: CompareModelsRenderer,
-    adapter: (item) => ({
-      id: item.id || item.name,
-      title: item.name,
-      subtitle: `${item.provider} - ${item.score_pct?.toFixed(1) || 0}%`,
-      icon: Cpu,
-    }),
-    stats: (data) => {
+    CustomRenderer: ({ rawData, isDark }) => <CompareModelsRenderer rawData={rawData as CompareModelsRawData} isDark={isDark} />,
+    adapter: (raw) => {
+      const item = raw as CompareModelsRawData['models'][number]
+      return {
+        id: item.id || item.name,
+        title: item.name,
+        subtitle: `${item.provider} - ${item.score_pct?.toFixed(1) || 0}%`,
+        icon: Cpu,
+      }
+    },
+    stats: (raw) => {
+      const data = raw as CompareModelsListStats
       const stats: Array<{ label: string; value: string | number }> = []
       if (data.preset_label) {
         stats.push({ label: 'preset', value: data.preset_label })
@@ -948,15 +1065,19 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     itemsKey: 'documents',
     countKey: 'total_documents',
     pageUrl: '/knowledge',
-    CustomRenderer: KnowledgeBaseDocumentsRenderer,
-    adapter: (item) => ({
-      id: item.id || item.filename,
-      title: item.filename,
-      icon: FileText,
-      badges: item.type ? [{ label: item.type.toUpperCase() }] : [],
-      metadata: item.size_kb ? [{ label: 'Size', value: `${item.size_kb.toFixed(0)} KB` }] : undefined,
-    }),
-    stats: (data) => {
+    CustomRenderer: ({ rawData, isDark }) => <KnowledgeBaseDocumentsRenderer rawData={rawData as KnowledgeBaseDocumentsRawData} isDark={isDark} />,
+    adapter: (raw) => {
+      const item = raw as KnowledgeBaseDocument
+      return {
+        id: item.id || item.filename,
+        title: item.filename,
+        icon: FileText,
+        badges: item.type ? [{ label: item.type.toUpperCase() }] : [],
+        metadata: item.size_kb ? [{ label: 'Size', value: `${item.size_kb.toFixed(0)} KB` }] : undefined,
+      }
+    },
+    stats: (raw) => {
+      const data = raw as KnowledgeBaseDocumentsRawData
       if (!data.total_size_bytes) return []
       const mb = data.total_size_bytes / (1024 * 1024)
       return [{ label: 'Total', value: `${mb.toFixed(2)} MB` }]
@@ -970,21 +1091,25 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     itemsKey: 'agents',
     countKey: 'total_agents',
     pageUrl: '/agents',
-    CustomRenderer: CodingAgentsListRenderer,
-    adapter: (item) => ({
-      id: item.id,
-      title: item.name,
-      subtitle: item.description,
-      icon: BrainCircuit,
-      badges: [
-        { label: (TIER_CONFIG[item.model_tier] || TIER_CONFIG.balanced).label },
-        ...(!item.is_active ? [{ label: 'Inactive', color: 'text-red-500' }] : []),
-      ],
-      metadata: item.tools?.length > 0
-        ? [{ label: 'Tools', value: `${item.tools.length}` }]
-        : undefined,
-    }),
-    stats: (data) => {
+    CustomRenderer: ({ rawData, isDark }) => <CodingAgentsListRenderer rawData={rawData as CodingAgentsRawData} isDark={isDark} />,
+    adapter: (raw) => {
+      const item = raw as CodingAgentsRawData['agents'][number]
+      return {
+        id: item.id,
+        title: item.name,
+        subtitle: item.description,
+        icon: BrainCircuit,
+        badges: [
+          { label: (TIER_CONFIG[item.model_tier] || TIER_CONFIG.balanced).label },
+          ...(!item.is_active ? [{ label: 'Inactive', color: 'text-red-500' }] : []),
+        ],
+        metadata: item.tools?.length > 0
+          ? [{ label: 'Tools', value: `${item.tools.length}` }]
+          : undefined,
+      }
+    },
+    stats: (raw) => {
+      const data = raw as CodingAgentsRawData
       const stats: Array<{ label: string; value: string | number }> = []
       if (data.active_count !== undefined) {
         stats.push({ label: 'active', value: data.active_count })
@@ -1000,12 +1125,13 @@ const TOOL_REGISTRY: Record<string, ToolConfig> = {
     itemsKey: 'changes',
     countKey: 'total_changes',
     pageUrl: '/agents',
-    CustomRenderer: UpdateCodingAgentRenderer,
-    adapter: (item) => ({
+    CustomRenderer: ({ rawData, isDark }) => <UpdateCodingAgentRenderer rawData={rawData as UpdateCodingAgentRawData} isDark={isDark} />,
+    adapter: (item: unknown) => ({
       id: String(Math.random()),
       title: typeof item === 'string' ? item : 'Change applied',
     }),
-    stats: (data) => {
+    stats: (raw) => {
+      const data = raw as UpdateCodingAgentListStats
       if (data.agent?.name) {
         return [{ label: 'agent', value: data.agent.name }]
       }
@@ -1027,31 +1153,35 @@ export interface ListToolData {
   toolName: string
   displayData: DisplayData
   config: ToolConfig
-  rawData?: any  // Raw data for custom renderers
+  rawData?: unknown  // Raw data for custom renderers
 }
 
-export const extractListToolData = (toolName: string, executionResult: any): ListToolData | null => {
+export const extractListToolData = (toolName: string, executionResult: ToolResult): ListToolData | null => {
   const config = TOOL_REGISTRY[toolName]
   if (!config) return null
 
   // Unwrap nested result
-  let result = executionResult
-  if (result && typeof result === 'object' && 'result' in result) {
+  let result: unknown = executionResult
+  if (isRecord(result) && 'result' in result) {
     result = result.result
   }
   if (typeof result === 'string') {
     try { result = JSON.parse(result) } catch { return null }
   }
-  if (!result || typeof result !== 'object') return null
+  if (!isRecord(result)) return null
 
   // Extract items using config
-  const items = result[config.itemsKey] || []
-  const count = result[config.countKey] || items.length
+  const rawItems = result[config.itemsKey]
+  const items: unknown[] = Array.isArray(rawItems) ? rawItems : []
+  const rawCount = result[config.countKey]
+  const count = typeof rawCount === 'number' ? rawCount : items.length
 
   if (items.length === 0 && count === 0) return null
 
-  // Transform items using adapter
-  const displayItems: DisplayItem[] = items.map((item: any) => {
+  // Transform items using adapter. Most tools' items are objects, but a
+  // couple (e.g. update_coding_agent's `changes`) are plain strings — each
+  // adapter narrows/guards the fields it actually reads.
+  const displayItems: DisplayItem[] = items.map((item) => {
     try {
       return config.adapter(item)
     } catch {

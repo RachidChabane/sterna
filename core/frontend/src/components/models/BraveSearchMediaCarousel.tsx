@@ -12,7 +12,7 @@ import { ChevronLeft, ChevronRight, ExternalLink, Play, Image as ImageIcon } fro
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-interface MediaItem {
+export interface MediaItem {
   type: 'image' | 'video'
   thumbnail: string
   url: string

@@ -7,8 +7,59 @@ import { getCodeTheme } from '@/constants/codeThemes'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { ChevronRight, Code2, Copy, Check } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { sanitizeOutput } from './shared'
+import { sanitizeOutput, isRecord } from './shared'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
+
+const WRAPPER_KEYS = new Set(['success', 'error', 'output', 'data', 'result', '_truncated', '_summary', 'status', 'task'])
+
+/** Like `isRecord`, but (matching this file's original loose checks) also accepts arrays. */
+const isObjectLike = (val: unknown): val is Record<string, unknown> => typeof val === 'object' && val !== null
+
+/** Returns the first truthy value, or `null` if none — the unknown-shaped equivalent of `a || b || c || null`. */
+const firstTruthy = (...vals: unknown[]): unknown => vals.find(Boolean) ?? null
+
+// Recursively parse JSON strings until we get a non-string value.
+const deepJsonParse = (val: unknown): unknown => {
+  if (typeof val !== 'string') return val
+  try { return deepJsonParse(JSON.parse(val)) } catch { return val }
+}
+
+// Recursively unwrap common wrapper objects (`{ data: { result: ... } }` etc.) to reach the actual payload.
+const unwrapResult = (obj: unknown): unknown => {
+  if (!isObjectLike(obj) || Array.isArray(obj)) return obj
+  const dataResult = isObjectLike(obj.data) ? obj.data.result : undefined
+  if (dataResult) return unwrapResult(dataResult)
+  if (isObjectLike(obj.result)) return unwrapResult(obj.result)
+  if (isRecord(obj.data)) return unwrapResult(obj.data)
+  return obj
+}
+
+// Get useful keys from an object (exclude wrapper keys)
+const getDataKeys = (obj: unknown): string[] => {
+  if (!isObjectLike(obj)) return []
+  return Object.keys(obj).filter((k) => !WRAPPER_KEYS.has(k))
+}
+
+// Extract useful data from a parsed result, unwrapping common wrappers first. `includeOutputFallback`
+// additionally falls back to `{ output }` when no other data keys were found (used by the expanded view only).
+const extractUsefulFields = (obj: unknown, includeOutputFallback = false): Record<string, unknown> | null => {
+  if (!isObjectLike(obj) || Array.isArray(obj)) return null
+  const dataResult = isObjectLike(obj.data) ? obj.data.result : undefined
+  if (dataResult) return extractUsefulFields(dataResult, includeOutputFallback)
+  if (isObjectLike(obj.result)) return extractUsefulFields(obj.result, includeOutputFallback)
+  if (isObjectLike(obj.data)) return extractUsefulFields(obj.data, includeOutputFallback)
+  const keys = Object.keys(obj).filter((k) => !WRAPPER_KEYS.has(k))
+  if (keys.length > 0) {
+    const extracted: Record<string, unknown> = {}
+    keys.forEach((k) => { extracted[k] = obj[k] })
+    return extracted
+  }
+  if (includeOutputFallback && typeof obj.output === 'string') {
+    return { output: obj.output }
+  }
+  return null
+}
 
 export function ProgrammingTaskBody({ execution }: ToolRenderContext) {
   if (!execution.result || execution.isExecuting) return null
@@ -121,7 +172,7 @@ const FileContentDisplay = memo(({ filename, content, isDark }: {
 })
 
 // Component for displaying execute_programming_task results - compact like other tools
-const ProgrammingTaskResult = memo(({ result, code }: { result: any, code?: string }) => {
+const ProgrammingTaskResult = memo(({ result, code }: { result: ToolResult | string, code?: string }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [showCode, setShowCode] = useState(false)
   const { isDark } = useTheme()
@@ -130,84 +181,46 @@ const ProgrammingTaskResult = memo(({ result, code }: { result: any, code?: stri
 
   // Parse the result - deeply unwrap nested JSON strings
   const parsed = useMemo(() => {
-    const WRAPPER_KEYS = new Set(['success', 'error', 'output', 'data', 'result', '_truncated', '_summary', 'status', 'task'])
-
-    // Recursively parse JSON strings until we get an object
-    const parse = (val: any): any => {
-      if (typeof val !== 'string') return val
-      try { return parse(JSON.parse(val)) } catch { return val }
+    const r = deepJsonParse(result)
+    if (!isObjectLike(r)) {
+      return { success: false as unknown, error: null as unknown, output: typeof result === 'string' ? result : null, data: null as Record<string, unknown> | null }
     }
 
-    // Recursively unwrap wrapper objects to get actual data
-    const unwrap = (obj: any): any => {
-      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj
-      // Try to go deeper through common wrappers
-      if (obj.data?.result) return unwrap(obj.data.result)
-      if (obj.result && typeof obj.result === 'object') return unwrap(obj.result)
-      if (obj.data && typeof obj.data === 'object' && !Array.isArray(obj.data)) return unwrap(obj.data)
-      return obj
-    }
-
-    // Get useful keys from an object (exclude wrapper keys)
-    const getDataKeys = (obj: any): string[] => {
-      if (!obj || typeof obj !== 'object') return []
-      return Object.keys(obj).filter(k => !WRAPPER_KEYS.has(k))
-    }
-
-    const r = parse(result)
-    if (!r || typeof r !== 'object') {
-      return { success: false, error: null, output: typeof result === 'string' ? result : null, data: null }
-    }
-
+    const rData = isObjectLike(r.data) ? r.data : undefined
+    const rDataResult = isObjectLike(rData?.result) ? rData.result : undefined
     const success = r.success ?? true
-    const error = r.error || r.data?.error || r.data?.result?.error || null
+    const error = firstTruthy(r.error, rData?.error, rDataResult?.error)
 
     // Unwrap to get the actual data
-    const unwrapped = unwrap(r)
+    const unwrapped = unwrapResult(r)
     const dataKeys = getDataKeys(unwrapped)
 
     // If we have actual data keys, use as structured data
-    if (dataKeys.length > 0) {
+    if (dataKeys.length > 0 && isObjectLike(unwrapped)) {
       // Filter to only include the actual data, not wrapper fields
-      const cleanData: Record<string, any> = {}
+      const cleanData: Record<string, unknown> = {}
       for (const key of dataKeys) {
         cleanData[key] = unwrapped[key]
       }
-      return { success, error, output: null, data: cleanData }
+      return { success, error, output: null as unknown, data: cleanData }
     }
 
     // Otherwise check for output field
-    const output = r.output || r.data?.output || r.data?.result?.output || null
-    return { success, error, output, data: null }
+    const output = firstTruthy(r.output, rData?.output, rDataResult?.output)
+    return { success, error, output, data: null as Record<string, unknown> | null }
   }, [result])
 
   const { success, error } = parsed
 
   // Get summary for collapsed view - extract useful info
   const summary = useMemo(() => {
-    // Extract useful data from result
-    const extract = (obj: any): Record<string, any> | null => {
-      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null
-      if (obj.data?.result) return extract(obj.data.result)
-      if (obj.result && typeof obj.result === 'object') return extract(obj.result)
-      if (obj.data && typeof obj.data === 'object') return extract(obj.data)
-      const keys = Object.keys(obj).filter(k =>
-        !['success', 'error', 'output', 'data', 'result', 'status', '_truncated', '_summary', 'task'].includes(k)
-      )
-      if (keys.length > 0) {
-        const extracted: Record<string, any> = {}
-        keys.forEach(k => extracted[k] = obj[k])
-        return extracted
-      }
-      return null
-    }
-
     // Check for error first
-    let raw = result
+    let raw: unknown = result
     if (typeof raw === 'string') {
       try { raw = JSON.parse(raw) } catch { /* keep string */ }
     }
-    const err = raw?.error || raw?.data?.error
+    const rawData = isObjectLike(raw) ? raw.data : undefined
+    const err = firstTruthy(isObjectLike(raw) ? raw.error : undefined, isObjectLike(rawData) ? rawData.error : undefined)
     if (err) {
       const lines = String(err).split('\n')
       const errorLine = lines.find(l => l.includes('Error:') || l.includes('Exception:')) || lines[lines.length - 1]
@@ -215,18 +228,19 @@ const ProgrammingTaskResult = memo(({ result, code }: { result: any, code?: stri
     }
 
     // Try to extract data
-    const extracted = extract(raw)
+    const extracted = extractUsefulFields(raw)
     if (extracted) {
       const keys = Object.keys(extracted)
-      if (keys.length === 1 && Array.isArray(extracted[keys[0]])) {
-        return `${keys[0]}: ${extracted[keys[0]].length} items`
+      const firstValue = extracted[keys[0]]
+      if (keys.length === 1 && Array.isArray(firstValue)) {
+        return `${keys[0]}: ${firstValue.length} items`
       }
       const preview = keys.slice(0, 3).join(', ')
       return keys.length > 3 ? `${preview}, +${keys.length - 3} more` : preview
     }
 
     // Check for output
-    const outputVal = raw?.output || raw?.data?.output
+    const outputVal = firstTruthy(isObjectLike(raw) ? raw.output : undefined, isObjectLike(rawData) ? rawData.output : undefined)
     if (outputVal && typeof outputVal === 'string' && !outputVal.startsWith('{')) {
       return sanitizeOutput(outputVal).slice(0, 60)
     }
@@ -275,7 +289,7 @@ const ProgrammingTaskResult = memo(({ result, code }: { result: any, code?: stri
       <CollapsibleContent>
         <div className="mt-1.5 ml-4 max-h-[300px] overflow-y-auto space-y-2">
           {/* Error */}
-          {error && (
+          {Boolean(error) && (
             <pre className="text-xs font-mono whitespace-pre-wrap break-all text-red-400 bg-red-500/10 rounded p-2">
               {sanitizeOutput(String(error))}
             </pre>
@@ -283,33 +297,11 @@ const ProgrammingTaskResult = memo(({ result, code }: { result: any, code?: stri
 
           {/* Always try to extract and display useful data */}
           {!error && (() => {
-            // Extract useful data from result, unwrapping wrappers
-            const extract = (obj: any): Record<string, any> | null => {
-              if (!obj || typeof obj !== 'object') return null
-              if (Array.isArray(obj)) return null
-              if (obj.data?.result) return extract(obj.data.result)
-              if (obj.result && typeof obj.result === 'object') return extract(obj.result)
-              if (obj.data && typeof obj.data === 'object') return extract(obj.data)
-              const keys = Object.keys(obj).filter(k =>
-                !['success', 'error', 'output', 'data', 'result', 'status', '_truncated', '_summary', 'task'].includes(k)
-              )
-              if (keys.length > 0) {
-                const extracted: Record<string, any> = {}
-                keys.forEach(k => extracted[k] = obj[k])
-                return extracted
-              }
-              // Check for output field as fallback
-              if (obj.output && typeof obj.output === 'string') {
-                return { output: obj.output }
-              }
-              return null
-            }
-
-            let raw = result
+            let raw: unknown = result
             if (typeof raw === 'string') {
               try { raw = JSON.parse(raw) } catch { /* keep as string */ }
             }
-            const extracted = extract(raw)
+            const extracted = extractUsefulFields(raw, true)
 
             if (!extracted) {
               // Last resort: show raw output if it's a simple string

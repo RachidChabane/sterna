@@ -3,8 +3,9 @@ import { memo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/hooks/useTheme'
 import { Zap } from 'lucide-react'
-import { parseDiffLines } from './shared'
+import { parseDiffLines, deepParse, isRecord, asString, asNumber } from './shared'
 import type { ToolRenderContext } from './types'
+import type { ToolResult } from '@/api/llm'
 
 const MAX_VISIBLE_LINES = 15
 
@@ -14,27 +15,20 @@ export function SparkUpdateBody({ execution, effectiveSuccess }: ToolRenderConte
 }
 
 // Component for displaying spark update diff
-const SparkUpdateDiff = memo(({ result }: { result: any }) => {
+const SparkUpdateDiff = memo(({ result }: { result: ToolResult }) => {
   const [showFullDiff, setShowFullDiff] = useState(false)
   const { isDark } = useTheme()
 
-  // Parse result - handles nested JSON strings
-  const parseResult = (r: any): any => {
-    if (typeof r === 'string') {
-      try { return parseResult(JSON.parse(r)) } catch { return r }
-    }
-    return r
-  }
-
-  const parsedResult = parseResult(result)
+  const parsedResult = deepParse(result)
 
   // Extract old and new code from spark result
   // Handle both direct spark and nested result.spark structures
-  const spark = parsedResult?.spark || parsedResult?.result?.spark
-  const oldCode = spark?.old_code
-  const newCode = spark?.code
-  const title = spark?.title || 'Spark'
-  const version = spark?.version
+  const nestedResult = isRecord(parsedResult) ? parsedResult.result : undefined
+  const spark = (isRecord(parsedResult) ? parsedResult.spark : undefined) ?? (isRecord(nestedResult) ? nestedResult.spark : undefined)
+  const oldCode = isRecord(spark) ? asString(spark.old_code) : undefined
+  const newCode = isRecord(spark) ? asString(spark.code) : undefined
+  const title = (isRecord(spark) ? asString(spark.title) : undefined) || 'Spark'
+  const version = isRecord(spark) ? asNumber(spark.version) : undefined
 
   if (!oldCode || !newCode) return null
 

@@ -53,7 +53,7 @@ export function useAttachmentViewerState(toast: ToastFn) {
     }
 
     // If we have an assetId (after reload), fetch the content
-    const assetId = (file as any).assetId
+    const assetId = file.assetId
     if (assetId) {
       try {
         const blob = await assetsAPI.download(assetId)

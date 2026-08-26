@@ -9,13 +9,13 @@ const mockToast = vi.fn()
 const mockResend = vi.fn()
 
 vi.mock('@/hooks/use-toast', () => ({
-  toast: (...args: any[]) => mockToast(...args),
+  toast: (...args: unknown[]) => mockToast(...args),
   useToast: () => ({ toast: mockToast }),
 }))
 
 vi.mock('@/api/endpoints', () => ({
   authApi: {
-    resendVerification: (...args: any[]) => mockResend(...args),
+    resendVerification: (...args: unknown[]) => mockResend(...args),
   },
 }))
 
@@ -23,10 +23,13 @@ interface AuthLikeUser {
   email: string
   is_verified: boolean
 }
+interface MockAuthState {
+  user: AuthLikeUser | null
+}
 let authUser: AuthLikeUser | null = null
 
 vi.mock('@/store/authStore', () => {
-  const sel = (selector: (s: any) => any) =>
+  const sel = (selector: (s: MockAuthState) => unknown) =>
     selector({ user: authUser })
   return {
     useAuthStore: Object.assign(sel, {
