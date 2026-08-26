@@ -104,7 +104,11 @@ def build_permission_profile(mode: str, plans_dir: str) -> Dict[str, Any]:
             "glob": ALLOW,
             "grep": ALLOW,
             "list": ALLOW,
-            "edit": DENY,
+            # `edit` is deliberately absent. opencode's own plan agent
+            # already denies it everywhere but its plans directories,
+            # and its patterns are matched relative to the worktree; a
+            # rule added here is merged after those and would override
+            # them, leaving the agent unable to record its plan.
             "task": DENY,
             "webfetch": DENY,
             "websearch": DENY,

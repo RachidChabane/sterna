@@ -47,9 +47,15 @@ class TestAgentSelection:
 class TestPermissionProfile:
     """Plan mode must not be able to change the workspace."""
 
-    def test_plan_mode_denies_editing(self):
-        profile = harness.build_permission_profile("plan", "/plans")
-        assert profile["edit"] == harness.DENY
+    def test_plan_mode_leaves_editing_to_opencodes_own_plan_agent(self):
+        """Its rules already deny editing outside the plans directory.
+
+        Their patterns are matched relative to the worktree, and a rule
+        added here merges after them. A blanket deny would therefore
+        override the allowances too, and the agent would have nowhere
+        to record the plan it was asked for.
+        """
+        assert "edit" not in harness.build_permission_profile("plan", "/plans")
 
     def test_plan_mode_denies_bash_by_default(self):
         """opencode's bash tool writes files the edit rule cannot see.
