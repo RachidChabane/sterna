@@ -5,9 +5,8 @@ The orchestrator imports its own modules by bare name
 be on ``sys.path`` regardless of where pytest is invoked from.
 
 NOTE: no global dependency stubbing here — ``test_request_id_middleware``
-relies on ``pytest.importorskip("fastapi")`` to skip in the Django
-venv, and a sys.modules stub would defeat that. The fastapi stub that
-``test_anthropic_bridge`` needs is scoped inside that module.
+relies on ``pytest.importorskip("fastapi")`` to skip in the Django venv,
+and a sys.modules stub would defeat that.
 """
 
 import sys

@@ -41,7 +41,7 @@ flowchart TB
 
     subgraph sandbox [Coding-agent sandbox pair]
         ORCH["orchestrator<br/>FastAPI :8003<br/>spawns sandbox containers"]
-        SBX["sandbox-exec-*<br/>read-only rootfs, tmpfs /workspace<br/>non-root, Claude CLI installed"]
+        SBX["sandbox-exec-*<br/>read-only rootfs, tmpfs /workspace<br/>non-root, opencode CLI installed"]
         EG["egress-proxy<br/>mitmproxy :8888<br/>domain whitelist, TLS interception"]
     end
 
@@ -91,7 +91,7 @@ in compose it runs inside the Django process.
 | google-maps | FastAPI (`core/google-maps/`) | Geocoding, directions, places, air quality, Street View; Redis-cached |
 | celery-worker | Celery, queues `celery` + `code_jobs` | Email, billing settlement, backups, code jobs |
 | celery-beat | Celery beat, `django_celery_beat` DB scheduler | Periodic tasks |
-| orchestrator | FastAPI (`core/sandbox/orchestrator/`) | Creates and manages sandbox containers over the Docker socket; hosts the Anthropic-to-OpenAI bridge |
+| orchestrator | FastAPI (`core/sandbox/orchestrator/`) | Creates and manages sandbox containers over the Docker socket; drives the opencode coding-agent CLI inside them |
 | egress-proxy | mitmproxy (`core/sandbox/runtime/Dockerfile.egress-proxy`) | Whitelist-only egress for sandbox containers; CA cert shared through the `proxy-ca` volume |
 | postgres | `pgvector/pgvector:pg16` | Relational data and vector embeddings |
 | redis | `redis:7-alpine` | Cache, rate-limit state, Channels layer, Celery broker |
@@ -150,11 +150,11 @@ sequenceDiagram
     W->>R: chat completion with tool schemas
     R-->>W: tool_call plan_implementation
     W->>O: POST job (repo, task, mode)
-    O->>S: ensure repo, then exec claude CLI
+    O->>S: ensure repo, then exec opencode CLI
     S->>P: HTTPS via HTTP_PROXY
     P->>R: whitelisted domains only
     R-->>S: streamed tokens
-    S-->>O: stream-json events on stdout
+    S-->>O: JSON events on stdout
     O-->>W: progress polling + final result (incl. cost)
     W-->>U: SSE steps, then plan / PR link
 ```
@@ -165,32 +165,36 @@ through OpenRouter) is given the tools `coding_agent`, `plan_implementation`,
 one POSTs a job to the orchestrator service.
 
 **Layer 2 — the sandboxed CLI.** The orchestrator
-(`core/sandbox/orchestrator/coding_agent_runner.py`) runs the official `claude`
-CLI, installed into the sandbox image via
-`npm install -g @anthropic-ai/claude-code`
-(`core/sandbox/runtime/Dockerfile.sandbox-base`), inside a sandbox container:
+(`core/sandbox/orchestrator/coding_agent_runner.py`) runs `opencode`,
+installed into the sandbox image via a pinned `npm install -g
+opencode-ai@<version>` (`core/sandbox/runtime/Dockerfile.sandbox-base`),
+inside a sandbox container. `core/sandbox/orchestrator/opencode_harness.py`
+builds the invocation; an in-sandbox wrapper
+(`opencode_run_wrapper.py`) brackets its output stream:
 
-- **Invocation** is non-interactive and streamed:
-  `claude --print --verbose --output-format stream-json --max-turns N --allowedTools ... --no-session-persistence`.
-- **Authentication** points the CLI at OpenRouter: `ANTHROPIC_API_KEY` holds the
-  OpenRouter key and `ANTHROPIC_BASE_URL` targets OpenRouter's
-  Anthropic-compatible endpoint. In the default configuration the CLI never
-  authenticates against Anthropic directly.
-- **Non-Anthropic models** go through the in-repo Anthropic-to-OpenAI bridge
-  (`core/sandbox/orchestrator/anthropic_bridge.py`), which translates the
-  Anthropic Messages API to and from OpenAI Chat Completions and forwards to
-  OpenRouter. The runner rewrites `ANTHROPIC_BASE_URL` to
-  `http://sterna-orchestrator:8003/bridge` when the selected model is not an
-  Anthropic one.
-- **Plan mode** is read-only exploration, enforced three ways at once: a mode
-  CLAUDE.md that states the intent, filesystem `chmod` on the workspace, and
-  `.claude/settings.json`. Filesystem permissions are the enforcement that
-  actually holds — `--allowedTools` does not restrict the CLI's built-in tools.
-  Plans are captured from `ExitPlanMode` output and persisted as `AgentPlan` and
+- **Invocation** is non-interactive and streamed: `opencode run --format json
+  --agent plan|build --title ... < task_file`. The task is piped over stdin
+  rather than passed as an argument.
+- **Authentication** targets OpenRouter's native OpenAI-compatible endpoint
+  directly: `OPENROUTER_API_KEY` holds the OpenRouter key, injected together
+  with the rest of opencode's configuration through the
+  `OPENCODE_CONFIG_CONTENT` environment variable (opencode merges this last,
+  so it outranks any config file a workspace, or a directory above it,
+  happens to hold). Every model routes through OpenRouter's OpenAI-compatible
+  format uniformly — there is no per-provider bridge to maintain.
+- **Plan mode** is read-only exploration, enforced two ways at once: opencode's
+  own agent permission profile (`opencode_harness.build_permission_profile`,
+  which denies `edit` and restricts `bash` to a read-only command allowlist)
+  and a filesystem `chmod` on the workspace. The filesystem permission is the
+  enforcement that actually holds — a permission profile cannot stop `bash`
+  from writing a file no rule separately denies. Plans are written by
+  opencode's plan agent to its own data directory
+  (`opencode_harness.plans_dir_for`); the wrapper reads the newest one and
+  reports it as the run's summary, which the runner persists as `AgentPlan` and
   `PlanStep` rows (`core/code_sessions/`), optionally linked to a GitHub issue.
   Implement mode consumes an approved plan and opens a pull request.
-- **Progress** streams back as `stream-json` events parsed by
-  `claude_output_parser.py`, held in an in-memory progress store on the
+- **Progress** streams back as JSON events parsed by
+  `opencode_output_adapter.py`, held in an in-memory progress store on the
   orchestrator (the Docker `put_archive` API is unreliable against the tmpfs
   `/workspace` mount) and polled by Django so the UI can render live steps.
 - **Workspace durability**: `/workspace` is tmpfs and disappears when a sandbox
@@ -263,11 +267,11 @@ to audit.
   writes idempotent `UsageLog` rows. Closing the browser tab does not evade
   billing, and client-supplied cost patches are clamped server-side. Covered by
   `core/usage_quota/tests/test_billing_coverage.py`.
-- **Two-layer agent cost**: the sandboxed CLI reports its own spend in its result
-  stream. `claude_output_parser.py` extracts it, the runner returns it, the tool
-  wrapper surfaces it as `cost_usd`, and the chat agent folds it into the
-  conversation's accumulated tool cost — so both layers land in `UsageLog`
-  instead of only the orchestrator LLM.
+- **Two-layer agent cost**: the sandboxed CLI reports its own spend in its
+  event stream. `opencode_output_adapter.py` extracts it, the runner returns
+  it, the tool wrapper surfaces it as `cost_usd`, and the chat agent folds it
+  into the conversation's accumulated tool cost — so both layers land in
+  `UsageLog` instead of only the orchestrator LLM.
 
 ## Authentication
 

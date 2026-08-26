@@ -1,13 +1,16 @@
 """The ports a caller supplies to run a turn, beyond the model and the tools.
 
 The loop reaches the model through `provider.ModelProvider` and the
-tools through `registry.ToolRegistry`. Three further concerns belong
-to whoever owns persistence, billing, and the conversation's history,
-and are injected here rather than implemented inside this package:
+tools through `registry.ToolRegistry`. The remaining concerns belong
+to whoever owns persistence, billing, the conversation's history, and
+the meaning of a given tool's payloads; they are injected here rather
+than implemented inside this package:
 
 * relieving context-window pressure (trimming or summarizing history),
 * minting the approval records a gated tool call waits on,
-* splitting a provider's reported cost into its prompt/completion parts.
+* splitting a provider's reported cost into its prompt/completion parts,
+* deriving the extra events a tool's own result implies,
+* reporting what a long-running tool call is doing while it runs.
 
 Each port ships with a default implementation that does the inert
 thing, so a caller with no such concern supplies nothing.
@@ -186,3 +189,47 @@ class NoDerivedToolEvents:
 
     def derive(self, call: ToolCall, result: JsonDict) -> Sequence[StreamEvent]:
         return ()
+
+
+# --- Long-running tool progress -----------------------------------------
+
+
+class ToolProgressWatch(Protocol):
+    """What one long-running call is doing, while it is still running.
+
+    `poll` is asked at the turn's keep-alive interval for as long as
+    the call is in flight, and answers with the events that describe
+    whatever happened since the last time it was asked. `close` is
+    asked once, with what the call returned, and answers with the
+    events that state what the run amounted to.
+
+    Neither method may raise: a call must not fail because the channel
+    reporting on it did.
+    """
+
+    async def poll(self) -> Sequence[StreamEvent]:
+        ...
+
+    async def close(self, result: JsonDict) -> Sequence[StreamEvent]:
+        ...
+
+
+class ToolProgressPort(Protocol):
+    """Opens a progress channel for the tool calls that have one.
+
+    Whether a call reports progress is a property of the tool, not of
+    the loop -- only a handler that drives something long-running
+    elsewhere has anything to report. A call the port knows nothing
+    about is answered with `None`, and the loop runs it with no
+    progress channel at all.
+    """
+
+    def watch(self, call: ToolCall) -> Optional[ToolProgressWatch]:
+        ...
+
+
+class NoToolProgress:
+    """A progress port that watches nothing."""
+
+    def watch(self, call: ToolCall) -> Optional[ToolProgressWatch]:
+        return None

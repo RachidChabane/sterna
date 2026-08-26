@@ -28,10 +28,6 @@ security.ubuntu.com
 openrouter.ai
 api.openrouter.ai
 
-# Anthropic (Claude CLI requires direct API access + telemetry)
-api.anthropic.com
-statsig.anthropic.com
-
 # Documentation sites
 docs.python.org
 numpy.org

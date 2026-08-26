@@ -74,7 +74,10 @@ def _samples() -> Dict[EventType, StreamEvent]:
         CodingAgentStepEvent(
             step_index=0, type="tool", tool="run_bash", content="ls", timestamp=None
         ),
-        CodingAgentQuestionEvent(question="Which branch?", options=["main"]),
+        CodingAgentQuestionEvent(
+            question="Which branch?",
+            options=[{"label": "main", "description": "The default branch."}],
+        ),
         CodingAgentCompletedEvent(
             success=True,
             summary="done",

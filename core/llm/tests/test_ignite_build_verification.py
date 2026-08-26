@@ -10,7 +10,7 @@ class TestIgniteBuildVerification(TestCase):
     def _run_verification(self, make_request_side_effect):
         """Run the build verification logic extracted from coding_agent.
 
-        Returns (build_verified, ignite_called, response_data).
+        Returns whether the build was verified.
         """
         context = MagicMock()
         context._make_request = AsyncMock(side_effect=make_request_side_effect)
@@ -33,8 +33,7 @@ class TestIgniteBuildVerification(TestCase):
                 build_verified = False
             return build_verified
 
-        result = asyncio.get_event_loop().run_until_complete(_verify())
-        return result
+        return asyncio.run(_verify())
 
     def test_build_id_exists_ignite_proceeds(self):
         """BUILD_ID exists -> build_verified=True, ignite should proceed."""

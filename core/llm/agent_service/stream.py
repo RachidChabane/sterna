@@ -183,7 +183,9 @@ class V2TurnRunner:
         """The frames one run of the turn produces, failure excluded."""
 
         stack = await build_turn_stack(
-            turn, summarizer_endpoint=self._summarizer_endpoint
+            turn,
+            summarizer_endpoint=self._summarizer_endpoint,
+            resolve_file_tools_context=lambda: self.session.file_tools_context,
         )
         self.session.tools = list(stack.tool_set.bound_callables.values())
         self._accounting = TurnAccounting()

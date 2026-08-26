@@ -780,8 +780,8 @@ class PlanStep(models.Model):
 class SubAgent(models.Model):
     """A custom sub-agent definition that users can deploy into coding agent sandboxes.
 
-    Sub-agents are serialized as markdown files with YAML frontmatter and written
-    to the ephemeral home's ~/.claude/agents/ directory before CLI launch.
+    Sub-agents are serialized as markdown files with YAML frontmatter, which the
+    orchestrator rewrites into its harness's format and plants where it looks.
     """
 
     class PermissionMode(models.TextChoices):
@@ -922,8 +922,8 @@ class SubAgent(models.Model):
             "description": self.description,
         }
         # Only include model in frontmatter if it's a valid Claude CLI alias.
-        # "inherit" means use the parent model, so omit model: to let CLI use
-        # its default (controlled by ANTHROPIC_SMALL_FAST_MODEL env var).
+        # "inherit" means use the parent model, so omit model: to let the
+        # CLI fall back to its own default model resolution.
         model_alias = self._map_model_to_claude_alias()
         if model_alias != "inherit":
             frontmatter["model"] = model_alias

@@ -22,7 +22,9 @@ from .ports import (
     CostAccountantPort,
     LocalApprovals,
     NoDerivedToolEvents,
+    NoToolProgress,
     ProviderReportedCost,
+    ToolProgressPort,
     ToolResultEventsPort,
     UnboundedContextWindow,
 )
@@ -43,3 +45,4 @@ class GraphDependencies:
     tool_result_events: ToolResultEventsPort = dataclasses.field(
         default_factory=NoDerivedToolEvents
     )
+    tool_progress: ToolProgressPort = dataclasses.field(default_factory=NoToolProgress)

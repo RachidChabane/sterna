@@ -27,7 +27,6 @@ from auth import CurrentUser, verify_jwt_token_from_query, generate_preview_toke
 from security_monitor import security_monitor
 from mcp_endpoints import router as mcp_router, set_sandbox_executor
 from workspace_client import get_workspace_client
-from anthropic_bridge import handle_messages_request as _bridge_handler
 
 # ArtifactStorage is optional - only initialize if S3/MinIO is configured
 artifact_storage = None
@@ -52,9 +51,9 @@ init_observability(
     service="orchestrator",
     app_loggers=(
         "main", "sandbox_executor", "coding_agent_runner",
-        "anthropic_bridge", "mcp_endpoints", "mcp_manager", "mcp_tools",
+        "mcp_endpoints", "mcp_manager", "mcp_tools",
         "workspace_client", "file_tools", "tool_executor",
-        "security_monitor", "artifact_storage", "claude_output_parser",
+        "security_monitor", "artifact_storage",
         "excel_handler", "auth",
     ),
 )
@@ -118,18 +117,6 @@ if sandbox_executor:
 
 # Include MCP router
 app.include_router(mcp_router)
-
-
-# ---------------------------------------------------------------------------
-# Anthropic-to-OpenAI Bridge
-# Allows Claude Code CLI to work with non-Anthropic models via OpenRouter.
-# Claude Code speaks Anthropic Messages format; the bridge translates to
-# OpenAI Chat Completions format for OpenRouter's /v1/chat/completions.
-# ---------------------------------------------------------------------------
-@app.post("/bridge/v1/messages")
-async def bridge_messages(request: Request):
-    """Bridge endpoint: Anthropic Messages → OpenAI Chat Completions → OpenRouter."""
-    return await _bridge_handler(request)
 
 
 @app.on_event("startup")
@@ -528,18 +515,10 @@ class CodingAgentExecuteRequest(BaseModel):
         default="auto",
         description="Agent mode: 'plan' (create plan), 'implement' (execute plan), or 'auto' (default)"
     )
-    plan_id: Optional[str] = Field(
-        default=None,
-        description="Plan ID to implement (required when mode='implement')"
-    )
-    sub_agents: Optional[List[Dict[str, Any]]] = Field(
-        default=None,
-        description="Sub-agent definitions as {name, markdown} dicts"
-    )
-    user_model_preferences: Optional[Dict[str, str]] = Field(
-        default=None,
-        description="User's tier→model mapping: {fast_model_id, balanced_model_id, powerful_model_id}"
-    )
+    plan_id: Optional[str] = Field(default=None, description="Plan ID to implement (required when mode='implement')")
+    sub_agents: Optional[List[Dict[str, Any]]] = Field(default=None, description="Sub-agent definitions as {name, markdown} dicts")
+    user_model_preferences: Optional[Dict[str, str]] = Field(default=None, description="User's tier→model mapping: {fast_model_id, balanced_model_id, powerful_model_id}")
+    budget_usd: Optional[float] = None  # Quota ceiling; the job stops once its running cost crosses it
 
 
 class CodingAgentExecuteResponse(BaseModel):
@@ -547,11 +526,22 @@ class CodingAgentExecuteResponse(BaseModel):
     success: bool
     job_id: Optional[str] = None
     summary: Optional[str] = None
+    plan_content: Optional[str] = Field(
+        default=None,
+        description="The plan the agent wrote, on a run in plan mode"
+    )
     files_modified: List[str] = []
     files_created: List[str] = []
+    versions_created: int = Field(
+        default=0,
+        description="File versions the run recorded for the files it changed"
+    )
     steps: List[Dict[str, Any]] = []
     error: Optional[str] = None
     duration_ms: int = 0
+    total_tokens: int = 0
+    total_cost_usd: float = 0.0
+    quota_exceeded: bool = False
 
 
 class CodingAgentProgressRequest(BaseModel):
@@ -1840,6 +1830,7 @@ async def execute_coding_agent(
             plan_id=request.plan_id,
             sub_agents=request.sub_agents,
             user_model_preferences=request.user_model_preferences,
+            budget_usd=request.budget_usd,
         )
 
         logger.info(
@@ -1851,11 +1842,16 @@ async def execute_coding_agent(
             success=result.get("success", False),
             job_id=result.get("job_id"),
             summary=result.get("summary"),
+            plan_content=result.get("plan_content"),
             files_modified=result.get("files_modified", []),
             files_created=result.get("files_created", []),
+            versions_created=result.get("versions_created", 0),
             steps=result.get("steps", []),
             error=result.get("error"),
             duration_ms=result.get("duration_ms", 0),
+            total_tokens=result.get("total_tokens", 0),
+            total_cost_usd=result.get("total_cost_usd", 0.0),
+            quota_exceeded=result.get("quota_exceeded", False),
         )
 
     except ImportError:

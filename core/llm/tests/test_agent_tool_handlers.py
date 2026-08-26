@@ -216,7 +216,7 @@ class CodingAgentToolCostUsdTests(TestCase):
         self.addCleanup(clear_file_tools_context, self.key)
 
         self._patches = [
-            patch("llm.agent_tool_handlers._check_code_session_tier_gate", new=AsyncMock(return_value=None)),
+            patch("llm.agent_tool_handlers.check_code_session_budget", new=AsyncMock(return_value=(None, None))),
             patch("llm.agent_tool_handlers._resolve_workspace_chat_id", new=AsyncMock(return_value="chat-1")),
             patch("llm.agent_tool_handlers._ensure_repo_in_sandbox", new=AsyncMock(return_value=None)),
             patch("llm.agent_tool_handlers._fetch_user_sub_agents", new=AsyncMock(return_value=([], []))),
@@ -243,15 +243,16 @@ class CodingAgentToolCostUsdTests(TestCase):
             "duration_ms": 1200,
         }
         with patch("llm.services.execute_coding_agent", new=AsyncMock(return_value=execute_result)), \
-             patch("llm.agent_tool_handlers._bill_code_session", new=AsyncMock()) as mock_bill:
+             patch("llm.services.coding_agent_billing.bill_code_session", new=AsyncMock()) as mock_bill:
             raw = _run(coding_agent.ainvoke({"task": "do the thing"}))
 
         payload = json.loads(raw)
         self.assertTrue(payload["success"])
         self.assertEqual(payload["cost_usd"], 0.42)
         mock_bill.assert_awaited_once()
-        _, called_cost, called_model, called_session = mock_bill.await_args.args
+        _, called_cost, called_model, called_session, called_request_id = mock_bill.await_args.args
         self.assertEqual(called_cost, 0.42)
+        self.assertEqual(called_request_id, "job-1")
 
     def test_failure_path_still_surfaces_cost_usd(self):
         """A partially-billable failed run (agent burned tokens before
@@ -264,7 +265,7 @@ class CodingAgentToolCostUsdTests(TestCase):
             "result": {"total_cost_usd": 0.11},
         }
         with patch("llm.services.execute_coding_agent", new=AsyncMock(return_value=execute_result)), \
-             patch("llm.agent_tool_handlers._bill_code_session", new=AsyncMock()) as mock_bill:
+             patch("llm.services.coding_agent_billing.bill_code_session", new=AsyncMock()) as mock_bill:
             raw = _run(coding_agent.ainvoke({"task": "do the thing"}))
 
         payload = json.loads(raw)
@@ -280,7 +281,7 @@ class CodingAgentToolCostUsdTests(TestCase):
             "result": {"total_cost_usd": 0.0, "summary": "no-op"},
         }
         with patch("llm.services.execute_coding_agent", new=AsyncMock(return_value=execute_result)), \
-             patch("llm.agent_tool_handlers._bill_code_session", new=AsyncMock()) as mock_bill:
+             patch("llm.services.coding_agent_billing.bill_code_session", new=AsyncMock()) as mock_bill:
             raw = _run(coding_agent.ainvoke({"task": "do nothing"}))
 
         payload = json.loads(raw)
@@ -320,7 +321,7 @@ class CodingAgentToolGuardTests(TestCase):
         self.addCleanup(clear_file_tools_context, key)
 
         denial = json.dumps({"success": False, "error_type": "QUOTA_EXCEEDED", "message": "no more code sessions"})
-        with patch("llm.agent_tool_handlers._check_code_session_tier_gate", new=AsyncMock(return_value=denial)), \
+        with patch("llm.agent_tool_handlers.check_code_session_budget", new=AsyncMock(return_value=(denial, None))), \
              patch("llm.services.execute_coding_agent", new=AsyncMock()) as mock_execute:
             raw = _run(coding_agent.ainvoke({"task": "do the thing"}))
 

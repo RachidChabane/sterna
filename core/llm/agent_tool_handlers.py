@@ -15,6 +15,11 @@ from typing import Optional, Callable, Dict, List
 from langchain_core.tools import tool
 
 from sterna.middleware.request_id import request_id_headers
+from llm.services.coding_agent_billing import (
+    check_code_session_budget,
+    quota_exceeded_error,
+    run_and_settle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,104 +28,6 @@ logger = logging.getLogger(__name__)
 _current_context_key: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     'file_tools_context_key', default=None
 )
-
-
-async def _check_code_session_tier_gate(context) -> Optional[str]:
-    """Run feature_name='code_session' pre-flight on the context's user.
-
-    Returns ``None`` when the gate passes. Returns a JSON-encoded error
-    string when the gate denies — coding-tool callers should return that
-    string directly so the LLM sees a structured error.
-    """
-    if not context or not getattr(context, "user_id", None):
-        return None
-    try:
-        from asgiref.sync import sync_to_async
-        from decimal import Decimal
-        from usage_quota.billing.service import get_billing_service
-        from usage_quota.exceptions import (
-            FeatureNotAvailableException,
-            QuotaExceededException,
-        )
-        from usage_quota.models import ServiceType, FeatureType
-        try:
-            from authentication.models import User
-        except ImportError:
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
-        user = await sync_to_async(User.objects.get)(id=context.user_id)
-        try:
-            await sync_to_async(get_billing_service().check_quota)(
-                user=user,
-                service=ServiceType.CODE_SESSION,
-                estimated_cost=Decimal('0'),
-                feature=FeatureType.CODE_SESSION,
-                feature_name='code_session',
-            )
-        except (FeatureNotAvailableException, QuotaExceededException) as exc:
-            return json.dumps({
-                "success": False,
-                "status": "error",
-                "error_type": exc.code,
-                "message": exc.message,
-                **exc.to_response_dict(),
-            })
-    except Exception:
-        logger.error("code_session_tier_gate_error", exc_info=True)
-    return None
-
-
-async def _bill_code_session(context, cost_usd, model_id: str, session_id: str = "") -> None:
-    """Record a UsageLog row for a Claude-CLI coding-agent invocation.
-
-    The chat row's tool-cost accumulator excludes coding-agent costs (see
-    `agent.cost_ledger.extract_billable_tool_costs`'s dedup guard) — this
-    is the single bill site for `service=code_session`. No-op for
-    zero/negative cost or missing user.
-    """
-    try:
-        cost_value = float(cost_usd or 0)
-    except (TypeError, ValueError):
-        cost_value = 0.0
-    if cost_value <= 0:
-        return
-    if not context or not getattr(context, "user_id", None):
-        return
-    try:
-        from asgiref.sync import sync_to_async
-        from decimal import Decimal
-        from usage_quota.billing.service import get_billing_service
-        from usage_quota.billing.operations import BillableOperation
-        from usage_quota.models import ServiceType, FeatureType
-        try:
-            from authentication.models import User
-        except ImportError:
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
-        user = await sync_to_async(User.objects.get)(id=context.user_id)
-        op = BillableOperation(
-            service=ServiceType.CODE_SESSION,
-            feature=FeatureType.CODE_SESSION,
-            model_id=model_id or "",
-            cost_usd=Decimal(str(cost_value)),
-            session_id=session_id,
-        )
-        # Resolve BYOK origin: code-session runs Claude CLI through the
-        # OpenRouter bridge using the user's key when uploaded.
-        from llm.services.api_key_resolver import resolve_with_origin
-        try:
-            _, origin = await sync_to_async(resolve_with_origin)(user=user)
-        except Exception:
-            origin = 'platform'
-        await sync_to_async(get_billing_service().record_usage)(
-            user, op, billing_origin=origin,
-        )
-        logger.info(
-            f"[code_session_billing] Recorded ${cost_value:.6f} for "
-            f"chat={getattr(context, 'chat_id', None)} (origin={origin})"
-        )
-    except Exception:
-        logger.error("code_session_billing_failed", exc_info=True)
 
 
 class FileToolsContext:
@@ -1030,7 +937,7 @@ async def coding_agent(
     if not task:
         return json.dumps({"success": False, "error": "Task description is required"})
 
-    gate_denial = await _check_code_session_tier_gate(context)
+    gate_denial, budget_usd = await check_code_session_budget(context)
     if gate_denial is not None:
         return gate_denial
 
@@ -1105,29 +1012,34 @@ async def coding_agent(
             )
             task = f"{task}\n\nAvailable sub-agents you can delegate to via the Task tool: {agent_list}"
 
-        # Execute Coding Agent via the service
-        result = await execute_coding_agent(
-            user_id=context.user_id,
-            chat_id=workspace_chat_id,
-            task=task,
-            model=model,
-            api_key=api_key,
-            auth_token=context.auth_token,
-            allowed_tools=allowed_tools,
-            max_iterations=max_iterations,
-            conversation_id=context.conversation_id,
-            model_metadata=model_metadata,
-            sub_agents=sub_agents,
-            user_model_preferences=user_model_prefs,
+        # Execute Coding Agent via the service, billed on completion
+        # regardless of whether this request is still being listened to.
+        result = await run_and_settle(
+            context, model, context.chat_id or "",
+            execute_coding_agent(
+                user_id=context.user_id,
+                chat_id=workspace_chat_id,
+                task=task,
+                model=model,
+                api_key=api_key,
+                auth_token=context.auth_token,
+                allowed_tools=allowed_tools,
+                max_iterations=max_iterations,
+                conversation_id=context.conversation_id,
+                model_metadata=model_metadata,
+                sub_agents=sub_agents,
+                user_model_preferences=user_model_prefs,
+                budget_usd=budget_usd,
+            ),
         )
 
         # Store full result on context so heartbeat loop can enrich SSE data
         context.last_coding_agent_result = result
 
-        # BILLING: Extract Layer 2 cost regardless of success/failure
-        # so the chat-aggregate rollup (extract_billable_tool_costs) picks it up
+        if result.get("result", {}).get("quota_exceeded"):
+            return quota_exceeded_error(budget_usd)
+
         cost_usd = result.get("result", {}).get("total_cost_usd", 0.0) or result.get("total_cost_usd", 0.0)
-        await _bill_code_session(context, cost_usd, model, context.chat_id or "")
 
         logger.info(f"[coding_agent] Post-execution: success={result.get('success')}, spark_ignite_request={bool(context.spark_ignite_request)}")
         build_verified = False
@@ -1302,7 +1214,7 @@ async def plan_implementation(
     if not task:
         return json.dumps({"success": False, "error": "Task description is required"})
 
-    gate_denial = await _check_code_session_tier_gate(context)
+    gate_denial, budget_usd = await check_code_session_budget(context)
     if gate_denial is not None:
         return gate_denial
 
@@ -1333,32 +1245,33 @@ async def plan_implementation(
         }
 
         # Fetch user's active sub-agents and model preferences
-        sub_agents, sub_agent_descs = await _fetch_user_sub_agents(context)
+        sub_agents, _ = await _fetch_user_sub_agents(context)
         user_model_prefs = await _fetch_user_model_preferences(context)
-        if sub_agent_descs:
-            agent_list = ", ".join(
-                f"{a['name']} ({a['description'][:80]})" for a in sub_agent_descs
-            )
-            task = f"{task}\n\nAvailable sub-agents you can delegate to via the Task tool: {agent_list}"
-
-        result = await execute_coding_agent(
-            user_id=context.user_id,
-            chat_id=workspace_chat_id,
-            task=task,
-            model=model,
-            api_key=api_key,
-            auth_token=context.auth_token,
-            allowed_tools=["Read", "Glob", "Grep", "Bash"],
-            max_iterations=30,
-            conversation_id=context.conversation_id,
-            model_metadata=model_metadata,
-            mode="plan",
-            sub_agents=sub_agents,
-            user_model_preferences=user_model_prefs,
+        result = await run_and_settle(
+            context, model, context.chat_id or "",
+            execute_coding_agent(
+                user_id=context.user_id,
+                chat_id=workspace_chat_id,
+                task=task,
+                model=model,
+                api_key=api_key,
+                auth_token=context.auth_token,
+                allowed_tools=["Read", "Glob", "Grep", "Bash"],
+                max_iterations=30,
+                conversation_id=context.conversation_id,
+                model_metadata=model_metadata,
+                mode="plan",
+                sub_agents=sub_agents,
+                user_model_preferences=user_model_prefs,
+                budget_usd=budget_usd,
+            ),
         )
 
         # Store full result on context so heartbeat loop can enrich SSE data
         context.last_coding_agent_result = result
+
+        if result.get("result", {}).get("quota_exceeded"):
+            return quota_exceeded_error(budget_usd)
 
         if not result.get("success"):
             return json.dumps({"success": False, "error": result.get("error", "Planning failed")})
@@ -1395,9 +1308,7 @@ async def plan_implementation(
             chat=target_chat,
         )
 
-        # BILLING: Include Layer 2 cost at top level for accumulated_tool_cost
         plan_cost = result.get("result", {}).get("total_cost_usd", 0.0)
-        await _bill_code_session(context, plan_cost, model, context.chat_id or "")
 
         return json.dumps({
             "success": True,
@@ -1417,10 +1328,6 @@ async def plan_implementation(
         try:
             if 'result' in dir() and isinstance(result, dict):
                 partial_cost = result.get("result", {}).get("total_cost_usd", 0.0) or result.get("total_cost_usd", 0.0)
-        except Exception:
-            pass
-        try:
-            await _bill_code_session(context, partial_cost, model, context.chat_id or "")
         except Exception:
             pass
         return json.dumps({"success": False, "error": str(e), "cost_usd": partial_cost})
@@ -1444,7 +1351,7 @@ async def implement_plan(
     if not plan_id:
         return json.dumps({"success": False, "error": "plan_id is required"})
 
-    gate_denial = await _check_code_session_tier_gate(context)
+    gate_denial, budget_usd = await check_code_session_budget(context)
     if gate_denial is not None:
         return gate_denial
 
@@ -1536,24 +1443,33 @@ async def implement_plan(
         user_model_prefs = await _fetch_user_model_preferences(context)
 
         impl_task = plan.task_description
-        result = await execute_coding_agent(
-            user_id=context.user_id,
-            chat_id=workspace_chat_id,
-            task=impl_task,
-            model=model,
-            api_key=api_key,
-            auth_token=context.auth_token,
-            max_iterations=50,
-            conversation_id=context.conversation_id,
-            model_metadata=model_metadata,
-            mode="implement",
-            plan_id=str(plan.id),
-            sub_agents=sub_agents,
-            user_model_preferences=user_model_prefs,
+        result = await run_and_settle(
+            context, model, context.chat_id or "",
+            execute_coding_agent(
+                user_id=context.user_id,
+                chat_id=workspace_chat_id,
+                task=impl_task,
+                model=model,
+                api_key=api_key,
+                auth_token=context.auth_token,
+                max_iterations=50,
+                conversation_id=context.conversation_id,
+                model_metadata=model_metadata,
+                mode="implement",
+                plan_id=str(plan.id),
+                sub_agents=sub_agents,
+                user_model_preferences=user_model_prefs,
+                budget_usd=budget_usd,
+            ),
         )
 
         # Store full result on context so heartbeat loop can enrich SSE data
         context.last_coding_agent_result = result
+
+        if result.get("result", {}).get("quota_exceeded"):
+            plan.status = AgentPlan.Status.FAILED
+            await sync_to_async(plan.save)(update_fields=["status", "updated_at"])
+            return quota_exceeded_error(budget_usd)
 
         # Update plan status
         plan.status = AgentPlan.Status.COMPLETED if result.get("success") else AgentPlan.Status.FAILED
@@ -1581,9 +1497,7 @@ async def implement_plan(
             except Exception as push_err:
                 logger.warning(f"[implement_plan] Push error: {push_err}")
 
-        # BILLING: Include Layer 2 cost at top level for accumulated_tool_cost
         impl_cost = result.get("result", {}).get("total_cost_usd", 0.0)
-        await _bill_code_session(context, impl_cost, model, context.chat_id or "")
 
         if result.get("success"):
             job_result = result.get("result", {})
@@ -1641,7 +1555,7 @@ async def edit_plan(
     if not instructions:
         return json.dumps({"success": False, "error": "instructions are required"})
 
-    gate_denial = await _check_code_session_tier_gate(context)
+    gate_denial, budget_usd = await check_code_session_budget(context)
     if gate_denial is not None:
         return gate_denial
 
@@ -1685,37 +1599,38 @@ async def edit_plan(
             f"Review and edit the following implementation plan.\n\n"
             f"**Edit Instructions:** {instructions}\n\n"
             f"**Current Plan:**\n\n{plan.plan_content}\n\n"
-            f"Apply the requested changes and save the updated plan using ExitPlanMode. "
+            f"Apply the requested changes and save the updated plan where these instructions say to. "
             f"Use the same structured format (# Implementation Plan: ..., ## Summary, "
             f"### Step N: ..., **Files:** etc). "
             f"You may re-explore the codebase if needed to improve the plan."
         )
 
         # Fetch user's active sub-agents and model preferences
-        sub_agents, sub_agent_descs = await _fetch_user_sub_agents(context)
+        sub_agents, _ = await _fetch_user_sub_agents(context)
         user_model_prefs = await _fetch_user_model_preferences(context)
-        if sub_agent_descs:
-            agent_list = ", ".join(
-                f"{a['name']} ({a['description'][:80]})" for a in sub_agent_descs
-            )
-            task = f"{task}\n\nAvailable sub-agents you can delegate to via the Task tool: {agent_list}"
-
-        result = await execute_coding_agent(
-            user_id=context.user_id,
-            chat_id=workspace_chat_id,
-            task=task,
-            model=model,
-            api_key=api_key,
-            auth_token=context.auth_token,
-            allowed_tools=["Read", "Glob", "Grep", "Bash"],
-            max_iterations=30,
-            conversation_id=context.conversation_id,
-            model_metadata=model_metadata,
-            mode="plan",
-            sub_agents=sub_agents,
-            user_model_preferences=user_model_prefs,
+        result = await run_and_settle(
+            context, model, context.chat_id or "",
+            execute_coding_agent(
+                user_id=context.user_id,
+                chat_id=workspace_chat_id,
+                task=task,
+                model=model,
+                api_key=api_key,
+                auth_token=context.auth_token,
+                allowed_tools=["Read", "Glob", "Grep", "Bash"],
+                max_iterations=30,
+                conversation_id=context.conversation_id,
+                model_metadata=model_metadata,
+                mode="plan",
+                sub_agents=sub_agents,
+                user_model_preferences=user_model_prefs,
+                budget_usd=budget_usd,
+            ),
         )
         context.last_coding_agent_result = result
+
+        if result.get("result", {}).get("quota_exceeded"):
+            return quota_exceeded_error(budget_usd)
 
         if not result.get("success"):
             return json.dumps({"success": False, "error": result.get("error", "Plan editing failed")})
@@ -1731,9 +1646,7 @@ async def edit_plan(
 
         plan = await sync_to_async(update_plan_from_content)(plan, plan_content)
 
-        # BILLING: Include Layer 2 cost at top level for accumulated_tool_cost
         edit_cost = result.get("result", {}).get("total_cost_usd", 0.0)
-        await _bill_code_session(context, edit_cost, model, context.chat_id or "")
 
         return json.dumps({
             "success": True,
@@ -1752,10 +1665,6 @@ async def edit_plan(
         try:
             if 'result' in dir() and isinstance(result, dict):
                 partial_cost = result.get("result", {}).get("total_cost_usd", 0.0) or result.get("total_cost_usd", 0.0)
-        except Exception:
-            pass
-        try:
-            await _bill_code_session(context, partial_cost, model, context.chat_id or "")
         except Exception:
             pass
         return json.dumps({"success": False, "error": str(e), "cost_usd": partial_cost})

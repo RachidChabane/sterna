@@ -286,11 +286,15 @@ class CodingAgentStepEvent:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class CodingAgentQuestionEvent:
-    """A coding-agent tool call is blocked on a question for the user."""
+    """A coding-agent tool call is blocked on a question for the user.
+
+    Each option is one answer the user may pick, carrying the label it
+    is offered under and a description of what picking it means.
+    """
 
     event_type: ClassVar[EventType] = EventType.CODING_AGENT_QUESTION
     question: Optional[str]
-    options: Optional[List[str]]
+    options: Optional[List[JsonDict]]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
