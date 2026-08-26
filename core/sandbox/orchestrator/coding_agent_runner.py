@@ -8,6 +8,7 @@ Captures file versions before/after execution for history tracking.
 
 import uuid
 import json
+import shlex
 import logging
 import asyncio
 import time
@@ -20,7 +21,15 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 
 from workspace_client import get_workspace_client
-from claude_output_parser import ClaudeOutputParser, parse_claude_output
+import opencode_harness
+from claude_permission_profile import settings_for as claude_settings_for
+from coding_harness import (
+    OPENCODE,
+    AgentOutputAdapter,
+    create_adapter,
+    parse_run_output,
+    resolve_harness,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +38,8 @@ logger = logging.getLogger(__name__)
 # This bypasses the file-based approach which fails when Docker's put_archive
 # can't write to tmpfs-mounted workspace directories.
 _progress_store: Dict[str, dict] = {}
+
+PLAN_MODE = "plan"
 
 
 def get_progress_from_store(user_id: str, chat_id: str) -> Optional[dict]:
@@ -53,6 +64,7 @@ class CodingAgentConfig:
     plan_content: Optional[str] = None  # Full plan content for implement mode
     sub_agents: Optional[List[Dict[str, Any]]] = None  # Sub-agent defs as {name, markdown} dicts
     user_model_preferences: Optional[Dict[str, str]] = None  # Tier→model mapping from user prefs
+    harness: str = ""  # CLI harness that runs the job
 
 
 @dataclass
@@ -104,7 +116,24 @@ class CodingAgentRunner:
         ".clauderc",         # Claude RC file
         "claude.config.json", # Alternative config file
         ".mcp.json",         # MCP server config
+        "opencode.json",     # opencode config
+        "opencode.jsonc",    # opencode config, comment-tolerant form
+        ".opencode",         # opencode config/agent/plan directory
     ]
+
+    def _config_scan_directories(self, workspace_path: str) -> List[str]:
+        """The workspace and every directory above it.
+
+        opencode looks for ``opencode.json`` in the working directory
+        and each of its ancestors, so a file planted one level up
+        reaches the run just as one inside the workspace would.
+        """
+        directories = [workspace_path]
+        current = workspace_path.rstrip("/")
+        while "/" in current and current:
+            current = current.rsplit("/", 1)[0]
+            directories.append(current or "/")
+        return directories
 
     async def _scan_for_dangerous_configs(
         self,
@@ -123,23 +152,22 @@ class CodingAgentRunner:
         Returns:
             (is_safe, list_of_dangerous_files_found)
         """
-        dangerous_found = []
+        candidates = [
+            f"{directory.rstrip('/')}/{pattern}"
+            for directory in self._config_scan_directories(workspace_path)
+            for pattern in self.DANGEROUS_CONFIG_PATTERNS
+        ]
+        probe = "; ".join(f'test -e "{path}" && echo "{path}"' for path in candidates)
+        result = container.exec_run(
+            ["sh", "-c", f"{probe}; true"],
+            workdir=workspace_path,
+            user="sandboxuser"
+        )
+        output = result.output.decode().strip() if result.output else ""
+        dangerous_found = [line.strip() for line in output.split("\n") if line.strip()]
 
-        for pattern in self.DANGEROUS_CONFIG_PATTERNS:
-            # Check in workspace root
-            check_cmd = f'test -e "{workspace_path}/{pattern}" && echo "EXISTS" || echo "NOTFOUND"'
-            result = container.exec_run(
-                ["sh", "-c", check_cmd],
-                workdir=workspace_path,
-                user="sandboxuser"
-            )
-            output = result.output.decode().strip() if result.output else ""
-
-            if output == "EXISTS":
-                dangerous_found.append(f"{workspace_path}/{pattern}")
-                logger.warning(
-                    f"[SECURITY] Dangerous config file found: {workspace_path}/{pattern}"
-                )
+        for found in dangerous_found:
+            logger.warning(f"[SECURITY] Dangerous config file found: {found}")
 
         if dangerous_found:
             logger.error(
@@ -156,6 +184,7 @@ class CodingAgentRunner:
         job_id: str,
         workspace_path: str,
         mode: str = "auto",
+        harness: str = "",
     ) -> str:
         """
         SECURITY: Create an ephemeral HOME directory for this job.
@@ -163,18 +192,17 @@ class CodingAgentRunner:
         This prevents any persistent config files from being read and ensures
         each execution starts with a clean, controlled environment.
 
-        Also creates a .claude/settings.json that restricts file access to
-        only the workspace directory, preventing writes to /tmp or elsewhere.
-
-        In plan mode, permissions are tightened: workspace is read-only,
-        but writes to ephemeral home are allowed (needed for ExitPlanMode
-        which saves plans to $HOME/.claude/plans/).
+        Also lays down whatever the harness reads from HOME: the Claude
+        harness takes its permissions from a settings file written here,
+        while opencode takes its own from the environment and needs only
+        the data directory a planning run writes its plan into.
 
         Args:
             container: Docker container
             job_id: Unique job identifier
             workspace_path: The workspace directory to restrict access to
             mode: Agent mode - "plan" for restricted, anything else for full
+            harness: CLI harness the job runs on
 
         Returns:
             Path to the ephemeral home directory
@@ -196,124 +224,23 @@ class CodingAgentRunner:
             )
             return "/home/sandboxuser"
 
-        # SECURITY: Create settings.json that restricts file access to workspace
-        # This prevents Claude CLI from reading/writing outside the workspace
-        # Reference: https://docs.anthropic.com/en/docs/claude-code/settings
-        # NOTE: The sandbox container provides additional isolation, so we only
-        # need to restrict the most dangerous operations here.
-        # We allow ephemeral_home access since Claude CLI needs it for internal operations.
+        if harness == OPENCODE:
+            # opencode takes its configuration from the environment, not
+            # from a file under HOME; it needs only its data directory,
+            # where a planning run's plan is allowed to land.
+            container.exec_run(
+                ["sh", "-c", f'mkdir -p "{opencode_harness.plans_dir_for(ephemeral_home)}"'],
+                user="sandboxuser",
+            )
+            logger.info(f"[SECURITY] Created ephemeral home directory: {ephemeral_home}")
+            return ephemeral_home
 
-        if mode == "plan":
-            # PLAN MODE: Workspace is read-only but ephemeral home is writable.
-            # ExitPlanMode writes plans to $HOME/.claude/plans/ which is under ephemeral_home.
-            # Bash is allowed for exploration (git log, find, tree, etc.).
-            settings = {
-                "permissions": {
-                    "allow": [
-                        # Read the entire workspace
-                        f"Read({workspace_path}/**)",
-                        # Allow access to ephemeral home (ExitPlanMode writes here)
-                        f"Read({ephemeral_home}/**)",
-                        f"Write({ephemeral_home}/**)",
-                        # Bash allowed for exploration commands
-                        f"Bash(cd {workspace_path}*)",
-                        "Bash(ls*)",
-                        "Bash(cat*)",
-                        "Bash(grep*)",
-                        "Bash(find*)",
-                        "Bash(head*)",
-                        "Bash(tail*)",
-                        "Bash(wc*)",
-                        "Bash(sort*)",
-                        "Bash(uniq*)",
-                        "Bash(diff*)",
-                        "Bash(echo*)",
-                        "Bash(tree*)",
-                        "Bash(git*)",
-                        "Bash(file*)",
-                    ],
-                    "deny": [
-                        # Block ALL writes and edits to workspace
-                        f"Write({workspace_path}/**)",
-                        f"Edit({workspace_path}/**)",
-                        # Block system directories
-                        "Read(/etc/**)",
-                        "Read(/root/**)",
-                        # Block dangerous bash commands
-                        "Bash(sudo*)",
-                        "Bash(rm*)",
-                        "Bash(mv*)",
-                        "Bash(cp*)",
-                        "Bash(chmod*)",
-                        "Bash(python*)",
-                        "Bash(node*)",
-                        "Bash(npm*)",
-                        "Bash(pip*)",
-                        "Bash(curl*)",
-                        "Bash(wget*)",
-                        "Bash(ssh*)",
-                    ]
-                }
-            }
-            logger.info("[SECURITY] Plan mode: read-only workspace, bash exploration allowed")
-        else:
-            # NORMAL MODE: Full workspace access
-            settings = {
-                "permissions": {
-                    "allow": [
-                        f"Read({workspace_path}/**)",
-                        f"Write({workspace_path}/**)",
-                        f"Edit({workspace_path}/**)",
-                        # Allow access to ephemeral home for Claude CLI internal operations
-                        f"Read({ephemeral_home}/**)",
-                        f"Write({ephemeral_home}/**)",
-                        # Bash commands allowed in sandbox
-                        f"Bash(cd {workspace_path}*)",
-                        "Bash(ls*)",
-                        "Bash(cat*)",
-                        "Bash(grep*)",
-                        "Bash(find*)",
-                        "Bash(head*)",
-                        "Bash(tail*)",
-                        "Bash(wc*)",
-                        "Bash(sort*)",
-                        "Bash(uniq*)",
-                        "Bash(diff*)",
-                        "Bash(echo*)",
-                        "Bash(printf*)",
-                        "Bash(mkdir*)",
-                        "Bash(touch*)",
-                        "Bash(rm*)",
-                        "Bash(cp*)",
-                        "Bash(mv*)",
-                        "Bash(chmod*)",
-                        "Bash(python*)",
-                        "Bash(node*)",
-                        "Bash(npm*)",
-                        "Bash(npx*)",
-                        "Bash(pip*)",
-                        "Bash(git*)",
-                    ],
-                    "deny": [
-                        # Block system directories (sandbox provides additional isolation)
-                        "Read(/etc/**)",
-                        "Write(/etc/**)",
-                        "Edit(/etc/**)",
-                        "Read(/root/**)",
-                        "Write(/root/**)",
-                        "Edit(/root/**)",
-                        # Block dangerous bash commands
-                        "Bash(sudo*)",
-                        "Bash(su*)",
-                        "Bash(curl*)",
-                        "Bash(wget*)",
-                        "Bash(ssh*)",
-                        "Bash(scp*)",
-                        "Bash(nc*)",
-                        "Bash(netcat*)",
-                    ]
-                }
-            }
+        # The container bounds the job; these settings narrow it further.
+        settings = claude_settings_for(mode, workspace_path, ephemeral_home)
+        if mode == PLAN_MODE:
+            logger.info(
+                "[SECURITY] Plan mode: read-only workspace, bash exploration allowed"
+            )
 
         settings_json = json.dumps(settings, indent=2)
         settings_path = f"{claude_config_dir}/settings.json"
@@ -337,6 +264,76 @@ class CodingAgentRunner:
 
         logger.info(f"[SECURITY] Created ephemeral home directory: {ephemeral_home}")
         return ephemeral_home
+
+    def _write_sandbox_file(self, container, path: str, content: str) -> None:
+        """Write one file into the sandbox as the unprivileged user."""
+        escaped = content.replace("'", "'\"'\"'")
+        container.exec_run(
+            ["sh", "-c", f"printf '%s' '{escaped}' > {path}"],
+            user="sandboxuser",
+        )
+
+    async def _prepare_opencode_run(
+        self, container, job_dir, ephemeral_home, workspace_path, mode,
+        model, api_key, max_iterations, allowed_tools,
+        task_file, output_file, full_task, base_env, job_token,
+    ) -> tuple:
+        """Stage the opencode harness; return its command and environment.
+
+        The ask-user relay and the wrapper that brackets opencode's
+        output both live in the ephemeral home, and the job description
+        the wrapper reads lives beside the task in the job directory.
+        """
+        relay_path = f"{ephemeral_home}/mcp-ask-user-opencode.py"
+        wrapper_path = f"{ephemeral_home}/opencode-run-wrapper.py"
+        spec_path = f"{job_dir}/opencode-job.json"
+        here = Path(__file__).parent
+
+        for source, destination in (
+            ("mcp_ask_user_opencode.py", relay_path),
+            ("opencode_run_wrapper.py", wrapper_path),
+        ):
+            self._write_sandbox_file(
+                container, destination, here.joinpath(source).read_text()
+            )
+
+        config = opencode_harness.build_config(
+            mode=mode,
+            model=model,
+            ephemeral_home=ephemeral_home,
+            max_steps=max_iterations,
+            ask_user_command=["python3", relay_path],
+            ask_user_environment={
+                "STERNA_USER_ID": self.user_id,
+                "STERNA_CHAT_ID": self.chat_id,
+                "STERNA_JOB_TOKEN": job_token,
+            },
+        )
+        spec = opencode_harness.build_wrapper_spec(
+            mode=mode,
+            workspace_path=workspace_path,
+            ephemeral_home=ephemeral_home,
+            task_file=task_file,
+            model=model,
+            tools=allowed_tools,
+        )
+        self._write_sandbox_file(container, spec_path, json.dumps(spec))
+        self._write_sandbox_file(container, task_file, full_task)
+
+        env = opencode_harness.build_env(
+            config=config,
+            ephemeral_home=ephemeral_home,
+            api_key=api_key,
+            base_env={
+                key: value for key, value in base_env.items()
+                if not key.startswith(("ANTHROPIC_", "CLAUDE_"))
+            },
+        )
+        cmd = (
+            f"stdbuf -oL python3 {wrapper_path} {spec_path} "
+            f"2>> {job_dir}/.opencode-wrapper.log | tee {output_file} > /dev/null"
+        )
+        return cmd, env
 
     def _get_metadata_base_path(self) -> str:
         """Get metadata base path for this chat."""
@@ -729,6 +726,7 @@ class CodingAgentRunner:
         plan_id: Optional[str] = None,
         sub_agents: Optional[List[Dict[str, Any]]] = None,
         user_model_preferences: Optional[Dict[str, str]] = None,
+        harness: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute Coding Agent agent.
@@ -751,6 +749,7 @@ class CodingAgentRunner:
         """
         job_id = self._generate_job_id()
         start_time = time.time()
+        harness = resolve_harness(harness)
 
         logger.info(f"[CodingAgent] Starting job {job_id}: task={task[:100]}...")
 
@@ -810,6 +809,7 @@ class CodingAgentRunner:
                 plan_content=plan_content,
                 sub_agents=sub_agents,
                 user_model_preferences=user_model_preferences,
+                harness=harness,
             )
 
             config_result = await self._create_config_file(container, job_dir, config)
@@ -976,6 +976,7 @@ class CodingAgentRunner:
                 "plan_content": config.plan_content,  # Plan content for implement mode
                 "sub_agents": config.sub_agents,  # Sub-agent definitions (may be None)
                 "user_model_preferences": config.user_model_preferences,  # Tier→model mapping
+                "harness": config.harness,  # CLI harness that runs the job
             }
 
             # Write config file
@@ -1349,6 +1350,7 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
             plan_content = config.get("plan_content")
             sub_agents = config.get("sub_agents")  # Sub-agent defs as {name, markdown} dicts
             user_model_preferences = config.get("user_model_preferences")  # Tier→model mapping
+            harness = resolve_harness(config.get("harness"))
 
             # SECURITY: Scan for dangerous config files before execution
             is_safe, dangerous_files = await self._scan_for_dangerous_configs(
@@ -1364,12 +1366,12 @@ Follow the approved plan step by step. Mark completed steps with ✅ in the plan
                     )
                 }
 
-            # SECURITY: Create ephemeral HOME directory for this job
-            # This prevents reading any persistent config from /home/sandboxuser/.claude/
-            # Also creates settings.json that restricts file access to workspace only
-            # In plan mode, permissions are tightened (read-only + write plans/ only)
+            # SECURITY: an ephemeral HOME keeps a job from reading, or
+            # leaving behind, any persistent configuration.
             job_id = job_dir.split("-")[-1] if "-" in job_dir else "unknown"
-            ephemeral_home = await self._setup_ephemeral_home(container, job_id, workspace_path, mode=mode)
+            ephemeral_home = await self._setup_ephemeral_home(
+                container, job_id, workspace_path, mode=mode, harness=harness
+            )
 
             # Create writable directories for pip/npm package installs on the workspace tmpfs.
             # The root filesystem is read-only, and /tmp is small, so packages go under /workspace.
@@ -1601,7 +1603,14 @@ Do NOT use ask_user for:
             # stdout has no reader, which causes SIGPIPE and early termination
             cmd = f'''printf '%s' '{escaped_task}' > {task_file} && stdbuf -oL claude --print --verbose --output-format stream-json --max-turns {max_iterations} --allowedTools "{tools_str}" --disallowedTools "AskUserQuestion" {mcp_flag} --no-session-persistence < {task_file} 2>&1 | tee {output_file} > /dev/null'''
 
-            logger.info(f"[CodingAgent] Executing Claude CLI in {workspace_path}")
+            if harness == OPENCODE:
+                cmd, env = await self._prepare_opencode_run(
+                    container, job_dir, ephemeral_home, workspace_path, mode,
+                    model, api_key, max_iterations, allowed_tools,
+                    task_file, output_file, full_task, env, job_token,
+                )
+
+            logger.info(f"[CodingAgent] Executing {harness} in {workspace_path}")
             logger.debug(f"[CodingAgent] Command: {cmd[:200]}...")
             # Presence only — never log key material (even a prefix).
             logger.info(f"[CodingAgent] API key provided: {bool(api_key)}")
@@ -1635,6 +1644,7 @@ Do NOT use ask_user for:
                         env=env,
                         output_file=output_file,
                         progress_file=progress_file,
+                        harness=harness,
                     ),
                     timeout=self.EXECUTION_TIMEOUT
                 )
@@ -1658,8 +1668,8 @@ Do NOT use ask_user for:
             if stdout:
                 logger.info(f"[CodingAgent] CLI output (first 500 chars): {stdout[:500]}")
 
-            # Parse the stream-json output
-            parsed = parse_claude_output(stdout)
+            # Parse the harness's own stream format
+            parsed = parse_run_output(harness, stdout, workspace_path)
             logger.info(f"[CodingAgent] Parsed {len(parsed.steps)} steps from output")
 
             # Override: if process was killed but parser didn't detect error
@@ -1748,9 +1758,10 @@ Do NOT use ask_user for:
         workspace_path: str,
         env: Dict[str, str],
         progress_file: str,
+        harness: str = "",
     ) -> Dict[str, Any]:
         """
-        Execute Claude CLI with streaming output for real-time progress tracking.
+        Execute the coding-agent CLI with streaming output for progress tracking.
 
         Args:
             container: Docker container to run in
@@ -1764,7 +1775,7 @@ Do NOT use ask_user for:
         """
         def _run_streaming():
             """Run the streaming execution in a thread."""
-            parser = ClaudeOutputParser()
+            parser = create_adapter(harness, workspace_path)
             all_output = []
             step_count = 0
 
@@ -1811,19 +1822,16 @@ Do NOT use ask_user for:
                         line_buffer += chunk_text
                         while '\n' in line_buffer:
                             line, line_buffer = line_buffer.split('\n', 1)
-                            if line.strip():
-                                step = parser.parse_line(line)
-                                if step:
-                                    parser.steps.append(step)
-                                    step_count += 1
+                            if line.strip() and parser.ingest(line):
+                                step_count += 1
 
-                                    # Write progress to file for real-time monitoring
-                                    self._write_progress_file(
-                                        container,
-                                        progress_file,
-                                        parser,
-                                        step_count
-                                    )
+                                # Write progress to file for real-time monitoring
+                                self._write_progress_file(
+                                    container,
+                                    progress_file,
+                                    parser,
+                                    step_count
+                                )
 
                     # Handle stderr (usually errors or warnings)
                     if stderr_chunk:
@@ -1834,12 +1842,9 @@ Do NOT use ask_user for:
                 logger.info(f"[CodingAgent] Stream completed: {chunks_received} chunks, {len(all_output)} output parts, {step_count} steps parsed")
 
                 # Process any remaining buffered line
-                if line_buffer.strip():
-                    step = parser.parse_line(line_buffer)
-                    if step:
-                        parser.steps.append(step)
-                        step_count += 1
-                        self._write_progress_file(container, progress_file, parser, step_count)
+                if line_buffer.strip() and parser.ingest(line_buffer):
+                    step_count += 1
+                    self._write_progress_file(container, progress_file, parser, step_count)
 
                 # Get exit code
                 exec_inspect = container.client.api.exec_inspect(exec_id["Id"])
@@ -1874,7 +1879,7 @@ Do NOT use ask_user for:
         self,
         container,
         progress_file: str,
-        parser: 'ClaudeOutputParser',
+        parser: AgentOutputAdapter,
         step_count: int,
         completed: bool = False,
         exit_code: Optional[int] = None,
@@ -1948,9 +1953,10 @@ Do NOT use ask_user for:
         env: Dict[str, str],
         output_file: str,
         progress_file: str,
+        harness: str = "",
     ) -> Dict[str, Any]:
         """
-        Execute Claude CLI with file-based progress tracking.
+        Execute the coding-agent CLI with file-based progress tracking.
 
         Instead of relying on Docker's streaming API (which has buffering issues with piped commands),
         this method:
@@ -1972,7 +1978,7 @@ Do NOT use ask_user for:
         def _run_with_file_polling():
             """Run command in background and poll output file for progress updates."""
             import time as time_module
-            parser = ClaudeOutputParser()
+            parser = create_adapter(harness, workspace_path)
             step_count = 0
             last_file_position = 0
             # Derive control file directory from output_file location
@@ -1992,10 +1998,11 @@ Do NOT use ask_user for:
                     user="sandboxuser"
                 )
 
-                # Build environment export string for shell
-                # Docker's environment parameter doesn't always export vars to subshells
+                # Docker's environment parameter doesn't always export vars to
+                # subshells. Values are quoted, not interpolated: they carry API
+                # keys and whole JSON documents that the shell must not reread.
                 env_exports = " && ".join([
-                    f'export {k}="{v}"' for k, v in env.items()
+                    f"export {k}={shlex.quote(str(v))}" for k, v in env.items()
                 ])
 
                 # Build background command that writes its PID and exit code
@@ -2079,19 +2086,16 @@ Do NOT use ask_user for:
                             line_buffer += new_content
                             while '\n' in line_buffer:
                                 line, line_buffer = line_buffer.split('\n', 1)
-                                if line.strip():
-                                    step = parser.parse_line(line)
-                                    if step:
-                                        parser.steps.append(step)
-                                        step_count += 1
+                                if line.strip() and parser.ingest(line):
+                                    step_count += 1
 
-                                        # Update progress file
-                                        self._write_progress_file(
-                                            container,
-                                            progress_file,
-                                            parser,
-                                            step_count
-                                        )
+                                    # Update progress file
+                                    self._write_progress_file(
+                                        container,
+                                        progress_file,
+                                        parser,
+                                        step_count
+                                    )
 
                     # Log progress periodically (more frequently at start for debugging)
                     if poll_count <= 5 or poll_count % 20 == 0:
@@ -2110,11 +2114,8 @@ Do NOT use ask_user for:
                             line_buffer += final_content
                             while '\n' in line_buffer:
                                 line, line_buffer = line_buffer.split('\n', 1)
-                                if line.strip():
-                                    step = parser.parse_line(line)
-                                    if step:
-                                        parser.steps.append(step)
-                                        step_count += 1
+                                if line.strip() and parser.ingest(line):
+                                    step_count += 1
 
                         # Check the final file size for debugging
                         size_result = container.exec_run(["sh", "-c", f"wc -c < {output_file}"], user="sandboxuser")
@@ -2126,11 +2127,8 @@ Do NOT use ask_user for:
                     time_module.sleep(poll_interval)
 
                 # Process any remaining buffered line
-                if line_buffer.strip():
-                    step = parser.parse_line(line_buffer)
-                    if step:
-                        parser.steps.append(step)
-                        step_count += 1
+                if line_buffer.strip() and parser.ingest(line_buffer):
+                    step_count += 1
 
                 # Read complete output file for return value
                 full_output_result = container.exec_run(
