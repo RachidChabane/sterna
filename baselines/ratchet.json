@@ -2,6 +2,7 @@
   "mypy_errors": 1486,
   "mypy_checked_files": 650,
   "ts_explicit_any": 666,
+  "ts_as_unknown": 17,
   "eslint_errors": 1114,
   "eslint_warnings": 83,
   "eslint_files_linted": 476,

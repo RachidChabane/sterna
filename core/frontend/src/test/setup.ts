@@ -42,7 +42,8 @@ class MemoryStorage implements Storage {
 const localStorageMock = new MemoryStorage()
 const sessionStorageMock = new MemoryStorage()
 
-for (const target of [globalThis, window] as unknown as Record<string, unknown>[]) {
+const globalScopes: object[] = [globalThis, window]
+for (const target of globalScopes) {
   Object.defineProperty(target, 'localStorage', {
     value: localStorageMock,
     writable: true,
@@ -80,6 +81,7 @@ Object.defineProperty(window, 'matchMedia', {
 class MockIntersectionObserver implements IntersectionObserver {
   readonly root: Element | Document | null = null;
   readonly rootMargin: string = '0px';
+  readonly scrollMargin: string = '0px';
   readonly thresholds: ReadonlyArray<number> = [0];
 
   constructor() {}
@@ -91,12 +93,12 @@ class MockIntersectionObserver implements IntersectionObserver {
   }
 }
 
-global.IntersectionObserver = MockIntersectionObserver as any;
+global.IntersectionObserver = MockIntersectionObserver
 
 // Mock ResizeObserver (Radix UI primitives use this)
-class MockResizeObserver {
+class MockResizeObserver implements ResizeObserver {
   observe() {}
   unobserve() {}
   disconnect() {}
 }
-global.ResizeObserver = MockResizeObserver as any;
+global.ResizeObserver = MockResizeObserver
