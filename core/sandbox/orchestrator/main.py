@@ -526,8 +526,16 @@ class CodingAgentExecuteResponse(BaseModel):
     success: bool
     job_id: Optional[str] = None
     summary: Optional[str] = None
+    plan_content: Optional[str] = Field(
+        default=None,
+        description="The plan the agent wrote, on a run in plan mode"
+    )
     files_modified: List[str] = []
     files_created: List[str] = []
+    versions_created: int = Field(
+        default=0,
+        description="File versions the run recorded for the files it changed"
+    )
     steps: List[Dict[str, Any]] = []
     error: Optional[str] = None
     duration_ms: int = 0
@@ -1834,8 +1842,10 @@ async def execute_coding_agent(
             success=result.get("success", False),
             job_id=result.get("job_id"),
             summary=result.get("summary"),
+            plan_content=result.get("plan_content"),
             files_modified=result.get("files_modified", []),
             files_created=result.get("files_created", []),
+            versions_created=result.get("versions_created", 0),
             steps=result.get("steps", []),
             error=result.get("error"),
             duration_ms=result.get("duration_ms", 0),

@@ -94,6 +94,11 @@ PLAN_MARKDOWN = (
     "Copy each expiring row into ArchivedSession, then delete it.\n"
 )
 
+PLAN_RUN_SUMMARY = (
+    "Read the session module and wrote a two-step plan for archiving "
+    "expired sessions."
+)
+
 IMPLEMENT_SUMMARY = (
     "Archived expired sessions before purging them. Added ArchivedSession, "
     "routed purge_expired through archive_then_delete, and covered it with "
@@ -159,14 +164,15 @@ FILES_MODIFIED = ["src/auth/session.py"]
 def _plan_execute_response():
     """What `/coding-agent/execute` serves for a finished planning run.
 
-    The plan text arrives as `summary`: the runner puts it in a
-    `plan_content` key the endpoint's response model does not carry, and
-    the chat side falls back to the summary.
+    The plan text arrives as `plan_content`, and the run's own
+    `summary` says something else, so a chat side that fell back to
+    the summary would write the wrong plan.
     """
     return execute_response(
         success=True,
         job_id=PLAN_JOB_ID,
-        summary=PLAN_MARKDOWN,
+        summary=PLAN_RUN_SUMMARY,
+        plan_content=PLAN_MARKDOWN,
         steps=PLAN_STEPS,
         duration_ms=41000,
     )
@@ -369,7 +375,13 @@ class CodingAgentGoldenTests(APITestCase):
         )
 
     def test_plan_mode_writes_a_reviewable_plan(self):
-        """The plan the turn produced is a record the user can act on."""
+        """The plan the turn produced is a record the user can act on.
+
+        The record holds what the orchestrator returned as
+        `plan_content`, not the run's summary: the plan is the
+        artefact the user reviews, and the summary only describes the
+        run that wrote it.
+        """
         from code_sessions.models import AgentPlan
 
         orchestrator = _plan_orchestrator()
@@ -387,6 +399,7 @@ class CodingAgentGoldenTests(APITestCase):
         self.assertEqual(plan.status, AgentPlan.Status.READY)
         self.assertEqual(plan.total_steps, 2)
         self.assertEqual(plan.plan_content, PLAN_MARKDOWN)
+        self.assertNotEqual(plan.plan_content, PLAN_RUN_SUMMARY)
 
     # --- (b) implement mode: file changes and a completed plan ---------
 
