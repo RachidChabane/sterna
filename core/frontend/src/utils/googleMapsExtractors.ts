@@ -5,11 +5,7 @@
  * and converting them to a format compatible with the LocationsMap component.
  */
 import { isRecord } from '@/components/models/tool-renderers/shared'
-
-/** A tool execution's raw payload — the shape every extractor unwraps before reading fields. */
-export interface ToolExecutionLike {
-  result: unknown
-}
+import type { ToolExecutionLike } from '@/utils/braveSearchExtractors'
 
 export interface LocationData {
   title: string
@@ -114,17 +110,22 @@ export const extractGeocodeLocations = (execution: ToolExecutionLike): LocationD
     return null
   }
 
-  return result.results.filter(isGeocodeResultItem).map((loc) => ({
-    title: loc.formatted_address ?? '',
-    address: loc.formatted_address,
-    coordinates: {
-      latitude: loc.latitude ?? 0,
-      longitude: loc.longitude ?? 0,
-    },
-    rating: null,
-    phone_number: null,
-    id: loc.place_id,
-  }))
+  const locations: LocationData[] = []
+  for (const loc of result.results.filter(isGeocodeResultItem)) {
+    if (typeof loc.latitude !== 'number' || typeof loc.longitude !== 'number') continue
+    locations.push({
+      title: loc.formatted_address ?? '',
+      address: loc.formatted_address,
+      coordinates: {
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+      },
+      rating: null,
+      phone_number: null,
+      id: loc.place_id,
+    })
+  }
+  return locations
 }
 
 /**
@@ -136,18 +137,22 @@ export const extractNearbyPlaces = (execution: ToolExecutionLike): LocationData[
     return null
   }
 
-  return result.results.filter(isNearbyPlaceItem).map((place) => ({
-    title: place.name ?? '',
-    address: place.address || place.vicinity || place.formatted_address,
-    coordinates: {
-      latitude: place.location?.lat ?? place.latitude ?? 0,
-      longitude: place.location?.lng ?? place.longitude ?? 0,
-    },
-    rating: place.rating,
-    phone_number: place.phone_number,
-    id: place.place_id,
-    types: place.types,
-  }))
+  const locations: LocationData[] = []
+  for (const place of result.results.filter(isNearbyPlaceItem)) {
+    const latitude = place.location?.lat ?? place.latitude
+    const longitude = place.location?.lng ?? place.longitude
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') continue
+    locations.push({
+      title: place.name ?? '',
+      address: place.address || place.vicinity || place.formatted_address,
+      coordinates: { latitude, longitude },
+      rating: place.rating,
+      phone_number: place.phone_number,
+      id: place.place_id,
+      types: place.types,
+    })
+  }
+  return locations
 }
 
 /**
