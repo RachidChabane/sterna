@@ -126,6 +126,7 @@ async def discover_protected_resource_metadata(
 
         candidate_urls.extend(_protected_resource_well_known_urls(server_url))
 
+        expected_resource = canonical_resource_uri(server_url)
         for url in candidate_urls:
             try:
                 response = await client.get(url, headers={"Accept": "application/json"})
@@ -134,10 +135,26 @@ async def discover_protected_resource_metadata(
                 continue
             if response.status_code == 200:
                 try:
-                    return response.json(), challenge_scope
+                    data = response.json()
                 except ValueError:
                     logger.warning(f"Protected resource metadata at {url} was not valid JSON")
                     continue
+                declared = data.get("resource")
+                if (
+                    not isinstance(declared, str)
+                    or canonical_resource_uri(declared) != expected_resource
+                ):
+                    # RFC 9728 Section 3.3: the metadata's `resource` must
+                    # identify the resource the client asked about, or the
+                    # document (whose URL may come from an untrusted
+                    # WWW-Authenticate challenge) could steer authorization
+                    # to an attacker-chosen server.
+                    logger.warning(
+                        f"Rejecting protected resource metadata at {url}: "
+                        f"resource {declared!r} does not match {expected_resource!r}"
+                    )
+                    continue
+                return data, challenge_scope
 
         return None, challenge_scope
 

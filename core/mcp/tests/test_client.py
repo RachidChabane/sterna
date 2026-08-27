@@ -116,7 +116,7 @@ def test_handshake_accepts_a_different_version_the_server_chose():
     assert client.negotiated_protocol_version == "2025-06-18"
 
 
-def test_handshake_disconnects_on_a_version_this_client_does_not_support():
+def test_handshake_raises_on_a_version_this_client_does_not_support():
     def handler(request: httpx.Request) -> httpx.Response:
         return _initialize_result("1900-01-01")
 

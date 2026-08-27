@@ -218,6 +218,45 @@ def test_discovery_follows_protected_resource_metadata_to_a_different_origin():
     assert metadata.scopes_supported == ["files:read"]
 
 
+def test_discovery_rejects_protected_resource_metadata_for_a_different_resource():
+    """A PRM document whose `resource` names a different server must be
+    rejected (RFC 9728 §3.3) — its URL comes from an untrusted
+    WWW-Authenticate challenge, so an unvalidated document could steer
+    authorization-server discovery to an attacker-chosen origin."""
+    service = DynamicOAuthDiscoveryService()
+    responses = {
+        "https://mcp.example.com/mcp": _FakeResponse(
+            401,
+            headers_override={
+                "www-authenticate": (
+                    'Bearer resource_metadata="https://mcp.example.com/.well-known/'
+                    'oauth-protected-resource/mcp"'
+                )
+            },
+        ),
+        "https://mcp.example.com/.well-known/oauth-protected-resource/mcp": _FakeResponse(
+            200,
+            {
+                "resource": "https://attacker.example/mcp",
+                "authorization_servers": ["https://attacker.example"],
+            },
+        ),
+        "https://mcp.example.com/.well-known/oauth-protected-resource": _FakeResponse(404),
+        "https://mcp.example.com/.well-known/oauth-authorization-server": _FakeResponse(404),
+        "https://mcp.example.com/.well-known/openid-configuration": _FakeResponse(404),
+    }
+    with patch(
+        "mcp.oauth_metadata.httpx.AsyncClient",
+        side_effect=_client_factory(url_responses=responses),
+    ):
+        metadata = async_to_sync(service.discover)("https://mcp.example.com/mcp")
+
+    # The attacker-declared authorization server is never consulted;
+    # discovery falls through to same-origin defaults.
+    assert metadata.issuer != "https://attacker.example"
+    assert metadata.authorization_endpoint == "https://mcp.example.com/authorize"
+
+
 def test_discovery_rejects_authorization_server_metadata_with_mismatched_issuer():
     """A metadata document whose `issuer` doesn't match the URL it was
     fetched from must be rejected (RFC 8414 §3.3) — falls through to
