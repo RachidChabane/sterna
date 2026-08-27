@@ -1,10 +1,8 @@
 """UnifiedMCPRegistry._refresh_oauth_token wiring (mcp/unified_registry.py).
 
-Proves the registry's OAuth refresh path resolves and calls the real
-``MCPDynamicOAuthFlow.refresh_server_token`` rather than a nonexistent
-class name — a stale import here would raise before any HTTP call is
-attempted, so a bare no-mock call already exercises the wiring end to
-end for the graceful-failure case.
+The no-refresh-token case below calls the registry with no mocking of
+`mcp.oauth`, so a broken import in `_refresh_oauth_token` surfaces as
+an error rather than silently returning False.
 """
 
 from unittest.mock import patch
@@ -22,8 +20,6 @@ pytestmark = pytest.mark.django_db
 
 
 def test_refresh_oauth_token_returns_false_without_refresh_token(user_a):
-    """No mocking: a stale `DynamicOAuthManager` import would raise
-    ImportError here instead of returning False."""
     server = make_server(
         user_a,
         npm_package="",

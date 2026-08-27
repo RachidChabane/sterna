@@ -13,7 +13,8 @@ from mcp.error_handlers import (
 )
 
 
-def test_load_connector_config_returns_empty_list_when_file_missing():
+def test_load_connector_config_returns_empty_list_when_file_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(error_handlers, "__file__", str(tmp_path / "error_handlers.py"))
     assert _load_connector_config("no-such-connector") == []
 
 
@@ -57,7 +58,8 @@ def test_load_connector_config_returns_empty_list_on_malformed_json(tmp_path, mo
     assert _load_connector_config("widget") == []
 
 
-def test_load_generic_config_returns_empty_list_when_file_missing():
+def test_load_generic_config_returns_empty_list_when_file_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(error_handlers, "__file__", str(tmp_path / "error_handlers.py"))
     assert _load_generic_config() == []
 
 
