@@ -48,6 +48,12 @@ class MCPProtocolError(MCPError):
     pass
 
 
+class MCPUnsupportedProtocolVersionError(MCPConnectionError):
+    """Raised when client and server share no common protocol version."""
+
+    pass
+
+
 class MCPAuthenticationError(MCPError):
     """Raised when authentication fails."""
 

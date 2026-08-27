@@ -27,8 +27,15 @@ from .protocol import (
     MCPToolCallResult,
     MCPToolDefinition,
 )
+from .versioning import negotiate_handshake_version
 
 logger = logging.getLogger(__name__)
+
+# Client identity sent with every `initialize` request.
+DEFAULT_CLIENT_INFO: Dict[str, Any] = {
+    "name": "Sterna MCP Client",
+    "version": "1.0.0",
+}
 
 
 class MCPClientBase(ABC):
@@ -49,6 +56,10 @@ class MCPClientBase(ABC):
         self.auth_config = auth_config or {}
         self.is_connected = False
         self._message_id = 0
+        # Set once `handshake()` negotiates a version with the server;
+        # None means no version has been negotiated yet (handshake was
+        # skipped or has not completed).
+        self.negotiated_protocol_version: Optional[str] = None
 
     def _generate_message_id(self) -> str:
         """Generate a unique message ID."""
@@ -99,26 +110,23 @@ class MCPClientBase(ABC):
         if not self.is_connected:
             raise MCPConnectionError("Not connected to MCP server")
 
-        client_info = client_info or {
-            "name": "Sterna MCP Client",
-            "version": "1.0.0",
-        }
+        client_info = client_info or DEFAULT_CLIENT_INFO
 
-        request = MCPRequest(
-            id=self._generate_message_id(),
-            method=MCPMessageType.INITIALIZE,
-            params={
-                "protocolVersion": "2024-11-05",
-                "clientInfo": client_info,
-                "capabilities": {},
-            },
-        )
+        async def send_initialize(version: str) -> MCPResponse:
+            request = MCPRequest(
+                id=self._generate_message_id(),
+                method=MCPMessageType.INITIALIZE,
+                params={
+                    "protocolVersion": version,
+                    "clientInfo": client_info,
+                    "capabilities": {},
+                },
+            )
+            return await self._send_request(request)
 
         try:
-            response = await self._send_request(request)
-            if response.is_error():
-                error_msg = (response.error or {}).get("message", "Unknown error")
-                raise MCPConnectionError(f"Handshake failed: {error_msg}")
+            response, negotiated = await negotiate_handshake_version(send_initialize)
+            self.negotiated_protocol_version = negotiated
 
             # Send initialized notification (fire-and-forget: no id, so _send_request won't await a response)
             initialized_notification = MCPRequest(method=MCPMessageType.INITIALIZED, params={})
@@ -128,6 +136,8 @@ class MCPClientBase(ABC):
 
         except asyncio.TimeoutError:
             raise MCPTimeoutError("Handshake timed out")
+        except MCPConnectionError:
+            raise
         except Exception as e:
             raise MCPConnectionError(f"Handshake failed: {str(e)}")
 
@@ -916,29 +926,29 @@ class MCPRemoteHTTPClient(MCPClientBase):
         if not self.is_connected:
             raise MCPConnectionError("Not connected to MCP server")
 
-        client_info = client_info or {
-            "name": "Sterna MCP Client",
-            "version": "1.0.0",
-        }
+        client_info = client_info or DEFAULT_CLIENT_INFO
 
-        request = MCPRequest(
-            id=self._generate_message_id(),
-            method=MCPMessageType.INITIALIZE,
-            params={
-                "protocolVersion": "2024-11-05",
-                "clientInfo": client_info,
-                "capabilities": {},
-            },
-        )
+        async def send_initialize(version: str) -> MCPResponse:
+            request = MCPRequest(
+                id=self._generate_message_id(),
+                method=MCPMessageType.INITIALIZE,
+                params={
+                    "protocolVersion": version,
+                    "clientInfo": client_info,
+                    "capabilities": {},
+                },
+            )
+            # Session ID is minted on this call, so it can't be sent yet.
+            return await self._send_request(request, capture_session_id=True)
 
         try:
-            # Send initialize request and capture session ID from response
-            response = await self._send_request(request, capture_session_id=True)
-            if response.is_error():
-                error_msg = (response.error or {}).get("message", "Unknown error")
-                raise MCPConnectionError(f"Handshake failed: {error_msg}")
+            response, negotiated = await negotiate_handshake_version(send_initialize)
+            self.negotiated_protocol_version = negotiated
 
-            logger.info(f"MCP handshake successful, session_id captured: {self.session_id is not None}")
+            logger.info(
+                f"MCP handshake successful (protocol {negotiated}), "
+                f"session_id captured: {self.session_id is not None}"
+            )
 
             # Send initialized notification (no response expected)
             initialized_notification = MCPRequest(
@@ -951,6 +961,8 @@ class MCPRemoteHTTPClient(MCPClientBase):
 
         except asyncio.TimeoutError:
             raise MCPTimeoutError("Handshake timed out")
+        except MCPConnectionError:
+            raise
         except Exception as e:
             raise MCPConnectionError(f"Handshake failed: {str(e)}")
 
