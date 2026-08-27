@@ -1,4 +1,4 @@
-import { Cpu } from 'lucide-react'
+import { Cpu, Star, GitCompare } from 'lucide-react'
 import type { CommandProvider, ModelCommandItem } from '../types'
 import type { ModelStore } from '@/store/modelStore'
 import { matchQuery, scoreMatch } from '../utils/search'
@@ -28,6 +28,7 @@ export function createModelsProvider(getStore: () => ModelStore): CommandProvide
         selectedModels,
         currentModel,
         setCurrentModel,
+        comparisonModels,
       } = store
 
       // Load all models if not already loaded
@@ -68,6 +69,9 @@ export function createModelsProvider(getStore: () => ModelStore): CommandProvide
         const isFavorite = favorites.some((f) => f.model_id === model.model_id)
         const isSelected = selectedModels.has(model.model_id)
         const isCurrent = currentModel?.model_id === model.model_id
+        // Comparison membership is looked up by model_id, matching ModelCatalogBrowser's
+        // comparisonIds convention; removal is issued by id, matching removeFromComparison's contract.
+        const isCompared = comparisonModels.some((m) => m.model_id === model.model_id)
 
         return {
           id: model.model_id,
@@ -85,6 +89,36 @@ export function createModelsProvider(getStore: () => ModelStore): CommandProvide
           onSelect: () => {
             setCurrentModel(model)
           },
+          actions: [
+            {
+              label: isFavorite ? 'Remove from favorites' : 'Add to favorites',
+              icon: Star,
+              // Re-read the store instead of closing over `isFavorite`: this item
+              // (and its label) is a point-in-time snapshot from getItems(), but the
+              // palette does not refetch between renders, so the toggle must decide
+              // add-vs-remove from current state at click time, not snapshot time.
+              onClick: () => {
+                const current = getStore()
+                if (current.favorites.some((f) => f.model_id === model.model_id)) {
+                  current.removeFavorite(model.model_id)
+                } else {
+                  current.addFavorite(model.model_id, model)
+                }
+              },
+            },
+            {
+              label: isCompared ? 'Remove from comparison' : 'Add to comparison',
+              icon: GitCompare,
+              onClick: () => {
+                const current = getStore()
+                if (current.comparisonModels.some((m) => m.model_id === model.model_id)) {
+                  current.removeFromComparison(model.id)
+                } else {
+                  current.addToComparison(model)
+                }
+              },
+            },
+          ],
           // Store full model data for rendering ModelIcon
           _modelData: model,
         }

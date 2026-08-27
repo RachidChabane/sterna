@@ -13,6 +13,20 @@ interface CommandPaletteItemProps {
 }
 
 /**
+ * Recent items round-trip through the command palette store's localStorage
+ * persistence as JSON, which drops function-valued properties (component
+ * references, callbacks) entirely. A rehydrated item can carry an `icon`
+ * or `onClick` that no longer exists, so both must be checked at render time
+ * rather than trusted from the item's declared type.
+ */
+function isIconComponent(icon: unknown): icon is LucideIcon {
+  return (
+    typeof icon === 'function' ||
+    (typeof icon === 'object' && icon !== null && ('$$typeof' in icon || 'render' in icon))
+  )
+}
+
+/**
  * Command Palette Item Component
  *
  * Renders individual command items with icons, highlighting, badges, and actions
@@ -72,12 +86,7 @@ export function CommandPaletteItem({ item, query, onSelect }: CommandPaletteItem
     }
 
     // Otherwise, treat icon as a component (function or ForwardRef) and render it
-    // ForwardRef components are objects with $$typeof or render properties
-    const isValidComponent =
-      typeof icon === 'function' ||
-      (typeof icon === 'object' && icon !== null && ('$$typeof' in icon || 'render' in icon))
-
-    if (icon && isValidComponent) {
+    if (isIconComponent(icon)) {
       const Icon = icon as LucideIcon
       return (
         <div className="p-1.5 rounded-md bg-muted group-hover:bg-accent-brand/10 group-hover:text-accent-brand group-aria-selected:bg-accent-brand/20 group-aria-selected:text-accent-brand transition-all duration-200">
@@ -146,6 +155,35 @@ export function CommandPaletteItem({ item, query, onSelect }: CommandPaletteItem
           </div>
         )}
       </div>
+
+      {/* Secondary actions (e.g. favorite/compare toggles on model items) */}
+      {'actions' in item && item.actions && (() => {
+        const renderableActions = item.actions.filter(
+          (action) => isIconComponent(action.icon) && typeof action.onClick === 'function'
+        )
+        if (renderableActions.length === 0) return null
+
+        return (
+          <div className="flex items-center gap-1 shrink-0">
+            {renderableActions.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                aria-label={action.label}
+                title={action.label}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  action.onClick(e)
+                }}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-accent-brand hover:bg-accent-brand/10 transition-colors"
+              >
+                <action.icon className="h-3.5 w-3.5" />
+              </button>
+            ))}
+          </div>
+        )
+      })()}
     </CommandItem>
     </div>
   )
