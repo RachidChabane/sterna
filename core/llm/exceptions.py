@@ -2,6 +2,8 @@
 Custom exceptions for LLM module.
 """
 
+from typing import Optional
+
 
 class LLMException(Exception):
     """Base exception for LLM module."""
@@ -42,7 +44,13 @@ class CostLimitException(LLMException):
 class ContextLimitExceededException(LLMException):
     """Exception when conversation context exceeds model's maximum tokens."""
 
-    def __init__(self, message: str, model_id: str = None, required_tokens: int = None, max_tokens: int = None):
+    def __init__(
+        self,
+        message: str,
+        model_id: Optional[str] = None,
+        required_tokens: Optional[int] = None,
+        max_tokens: Optional[int] = None,
+    ):
         """
         Initialize context limit exception with detailed information.
 

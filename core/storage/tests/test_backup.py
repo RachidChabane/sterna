@@ -3,10 +3,10 @@
 from datetime import datetime, timedelta, timezone as dt_tz
 from unittest.mock import patch
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 import moto
 import pytest
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 from django.core.cache import cache
 
 from storage.services import r2_backup

@@ -29,7 +29,7 @@ def apply_watermark(
     from PIL import Image, ImageDraw, ImageFont
 
     # Open the image
-    img = Image.open(io.BytesIO(image_data))
+    img: Image.Image = Image.open(io.BytesIO(image_data))
 
     # Convert to RGBA for transparency support
     if img.mode != 'RGBA':
@@ -44,6 +44,7 @@ def apply_watermark(
     font_size = max(16, int(min_dim * 0.025))
 
     # Try to use a nice font, fall back to default
+    font: "ImageFont.FreeTypeFont | ImageFont.ImageFont"
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
     except (IOError, OSError):

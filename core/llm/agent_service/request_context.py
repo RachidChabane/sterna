@@ -131,14 +131,14 @@ async def install(
     if agent.enable_brave_search:
         BRAVE_SEARCH_USER_CONTEXT.set({
             "user_id": user_id,
-            "authorization": _authorization_header(auth_token),
+            "authorization": _authorization_header(auth_token) or "",
         })
         logger.debug("[LangChain] Set Brave Search user context for quota tracking")
 
     if agent.enable_google_maps:
         GOOGLE_MAPS_USER_CONTEXT.set({
             "user_id": user_id,
-            "authorization": _authorization_header(auth_token),
+            "authorization": _authorization_header(auth_token) or "",
         })
         logger.debug("[LangChain] Set Google Maps user context for quota tracking")
 

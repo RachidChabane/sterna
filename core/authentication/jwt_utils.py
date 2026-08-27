@@ -3,10 +3,19 @@ import logging
 from datetime import datetime, timedelta
 from django.conf import settings
 from django.utils import timezone
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, TypedDict
 import secrets
 
 _logger = logging.getLogger("authentication.jwt")
+
+
+class TokenPairPayload(TypedDict):
+    """Response shape shared by ``create_token_pair`` and ``refresh_access_token``."""
+
+    access_token: str
+    refresh_token: str
+    token_type: str
+    expires_in: int
 
 
 class JWTManager:
@@ -114,7 +123,7 @@ class JWTManager:
             return None
 
     @classmethod
-    def create_token_pair(cls, user) -> Dict[str, str]:
+    def create_token_pair(cls, user) -> TokenPairPayload:
         """Create both access and refresh tokens for a user.
 
         Only the SHA-256 digest of the refresh token is persisted —
@@ -155,7 +164,7 @@ class JWTManager:
         )
 
     @classmethod
-    def refresh_access_token(cls, refresh_token: str) -> Optional[Dict[str, str]]:
+    def refresh_access_token(cls, refresh_token: str) -> Optional[TokenPairPayload]:
         """Rotate the refresh token and mint a new access token.
 
         Standard refresh-token rotation with reuse detection:

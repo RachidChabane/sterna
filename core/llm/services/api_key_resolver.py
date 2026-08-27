@@ -10,7 +10,7 @@ making it easy to track and monitor usage.
 
 import logging
 import os
-from typing import Literal, Optional, Tuple, TYPE_CHECKING
+from typing import Literal, Optional, Tuple, TYPE_CHECKING, cast
 
 from django.conf import settings
 
@@ -31,6 +31,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 BillingOrigin = Literal['byok', 'platform']
+
+# usage_quota.constants types these as plain `str` (its own BillingOrigin
+# alias is intentionally loose); this module narrows to the two known
+# values, so re-assert that narrowing once here rather than at every
+# return site below.
+_ORIGIN_BYOK: BillingOrigin = cast(BillingOrigin, BILLING_ORIGIN_BYOK)
+_ORIGIN_PLATFORM: BillingOrigin = cast(BillingOrigin, BILLING_ORIGIN_PLATFORM)
 
 
 class NoAPIKeyError(ValueError):
@@ -90,7 +97,7 @@ class APIKeyResolver:
         """
         # Try to get user's key first
         if request and hasattr(request, 'user') and request.user.is_authenticated:
-            user_key = self.get_api_key_for_user(request.user)
+            user_key = self.get_api_key_for_user(cast('User', request.user))
             if user_key:
                 return user_key
 
@@ -127,7 +134,7 @@ class APIKeyResolver:
     def get_user_from_request(self, request: Optional['HttpRequest']) -> Optional['User']:
         """Extract authenticated user from request."""
         if request and hasattr(request, 'user') and request.user.is_authenticated:
-            return request.user
+            return cast('User', request.user)
         return None
 
     def get_api_key_with_fallback(
@@ -189,10 +196,10 @@ class APIKeyResolver:
             ValueError: if no API key is available.
         """
         if model_id is not None:
-            api_key, _base_url, origin, _slug = self.resolve_endpoint(
+            api_key, _base_url, endpoint_origin, _slug = self.resolve_endpoint(
                 user=user, request=request, model_id=model_id,
             )
-            return api_key, origin
+            return api_key, endpoint_origin
 
         if user is None and request is not None:
             user = self.get_user_from_request(request)
@@ -201,15 +208,11 @@ class APIKeyResolver:
             user_key = getattr(user, 'openrouter_api_key', None)
             if user_key:
                 provisioned_at = getattr(user, 'openrouter_key_provisioned_at', None)
-                origin: BillingOrigin = (
-                    BILLING_ORIGIN_PLATFORM
-                    if provisioned_at is not None
-                    else BILLING_ORIGIN_BYOK
-                )
+                origin = _ORIGIN_PLATFORM if provisioned_at is not None else _ORIGIN_BYOK
                 return user_key, origin
 
         if self._fallback_key:
-            return self._fallback_key, BILLING_ORIGIN_PLATFORM
+            return self._fallback_key, _ORIGIN_PLATFORM
 
         raise NoAPIKeyError(
             "No OpenRouter API key available. "
@@ -248,7 +251,7 @@ class APIKeyResolver:
 
         is_authenticated = user is not None and getattr(user, 'is_authenticated', False)
 
-        if is_authenticated and model_id:
+        if is_authenticated and model_id and user is not None:
             provider_slug = provider_for_model(model_id)
             if provider_slug and hasattr(user, 'get_provider_key'):
                 provider_key = user.get_provider_key(provider_slug)
@@ -256,7 +259,7 @@ class APIKeyResolver:
                     return (
                         provider_key,
                         BYOK_PROVIDERS[provider_slug]['base_url'],
-                        BILLING_ORIGIN_BYOK,
+                        _ORIGIN_BYOK,
                         provider_slug,
                     )
 
@@ -264,18 +267,14 @@ class APIKeyResolver:
             user_key = getattr(user, 'openrouter_api_key', None)
             if user_key:
                 provisioned_at = getattr(user, 'openrouter_key_provisioned_at', None)
-                origin: BillingOrigin = (
-                    BILLING_ORIGIN_PLATFORM
-                    if provisioned_at is not None
-                    else BILLING_ORIGIN_BYOK
-                )
+                origin = _ORIGIN_PLATFORM if provisioned_at is not None else _ORIGIN_BYOK
                 return user_key, OPENROUTER_BASE_URL, origin, None
 
         if self._fallback_key:
             return (
                 self._fallback_key,
                 OPENROUTER_BASE_URL,
-                BILLING_ORIGIN_PLATFORM,
+                _ORIGIN_PLATFORM,
                 None,
             )
 

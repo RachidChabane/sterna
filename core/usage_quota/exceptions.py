@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
 
 class QuotaException(Exception):
@@ -50,23 +50,23 @@ class QuotaExceededException(QuotaException):
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API response (legacy shape)."""
-        result = {
-            "error": self.code,
-            "message": self.message,
-            "details": {
-                "limit_type": self.limit_type,
-                "limit_usd": str(self.limit_usd),
-                "used_usd": str(self.used_usd),
-                "remaining_usd": str(self.remaining_usd),
-            }
+        details: dict[str, Any] = {
+            "limit_type": self.limit_type,
+            "limit_usd": str(self.limit_usd),
+            "used_usd": str(self.used_usd),
+            "remaining_usd": str(self.remaining_usd),
         }
         if self.resets_in_seconds is not None:
-            result["details"]["resets_in_seconds"] = self.resets_in_seconds
+            details["resets_in_seconds"] = self.resets_in_seconds
             hours = self.resets_in_seconds // 3600
-            result["details"]["resets_in_hours"] = hours
+            details["resets_in_hours"] = hours
         if self.feature_name is not None:
-            result["details"]["feature"] = self.feature_name
-        return result
+            details["feature"] = self.feature_name
+        return {
+            "error": self.code,
+            "message": self.message,
+            "details": details,
+        }
 
     def to_response_dict(self) -> dict:
         """402-shaped body for the DRF exception handler."""

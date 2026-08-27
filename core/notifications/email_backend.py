@@ -115,12 +115,12 @@ class ResendEmailBackend(BaseEmailBackend):
             f"Resend retries exhausted: last_status={last_status} body={last_body}"
         )
 
-    def _build_payload(self, message: EmailMessage) -> dict:
-        payload = {
+    def _build_payload(self, message: EmailMessage) -> resend.Emails.SendParams:
+        payload: resend.Emails.SendParams = {
             "from": message.from_email,
             "to": list(message.to),
-            "subject": message.subject,
-            "text": message.body,
+            "subject": str(message.subject),
+            "text": str(message.body),
         }
         if message.cc:
             payload["cc"] = list(message.cc)
@@ -131,7 +131,7 @@ class ResendEmailBackend(BaseEmailBackend):
         if isinstance(message, EmailMultiAlternatives):
             for content, mimetype in message.alternatives or []:
                 if mimetype == "text/html":
-                    payload["html"] = content
+                    payload["html"] = str(content)
                     break
         if message.attachments:
             payload["attachments"] = [
@@ -142,7 +142,7 @@ class ResendEmailBackend(BaseEmailBackend):
         return payload
 
     @staticmethod
-    def _encode_attachment(attachment) -> dict:
+    def _encode_attachment(attachment) -> resend.Attachment:
         if isinstance(attachment, tuple):
             filename, content, mimetype = (attachment + (None,) * 3)[:3]
         else:
@@ -151,7 +151,7 @@ class ResendEmailBackend(BaseEmailBackend):
         if isinstance(content, str):
             content = content.encode("utf-8")
         encoded = base64.b64encode(content).decode("ascii")
-        result = {"filename": filename, "content": encoded}
+        result: resend.Attachment = {"filename": filename, "content": encoded}
         if mimetype:
             result["content_type"] = mimetype
         return result

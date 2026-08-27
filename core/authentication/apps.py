@@ -6,6 +6,9 @@ class AuthenticationConfig(AppConfig):
     name = "authentication"
 
     def ready(self):
-        """Register signals when app is ready."""
+        """Register signals and attach OpenAPI schema annotations."""
         # Import signals to register them
         from . import signals  # noqa: F401
+        from .openapi_schema import apply_auth_schema
+
+        apply_auth_schema()

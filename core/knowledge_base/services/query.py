@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from ..models import KnowledgeQueryLog
 
 from django.utils import timezone
-from pgvector.django import CosineDistance
+from pgvector.django import CosineDistance  # type: ignore[import-untyped]
 
 from ..config import config
 
@@ -64,7 +64,7 @@ class KnowledgeQueryService:
         self,
         user,
         query: str,
-        max_results: int = None,
+        max_results: Optional[int] = None,
         similarity_threshold: Optional[float] = None,
         document_ids: Optional[List[str]] = None,
         conversation_id: Optional[str] = None,
@@ -145,7 +145,9 @@ class KnowledgeQueryService:
         chunks_searched = KnowledgeChunk.objects.filter(user=user).count()
 
         for chunk in queryset.select_related('document'):
-            similarity = 1 - chunk.distance
+            # `distance` is added at query time by the .annotate() call above;
+            # it is not part of KnowledgeChunk's declared fields.
+            similarity = 1 - chunk.distance  # type: ignore[attr-defined]
             results.append(SearchResult(
                 chunk_id=str(chunk.id),
                 document_id=str(chunk.document_id),
@@ -226,7 +228,7 @@ class KnowledgeQueryService:
     def format_context_for_llm(
         self,
         results: List[SearchResult],
-        max_tokens: int = None,
+        max_tokens: Optional[int] = None,
     ) -> str:
         """
         Format search results as context for LLM injection.

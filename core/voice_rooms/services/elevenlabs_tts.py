@@ -676,7 +676,7 @@ class ElevenLabsTTSClient:
             await self.initialize()
 
         try:
-            response = await self._http_client.get("/voices")
+            response = await self._http_client.get("/voices")  # type: ignore[union-attr]
             response.raise_for_status()
             data = response.json()
 
@@ -705,7 +705,7 @@ class ElevenLabsTTSClient:
             await self.initialize()
 
         try:
-            response = await self._http_client.get("/models")
+            response = await self._http_client.get("/models")  # type: ignore[union-attr]
             response.raise_for_status()
             data = response.json()
 
@@ -816,7 +816,7 @@ class ElevenLabsTTSClient:
             if speed is not None:
                 request_body["speed"] = speed
 
-            response = await self._http_client.post(
+            response = await self._http_client.post(  # type: ignore[union-attr]
                 f"/text-to-speech/{voice_id}",
                 json=request_body,
                 headers={

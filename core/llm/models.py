@@ -4,28 +4,32 @@ Models for LLM module.
 
 import uuid
 from decimal import Decimal
+from typing import TYPE_CHECKING, Optional
 
 from django.db import models
 from django.conf import settings
+
+if TYPE_CHECKING:
+    from authentication.models import User
 
 
 class ModelCatalog(models.Model):
     """Cache of available models from OpenRouter."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    model_id = models.CharField(max_length=255, unique=True)
-    name = models.CharField(max_length=255)
-    provider = models.CharField(max_length=100)
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    model_id: models.CharField = models.CharField(max_length=255, unique=True)
+    name: models.CharField = models.CharField(max_length=255)
+    provider: models.CharField = models.CharField(max_length=100)
 
     # Pricing (stored as per 1K tokens, exposed as per 1M tokens via API)
-    prompt_price = models.DecimalField(
+    prompt_price: models.DecimalField = models.DecimalField(
         max_digits=10,
         decimal_places=6,
         null=True,
         blank=True,
         help_text="Price per 1K prompt tokens (internal storage)",
     )
-    completion_price = models.DecimalField(
+    completion_price: models.DecimalField = models.DecimalField(
         max_digits=10,
         decimal_places=6,
         null=True,
@@ -34,32 +38,32 @@ class ModelCatalog(models.Model):
     )
 
     # Capabilities
-    max_tokens = models.IntegerField(null=True, blank=True)
-    supports_streaming = models.BooleanField(default=True)
-    supports_functions = models.BooleanField(default=False)
-    supports_structured_outputs = models.BooleanField(default=False)
-    supports_reasoning = models.BooleanField(default=False)
-    supports_prompt_caching = models.BooleanField(default=False)
-    supports_stream_cancellation = models.BooleanField(default=False)
+    max_tokens: models.IntegerField = models.IntegerField(null=True, blank=True)
+    supports_streaming: models.BooleanField = models.BooleanField(default=True)
+    supports_functions: models.BooleanField = models.BooleanField(default=False)
+    supports_structured_outputs: models.BooleanField = models.BooleanField(default=False)
+    supports_reasoning: models.BooleanField = models.BooleanField(default=False)
+    supports_prompt_caching: models.BooleanField = models.BooleanField(default=False)
+    supports_stream_cancellation: models.BooleanField = models.BooleanField(default=False)
 
     # Architecture details
-    modality = models.CharField(
+    modality: models.CharField = models.CharField(
         max_length=100,
         null=True,
         blank=True,
         help_text="Model modality (e.g., 'text->text', 'text+image->text')",
     )
-    input_modalities = models.JSONField(
+    input_modalities: models.JSONField = models.JSONField(
         default=list,
         blank=True,
         help_text="List of supported input modalities (e.g., ['text', 'image'])",
     )
-    output_modalities = models.JSONField(
+    output_modalities: models.JSONField = models.JSONField(
         default=list,
         blank=True,
         help_text="List of supported output modalities (e.g., ['text'])",
     )
-    tokenizer = models.CharField(
+    tokenizer: models.CharField = models.CharField(
         max_length=100,
         null=True,
         blank=True,
@@ -67,63 +71,63 @@ class ModelCatalog(models.Model):
     )
 
     # Top provider details
-    max_completion_tokens = models.IntegerField(
+    max_completion_tokens: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Maximum completion tokens from top provider",
     )
-    is_moderated = models.BooleanField(
+    is_moderated: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether content moderation is enabled by top provider",
     )
 
     # Default parameters
-    default_parameters = models.JSONField(
+    default_parameters: models.JSONField = models.JSONField(
         default=dict,
         blank=True,
         help_text="Default generation parameters (temperature, top_p, etc.)",
     )
 
     # Performance stats (from OpenRouter)
-    latency_p50 = models.IntegerField(
+    latency_p50: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Median latency (time-to-first-token) in milliseconds",
     )
-    latency_p90 = models.IntegerField(
+    latency_p90: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="90th percentile latency in milliseconds",
     )
-    throughput_p50 = models.FloatField(
+    throughput_p50: models.FloatField = models.FloatField(
         null=True,
         blank=True,
         help_text="Median throughput in tokens per second",
     )
-    throughput_p90 = models.FloatField(
+    throughput_p90: models.FloatField = models.FloatField(
         null=True,
         blank=True,
         help_text="90th percentile throughput in tokens per second",
     )
-    stats_updated_at = models.DateTimeField(
+    stats_updated_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When performance stats were last updated",
     )
 
     # Metadata
-    description = models.TextField(blank=True)
-    tags = models.JSONField(default=list, blank=True)
-    is_available = models.BooleanField(default=True)
+    description: models.TextField = models.TextField(blank=True)
+    tags: models.JSONField = models.JSONField(default=list, blank=True)
+    is_available: models.BooleanField = models.BooleanField(default=True)
 
     # Timestamps
-    first_seen_at = models.DateTimeField(
+    first_seen_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When this model was first seen in OpenRouter catalog"
     )
-    fetched_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    fetched_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     @property
     def is_new(self) -> bool:
@@ -148,24 +152,24 @@ class ModelCatalog(models.Model):
 class ImageModelCatalog(models.Model):
     """Catalog of available image generation models."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    model_id = models.CharField(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    model_id: models.CharField = models.CharField(
         max_length=255,
         unique=True,
         help_text="Unique identifier (e.g., 'openai/dall-e-3', 'bfl/flux-1.1-pro')"
     )
-    name = models.CharField(max_length=255, help_text="Display name")
-    provider = models.CharField(max_length=100, help_text="Provider name (openai, bfl, stability, etc.)")
+    name: models.CharField = models.CharField(max_length=255, help_text="Display name")
+    provider: models.CharField = models.CharField(max_length=100, help_text="Provider name (openai, bfl, stability, etc.)")
 
     # Pricing
-    price_per_image = models.DecimalField(
+    price_per_image: models.DecimalField = models.DecimalField(
         max_digits=10,
         decimal_places=6,
         null=True,
         blank=True,
         help_text="Base price per generated image in USD"
     )
-    price_per_megapixel = models.DecimalField(
+    price_per_megapixel: models.DecimalField = models.DecimalField(
         max_digits=10,
         decimal_places=6,
         null=True,
@@ -174,107 +178,107 @@ class ImageModelCatalog(models.Model):
     )
 
     # Capabilities
-    supports_generation = models.BooleanField(
+    supports_generation: models.BooleanField = models.BooleanField(
         default=True,
         help_text="Whether model supports image generation from text"
     )
-    supports_editing = models.BooleanField(
+    supports_editing: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether model supports image editing/inpainting"
     )
-    supports_variations = models.BooleanField(
+    supports_variations: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether model supports creating image variations"
     )
-    supports_outpainting = models.BooleanField(
+    supports_outpainting: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether model supports outpainting/extending images"
     )
-    supports_upscaling = models.BooleanField(
+    supports_upscaling: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether model supports image upscaling"
     )
 
     # Supported sizes and aspect ratios
-    supported_sizes = models.JSONField(
+    supported_sizes: models.JSONField = models.JSONField(
         default=list,
         blank=True,
         help_text="List of supported image sizes (e.g., ['1024x1024', '1792x1024'])"
     )
-    supported_aspect_ratios = models.JSONField(
+    supported_aspect_ratios: models.JSONField = models.JSONField(
         default=list,
         blank=True,
         help_text="List of supported aspect ratios (e.g., ['1:1', '16:9', '9:16'])"
     )
-    max_resolution = models.IntegerField(
+    max_resolution: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Maximum resolution in pixels (width * height)"
     )
 
     # Quality options
-    supported_qualities = models.JSONField(
+    supported_qualities: models.JSONField = models.JSONField(
         default=list,
         blank=True,
         help_text="List of quality options (e.g., ['standard', 'hd'])"
     )
 
     # Style options
-    supported_styles = models.JSONField(
+    supported_styles: models.JSONField = models.JSONField(
         default=list,
         blank=True,
         help_text="List of style presets (e.g., ['vivid', 'natural'])"
     )
 
     # Generation limits
-    max_images_per_request = models.IntegerField(
+    max_images_per_request: models.IntegerField = models.IntegerField(
         default=1,
         help_text="Maximum number of images per request"
     )
-    max_prompt_length = models.IntegerField(
+    max_prompt_length: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Maximum prompt length in characters"
     )
 
     # Performance characteristics
-    typical_generation_time_ms = models.IntegerField(
+    typical_generation_time_ms: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="Typical generation time in milliseconds"
     )
-    is_fast = models.BooleanField(
+    is_fast: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether this is a fast/turbo model variant"
     )
 
     # Special capabilities
-    best_for_text = models.BooleanField(
+    best_for_text: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether model excels at rendering text in images"
     )
-    best_for_photorealism = models.BooleanField(
+    best_for_photorealism: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether model excels at photorealistic images"
     )
-    best_for_illustration = models.BooleanField(
+    best_for_illustration: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether model excels at illustrations/art"
     )
 
     # Metadata
-    description = models.TextField(blank=True)
-    tags = models.JSONField(default=list, blank=True)
-    is_available = models.BooleanField(default=True)
+    description: models.TextField = models.TextField(blank=True)
+    tags: models.JSONField = models.JSONField(default=list, blank=True)
+    is_available: models.BooleanField = models.BooleanField(default=True)
 
     # Timestamps
-    first_seen_at = models.DateTimeField(
+    first_seen_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When this model was first added to the catalog"
     )
-    fetched_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    fetched_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     @property
     def is_new(self) -> bool:
@@ -329,45 +333,45 @@ class VideoModelCatalog(models.Model):
     - Character animation (act_two)
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Identification
-    model_id = models.CharField(
+    model_id: models.CharField = models.CharField(
         max_length=100,
         unique=True,
         db_index=True,
         help_text="API model identifier (e.g., 'veo3.1_fast', 'sora-2')"
     )
-    canonical_id = models.CharField(
+    canonical_id: models.CharField = models.CharField(
         max_length=255,
         unique=True,
         db_index=True,
         help_text="Full canonical ID with provider prefix (e.g., 'runway/veo3.1-fast')"
     )
-    provider = models.CharField(
+    provider: models.CharField = models.CharField(
         max_length=50,
         db_index=True,
         help_text="Provider name (e.g., 'runway', 'openai')"
     )
 
     # Display
-    display_name = models.CharField(max_length=255, help_text="User-friendly display name")
-    description = models.TextField(blank=True, help_text="Description of the model's capabilities")
-    best_for = models.CharField(
+    display_name: models.CharField = models.CharField(max_length=255, help_text="User-friendly display name")
+    description: models.TextField = models.TextField(blank=True, help_text="Description of the model's capabilities")
+    best_for: models.CharField = models.CharField(
         max_length=500,
         blank=True,
         help_text="Use case description (e.g., 'Quick iterations, social media clips')"
     )
 
     # Input/Output Types
-    input_type = models.CharField(
+    input_type: models.CharField = models.CharField(
         max_length=20,
         choices=VideoInputType.choices,
         default=VideoInputType.TEXT,
         db_index=True,
         help_text="Type of input the model requires"
     )
-    output_type = models.CharField(
+    output_type: models.CharField = models.CharField(
         max_length=20,
         choices=VideoOutputType.choices,
         default=VideoOutputType.VIDEO,
@@ -375,7 +379,7 @@ class VideoModelCatalog(models.Model):
     )
 
     # Capabilities (flexible JSON for provider-specific features)
-    capabilities = models.JSONField(
+    capabilities: models.JSONField = models.JSONField(
         default=dict,
         blank=True,
         help_text="""Flexible capabilities dict. Expected structure:
@@ -398,14 +402,14 @@ class VideoModelCatalog(models.Model):
 
     # Pricing (current prices for quick lookups)
     # Authoritative pricing history should use ServicePricing model
-    current_price_per_second = models.DecimalField(
+    current_price_per_second: models.DecimalField = models.DecimalField(
         max_digits=10,
         decimal_places=4,
         null=True,
         blank=True,
         help_text="Current price per second of video in USD"
     )
-    current_price_per_request = models.DecimalField(
+    current_price_per_request: models.DecimalField = models.DecimalField(
         max_digits=10,
         decimal_places=4,
         null=True,
@@ -414,27 +418,27 @@ class VideoModelCatalog(models.Model):
     )
 
     # Status & Ordering
-    is_active = models.BooleanField(
+    is_active: models.BooleanField = models.BooleanField(
         default=True,
         db_index=True,
         help_text="Whether this model is currently available for use"
     )
-    is_pro = models.BooleanField(
+    is_pro: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether this is a premium/pro tier model"
     )
-    is_default = models.BooleanField(
+    is_default: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether this is the default model for its input type"
     )
-    sort_order = models.PositiveIntegerField(
+    sort_order: models.PositiveIntegerField = models.PositiveIntegerField(
         default=0,
         help_text="Display order (lower numbers shown first)"
     )
 
     # Metadata
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['sort_order', 'provider', 'display_name']
@@ -492,7 +496,7 @@ class VideoModelCatalog(models.Model):
         return self.capabilities.get('max_input_size_mb', 16)
 
     @classmethod
-    def get_active_models(cls, provider: str = None, input_type: str = None):
+    def get_active_models(cls, provider: Optional[str] = None, input_type: Optional[str] = None):
         """
         Get all active models, optionally filtered by provider or input type.
 
@@ -557,7 +561,7 @@ class VideoModelCatalog(models.Model):
         return model
 
     @classmethod
-    def get_default_model(cls, input_type: str = None):
+    def get_default_model(cls, input_type: Optional[str] = None):
         """
         Get the default model, optionally filtered by input type.
 
@@ -603,7 +607,7 @@ class VideoModelCatalog(models.Model):
         return model
 
     @classmethod
-    def invalidate_cache(cls, canonical_id: str = None, model_id: str = None):
+    def invalidate_cache(cls, canonical_id: Optional[str] = None, model_id: Optional[str] = None):
         """Invalidate cache for a specific model or all models."""
         from django.core.cache import cache
         if canonical_id:
@@ -611,7 +615,7 @@ class VideoModelCatalog(models.Model):
         if model_id:
             cache.delete(f"video_model_short:{model_id}")
 
-    def calculate_cost(self, duration_seconds: float = None, request_count: int = 1) -> Decimal:
+    def calculate_cost(self, duration_seconds: Optional[float] = None, request_count: int = 1) -> Decimal:
         """
         Calculate cost for a video generation operation.
 
@@ -643,8 +647,8 @@ class OpenRouterGenerationRecord(models.Model):
     invoicing decisions.
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='openrouter_generation_records',
@@ -652,30 +656,30 @@ class OpenRouterGenerationRecord(models.Model):
     )
 
     # Request details
-    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
-    model_id = models.CharField(max_length=128, db_index=True)
+    timestamp: models.DateTimeField = models.DateTimeField(auto_now_add=True, db_index=True)
+    model_id: models.CharField = models.CharField(max_length=128, db_index=True)
 
     # Token usage
-    prompt_tokens = models.IntegerField(default=0)
-    completion_tokens = models.IntegerField(default=0)
-    total_tokens = models.IntegerField(default=0)
+    prompt_tokens: models.IntegerField = models.IntegerField(default=0)
+    completion_tokens: models.IntegerField = models.IntegerField(default=0)
+    total_tokens: models.IntegerField = models.IntegerField(default=0)
 
     # Cost (in USD, stored as Decimal for precision)
-    cost_usd = models.DecimalField(max_digits=10, decimal_places=6, default=0)
+    cost_usd: models.DecimalField = models.DecimalField(max_digits=10, decimal_places=6, default=0)
 
     # Request metadata
-    endpoint = models.CharField(max_length=64, default='chat/completions')
-    request_source = models.CharField(
+    endpoint: models.CharField = models.CharField(max_length=64, default='chat/completions')
+    request_source: models.CharField = models.CharField(
         max_length=64,
         db_index=True,
         help_text="Where the request originated (e.g., 'chat', 'voice_room', 'mcp_discovery')",
     )
 
     # Optional: store request ID for debugging
-    openrouter_request_id = models.CharField(max_length=128, blank=True, null=True)
+    openrouter_request_id: models.CharField = models.CharField(max_length=128, blank=True, null=True)
 
     # Additional context
-    extra_data = models.JSONField(
+    extra_data: models.JSONField = models.JSONField(
         default=dict,
         blank=True,
         help_text="Additional request metadata (project_id, etc.)",
@@ -704,22 +708,22 @@ class RoutingPool(models.Model):
         ('premium', 'Premium'),
     ]
 
-    model = models.ForeignKey(
+    model: "models.ForeignKey[ModelCatalog, ModelCatalog]" = models.ForeignKey(
         ModelCatalog,
         on_delete=models.CASCADE,
         related_name='routing_pool_entries',
     )
-    is_active = models.BooleanField(default=True)
-    cost_tier = models.CharField(max_length=20, choices=COST_TIER_CHOICES)
-    min_complexity_score = models.IntegerField(
+    is_active: models.BooleanField = models.BooleanField(default=True)
+    cost_tier: models.CharField = models.CharField(max_length=20, choices=COST_TIER_CHOICES)
+    min_complexity_score: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Minimum complexity score (0-100) for this model",
     )
-    max_complexity_score = models.IntegerField(
+    max_complexity_score: models.IntegerField = models.IntegerField(
         default=100,
         help_text="Maximum complexity score (0-100) for this model",
     )
-    priority = models.IntegerField(
+    priority: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Tiebreaker within same cost tier (higher = preferred)",
     )
@@ -739,18 +743,18 @@ class RoutingPool(models.Model):
 class RoutingConversationScore(models.Model):
     """Tracks running complexity score per conversation for smart-router routing."""
 
-    conversation_id = models.CharField(max_length=255, db_index=True)
-    user = models.ForeignKey(
+    conversation_id: models.CharField = models.CharField(max_length=255, db_index=True)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='routing_conversation_scores',
     )
-    current_score = models.IntegerField(default=0)
-    max_score = models.IntegerField(default=0)
-    turn_count = models.IntegerField(default=0)
-    last_model_id = models.CharField(max_length=255, null=True, blank=True)
-    consecutive_simple_turns = models.IntegerField(default=0)
-    updated_at = models.DateTimeField(auto_now=True)
+    current_score: models.IntegerField = models.IntegerField(default=0)
+    max_score: models.IntegerField = models.IntegerField(default=0)
+    turn_count: models.IntegerField = models.IntegerField(default=0)
+    last_model_id: models.CharField = models.CharField(max_length=255, null=True, blank=True)
+    consecutive_simple_turns: models.IntegerField = models.IntegerField(default=0)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = [('conversation_id', 'user')]
@@ -764,27 +768,27 @@ class RoutingConversationScore(models.Model):
 class RoutingLog(models.Model):
     """Logs smart-router routing decisions for analytics and debugging."""
 
-    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
-    user = models.ForeignKey(
+    timestamp: models.DateTimeField = models.DateTimeField(auto_now_add=True, db_index=True)
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='routing_logs',
     )
-    conversation_id = models.CharField(max_length=255)
-    tier_used = models.IntegerField(help_text="1 = heuristic only, 2 = LLM classification")
-    heuristic_score = models.IntegerField()
-    llm_score = models.IntegerField(null=True, blank=True)
-    final_score = models.IntegerField()
-    resolved_model_id = models.CharField(max_length=255)
-    prompt_length = models.IntegerField()
-    has_images = models.BooleanField(default=False)
-    has_code = models.BooleanField(default=False)
-    classification_cost_usd = models.DecimalField(
+    conversation_id: models.CharField = models.CharField(max_length=255)
+    tier_used: models.IntegerField = models.IntegerField(help_text="1 = heuristic only, 2 = LLM classification")
+    heuristic_score: models.IntegerField = models.IntegerField()
+    llm_score: models.IntegerField = models.IntegerField(null=True, blank=True)
+    final_score: models.IntegerField = models.IntegerField()
+    resolved_model_id: models.CharField = models.CharField(max_length=255)
+    prompt_length: models.IntegerField = models.IntegerField()
+    has_images: models.BooleanField = models.BooleanField(default=False)
+    has_code: models.BooleanField = models.BooleanField(default=False)
+    classification_cost_usd: models.DecimalField = models.DecimalField(
         max_digits=10, decimal_places=6, null=True, blank=True,
     )
-    classification_latency_ms = models.IntegerField(null=True, blank=True)
-    is_reroute = models.BooleanField(default=False)
-    rerouted_from_model = models.CharField(max_length=255, null=True, blank=True)
+    classification_latency_ms: models.IntegerField = models.IntegerField(null=True, blank=True)
+    is_reroute: models.BooleanField = models.BooleanField(default=False)
+    rerouted_from_model: models.CharField = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         ordering = ['-timestamp']

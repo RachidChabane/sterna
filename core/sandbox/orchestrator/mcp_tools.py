@@ -376,7 +376,7 @@ def get_github_mcp_tools() -> List[Dict[str, Any]]:
     return GITHUB_MCP_TOOLS
 
 
-def get_all_mcp_tools(enabled_connectors: List[str] = None) -> List[Dict[str, Any]]:
+def get_all_mcp_tools(enabled_connectors: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """
     Get all available MCP tools based on enabled connectors.
 

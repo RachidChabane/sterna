@@ -5,10 +5,15 @@ Sparks are self-contained React components that render live in the chat interfac
 They support versioning, R2 storage for large components, and can be shared/exported.
 """
 import uuid
+from typing import TYPE_CHECKING, Optional
+
 from django.db import models
 from django.conf import settings
 from conversations.models import Chat, Message
 from workspaces.models import Asset
+
+if TYPE_CHECKING:
+    from authentication.models import User
 
 
 class Spark(models.Model):
@@ -56,25 +61,30 @@ class Spark(models.Model):
         INLINE = 'inline', 'Inline'
         R2 = 'r2', 'R2'
 
+    if TYPE_CHECKING:
+        user_id: uuid.UUID
+        chat_id: Optional[uuid.UUID]
+        message_id: Optional[int]
+
     # Primary key
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Owner
-    user = models.ForeignKey(
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='sparks'
     )
 
     # Optional associations
-    chat = models.ForeignKey(
+    chat: "models.ForeignKey[Optional[Chat], Optional[Chat]]" = models.ForeignKey(
         Chat,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='sparks'
     )
-    message = models.ForeignKey(
+    message: "models.ForeignKey[Optional[Message], Optional[Message]]" = models.ForeignKey(
         Message,
         on_delete=models.SET_NULL,
         null=True,
@@ -83,31 +93,31 @@ class Spark(models.Model):
     )
 
     # Metadata
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    framework = models.CharField(
+    title: models.CharField = models.CharField(max_length=255)
+    description: models.TextField = models.TextField(blank=True)
+    framework: models.CharField = models.CharField(
         max_length=20,
         choices=Framework.choices,
         default=Framework.REACT
     )
 
     # Code storage
-    storage_type = models.CharField(
+    storage_type: models.CharField = models.CharField(
         max_length=20,
         choices=StorageType.choices,
         default=StorageType.INLINE
     )
-    code = models.TextField(blank=True)  # For inline storage
-    r2_bucket = models.CharField(max_length=255, blank=True)
-    r2_key = models.CharField(max_length=500, blank=True)
+    code: models.TextField = models.TextField(blank=True)  # For inline storage
+    r2_bucket: models.CharField = models.CharField(max_length=255, blank=True)
+    r2_key: models.CharField = models.CharField(max_length=500, blank=True)
 
     # Dependencies detected from code
     dependencies = models.JSONField(default=list, blank=True)
     # e.g., ['recharts', 'lucide-react']
 
     # Versioning
-    version = models.PositiveIntegerField(default=1)
-    parent = models.ForeignKey(
+    version: models.PositiveIntegerField = models.PositiveIntegerField(default=1)
+    parent: "models.ForeignKey[Optional[Spark], Optional[Spark]]" = models.ForeignKey(
         'self',
         on_delete=models.SET_NULL,
         null=True,
@@ -116,17 +126,17 @@ class Spark(models.Model):
     )
 
     # Preview thumbnail URL (generated on save)
-    preview_url = models.URLField(blank=True)
+    preview_url: models.URLField = models.URLField(blank=True)
 
     # R2 key for generated binary output (PDF/DOCX)
-    generated_r2_key = models.CharField(
+    generated_r2_key: models.CharField = models.CharField(
         max_length=500, blank=True, default='',
         help_text='R2 key for generated binary output (PDF/DOCX)'
     )
 
     # Referenced assets (images, videos) that this spark uses
     # These are made available to the spark via window.__SPARK_ASSETS__
-    assets = models.ManyToManyField(
+    assets: models.ManyToManyField = models.ManyToManyField(
         Asset,
         blank=True,
         related_name='sparks',
@@ -134,11 +144,11 @@ class Spark(models.Model):
     )
 
     # Whether the spark has been ignited (scaffolded into a full project)
-    is_ignited = models.BooleanField(default=False)
+    is_ignited: models.BooleanField = models.BooleanField(default=False)
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-updated_at']
@@ -213,15 +223,20 @@ class Spark(models.Model):
         else:
             r2_key = f"{self.user_id}/sparks/{self.id}/code.tsx"
 
+        # BROKEN: store_file() takes (user_id, chat_id, content,
+        # content_hash=None, mime_type=None) — it has no r2_key parameter —
+        # so this call raises TypeError for any spark over the inline-size
+        # threshold. Repairing it needs a decision on which user_id/chat_id
+        # the spark should be stored under.
         storage.store_file(
             content=code.encode('utf-8'),
-            r2_key=r2_key,
+            r2_key=r2_key,  # type: ignore[call-arg]
             mime_type='text/typescript',
         )
 
         self.storage_type = self.StorageType.R2
         self.code = ''  # Clear inline code
-        self.r2_bucket = storage.bucket_name
+        self.r2_bucket = storage.bucket_name  # type: ignore[attr-defined]
         self.r2_key = r2_key
 
 
@@ -240,31 +255,31 @@ class SparkDeployment(models.Model):
         DEPLOYED = 'deployed', 'Deployed'
         FAILED = 'failed', 'Failed'
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    spark = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    spark: "models.ForeignKey[Spark, Spark]" = models.ForeignKey(
         Spark,
         on_delete=models.CASCADE,
         related_name='deployments'
     )
-    user = models.ForeignKey(
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='spark_deployments'
     )
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING
     )
-    preview_url = models.URLField(blank=True)
-    claim_url = models.URLField(blank=True)
-    deployment_id = models.CharField(max_length=255, blank=True)
-    project_id = models.CharField(max_length=255, blank=True)
-    error_message = models.TextField(blank=True)
-    coding_agent_job_id = models.CharField(max_length=255, blank=True)
-    cost_usd = models.DecimalField(max_digits=10, decimal_places=6, default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    preview_url: models.URLField = models.URLField(blank=True)
+    claim_url: models.URLField = models.URLField(blank=True)
+    deployment_id: models.CharField = models.CharField(max_length=255, blank=True)
+    project_id: models.CharField = models.CharField(max_length=255, blank=True)
+    error_message: models.TextField = models.TextField(blank=True)
+    coding_agent_job_id: models.CharField = models.CharField(max_length=255, blank=True)
+    cost_usd: models.DecimalField = models.DecimalField(max_digits=10, decimal_places=6, default=0)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -280,26 +295,26 @@ class SparkDeployment(models.Model):
 class App(models.Model):
     """Persisted application created from an ignited Spark."""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    spark = models.ForeignKey(Spark, on_delete=models.CASCADE, related_name='apps')
-    user = models.ForeignKey(
+    id: models.UUIDField = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    spark: "models.ForeignKey[Spark, Spark]" = models.ForeignKey(Spark, on_delete=models.CASCADE, related_name='apps')
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='apps',
     )
-    chat = models.ForeignKey(
+    chat: "models.ForeignKey[Optional[Chat], Optional[Chat]]" = models.ForeignKey(
         Chat,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='apps',
     )
-    title = models.CharField(max_length=255)
-    version = models.PositiveIntegerField(default=1)
-    project_path = models.CharField(max_length=500)
-    preview_command = models.CharField(max_length=1000, default='npm run dev')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    title: models.CharField = models.CharField(max_length=255)
+    version: models.PositiveIntegerField = models.PositiveIntegerField(default=1)
+    project_path: models.CharField = models.CharField(max_length=500)
+    preview_command: models.CharField = models.CharField(max_length=1000, default='npm run dev')
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']

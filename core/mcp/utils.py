@@ -3,7 +3,7 @@
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from .models import MCPTool
 from .protocol import MCPToolDefinition
@@ -121,7 +121,7 @@ def validate_tool_arguments(
 
         if expected_type:
             # Basic type checking
-            type_map = {
+            type_map: Dict[str, Union[Type[Any], Tuple[Type[Any], ...]]] = {
                 "string": str,
                 "number": (int, float),
                 "integer": int,
@@ -352,7 +352,10 @@ def _create_pydantic_model_from_schema(name: str, schema: Dict[str, Any]):
                     _model_counter += 1
                     nested_model_name = f"{name}_{prop_name}_Item_{_model_counter}"
                     nested_model = _create_nested_model(nested_model_name, items_schema)
-                    return TypingList[nested_model], full_desc
+                    # nested_model is a dynamically-built Pydantic model class
+                    # (its exact type is only known at runtime), so it cannot
+                    # be a statically valid type argument for List[...].
+                    return TypingList[nested_model], full_desc  # type: ignore[valid-type]
                 else:
                     return TypingList[Dict[str, Any]], description
             elif items_type == "string":
@@ -401,6 +404,7 @@ def _create_pydantic_model_from_schema(name: str, schema: Dict[str, Any]):
             if ndesc and len(ndesc) > 100:
                 ndesc = ndesc[:100].rsplit(' ', 1)[0] + '...'
 
+            py_type: Any
             if nprop_type == "string":
                 py_type = str
             elif nprop_type == "integer":
@@ -421,7 +425,12 @@ def _create_pydantic_model_from_schema(name: str, schema: Dict[str, Any]):
             else:
                 nested_fields[nprop_name] = (TypingOptional[py_type], Field(default=None, description=ndesc))
 
-        return create_model(model_name, **nested_fields)
+        # mypy's overload matching for **dict unpacking against create_model's
+        # keyword-only overloads is a known limitation independent of the
+        # value type (reproduces even with Dict[str, Any]); field_definitions
+        # is genuinely dynamic (schema-driven), so it can't be passed as
+        # literal keyword arguments instead.
+        return create_model(model_name, **nested_fields)  # type: ignore[call-overload]
 
     # Build field definitions for the main model
     properties = schema.get("properties", {})
@@ -441,8 +450,9 @@ def _create_pydantic_model_from_schema(name: str, schema: Dict[str, Any]):
         else:
             field_definitions[prop_name] = (TypingOptional[python_type], Field(default=None, description=description))
 
-    # Create the model dynamically
-    return create_model(name, **field_definitions)
+    # Create the model dynamically (see the type: ignore note in
+    # _create_nested_model above re: **dict unpacking vs. overloads).
+    return create_model(name, **field_definitions)  # type: ignore[call-overload]
 
 
 def _format_mcp_tool_result(tool_name: str, result: Dict[str, Any]) -> str:

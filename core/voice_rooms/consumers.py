@@ -5,7 +5,7 @@ import json
 import logging
 from uuid import uuid4
 
-from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from channels.generic.websocket import AsyncJsonWebsocketConsumer  # type: ignore[import-untyped]
 from asgiref.sync import sync_to_async
 
 from .models import VoiceRoom, VoiceRoomSession, VoiceRoomMessage

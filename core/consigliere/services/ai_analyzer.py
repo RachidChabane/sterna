@@ -533,7 +533,7 @@ class AIAnalyzer:
 
         return "\n".join(lines)
 
-    def _parse_ai_response(self, content: str, models_used_ids: set = None) -> Dict[str, Any]:
+    def _parse_ai_response(self, content: str, models_used_ids: Optional[set] = None) -> Dict[str, Any]:
         """
         Parse AI response and validate structure.
 

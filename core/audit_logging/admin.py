@@ -58,6 +58,7 @@ class AuditLogAdmin(admin.ModelAdmin):
     date_hierarchy = "timestamp"
     ordering = ["-timestamp"]
 
+    @admin.display(description="User")
     def user_display(self, obj):
         """Display user with email."""
         if obj.user:
@@ -66,8 +67,7 @@ class AuditLogAdmin(admin.ModelAdmin):
             return f"{obj.user_email} (deleted)"
         return "Anonymous"
 
-    user_display.short_description = "User"
-
+    @admin.display(description="Resource")
     def resource_link(self, obj):
         """Display resource with admin link if available."""
         if obj.resource_str:
@@ -87,16 +87,13 @@ class AuditLogAdmin(admin.ModelAdmin):
                 return f"{obj.resource_type}:{obj.resource_id}"
         return "-"
 
-    resource_link.short_description = "Resource"
-
+    @admin.display(description="Success")
     def success_icon(self, obj):
         """Display success/failure with icon."""
         if obj.success:
             return format_html('<span style="color: green;">✓</span>')
         else:
             return format_html('<span style="color: red;">✗</span>')
-
-    success_icon.short_description = "Success"
 
     def has_add_permission(self, request):
         """Prevent manual addition of audit logs."""
@@ -132,11 +129,10 @@ class AuditLogRetentionPolicyAdmin(admin.ModelAdmin):
     search_fields = ["name", "description"]
     readonly_fields = ["created_at", "updated_at"]
 
+    @admin.display(description="Retention Period")
     def retention_display(self, obj):
         """Display retention period."""
         return f"{obj.retention_value} {obj.retention_unit}"
-
-    retention_display.short_description = "Retention Period"
 
 
 @admin.register(AuditLogArchive)

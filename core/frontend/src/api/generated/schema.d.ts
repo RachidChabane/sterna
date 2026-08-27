@@ -834,7 +834,7 @@ export interface paths {
             cookie?: never;
         };
         /** @description Get list of all social accounts for authenticated user. */
-        get: operations["auth_social_accounts_retrieve"];
+        get: operations["auth_social_accounts_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6077,6 +6077,22 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccountDeletionCancelResponse: {
+            request_id: string;
+            status: string;
+            /** Format: date-time */
+            canceled_at: string;
+        };
+        AccountDeletionCreateResponse: {
+            request_id: string;
+            /** Format: date-time */
+            scheduled_for: string;
+            status?: string;
+        };
+        AccountDeletionRequest: {
+            password?: string;
+            confirm_email: string;
+        };
         /**
          * @description * `AUTH` - Authentication
          *     * `PROJECT` - Project Management
@@ -6206,14 +6222,14 @@ export interface components {
             readonly version: number;
             /** Format: uuid */
             readonly spark_id: string;
-            readonly spark_title: string;
-            readonly spark_framework: string;
+            readonly spark_title: string | null;
+            readonly spark_framework: string | null;
             /** Format: uuid */
             readonly chat_id: string;
-            readonly conversation_id: string;
+            readonly conversation_id: string | null;
             readonly project_path: string;
             readonly preview_command: string;
-            readonly latest_deployment: string;
+            readonly latest_deployment: components["schemas"]["LatestDeploymentSummary"] | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -6228,11 +6244,11 @@ export interface components {
             readonly version: number;
             /** Format: uuid */
             readonly spark_id: string;
-            readonly spark_title: string;
-            readonly spark_framework: string;
+            readonly spark_title: string | null;
+            readonly spark_framework: string | null;
             /** Format: uuid */
             readonly chat_id: string;
-            readonly conversation_id: string;
+            readonly conversation_id: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -6347,8 +6363,19 @@ export interface components {
          * @enum {string}
          */
         AuthTypeEnum: "none" | "api_key" | "bearer" | "oauth";
+        AvatarUploadRequest: {
+            /** Format: uri */
+            file: string;
+        };
+        AvatarUploadResponse: {
+            avatar_url: string;
+            message: string;
+        };
         /** @enum {unknown} */
         BlankEnum: "";
+        CancelDeletionRequest: {
+            token: string;
+        };
         /**
          * @description * `productivity` - Productivity & Collaboration
          *     * `developer` - Developer Tools
@@ -6366,6 +6393,19 @@ export interface components {
          * @enum {string}
          */
         CategoryEnum: "productivity" | "developer" | "cloud" | "crm" | "finance" | "ai" | "data" | "communication" | "automation" | "design" | "ecommerce" | "utilities" | "other";
+        /**
+         * @description Documents the full request body — the view also reads
+         *     `logout_other_sessions` / `current_refresh_token` directly off
+         *     `request.data`, alongside the fields `ChangePasswordSerializer`
+         *     validates.
+         */
+        ChangePasswordRequest: {
+            old_password: string;
+            new_password: string;
+            new_password_confirm: string;
+            logout_other_sessions?: boolean;
+            current_refresh_token?: string;
+        };
         /** @description Serializer for Chat model. */
         Chat: {
             /** Format: uuid */
@@ -6414,6 +6454,11 @@ export interface components {
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /** @description Shape of one entry in ConversationListSerializer's `chat_models` field. */
+        ChatModelSummary: {
+            model_id: string | null;
+            model_provider: string | null;
         };
         /** @description Full serializer for code jobs. */
         CodeJob: {
@@ -6593,6 +6638,37 @@ export interface components {
          * @enum {string}
          */
         CodeSessionStatusEnum: "active" | "paused" | "completed" | "archived";
+        Consent: {
+            session_id: string;
+            categories: components["schemas"]["ConsentCategories"];
+            version: string;
+        };
+        ConsentAttach: {
+            session_id: string;
+        };
+        ConsentAttachResponse: {
+            attached: number;
+        };
+        /** @description Shape of the `categories` object in consent request/response bodies. */
+        ConsentCategories: {
+            essential: boolean;
+            analytics: boolean;
+            marketing: boolean;
+        };
+        /** @description Shape of the `consent` object nested in consent GET/POST responses. */
+        ConsentRecord: {
+            session_id: string;
+            categories: components["schemas"]["ConsentCategories"];
+            version: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ConsentResponse: {
+            consent: components["schemas"]["ConsentRecord"] | null;
+            region_default: components["schemas"]["RegionDefaultEnum"];
+        };
         /** @description Full serializer for Conversation model with nested chats. */
         Conversation: {
             /** Format: uuid */
@@ -6660,9 +6736,9 @@ export interface components {
             is_pinned?: boolean;
             readonly message_count: number;
             readonly chat_count: number;
-            readonly model_id: string;
-            readonly model_provider: string;
-            readonly chat_models: string;
+            readonly model_id: string | null;
+            readonly model_provider: string | null;
+            readonly chat_models: components["schemas"]["ChatModelSummary"][];
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -6700,6 +6776,22 @@ export interface components {
             readonly plan_title: string | null;
             readonly repo_full_name: string;
         };
+        DataExportCreateResponse: {
+            request_id: string;
+            status: string;
+        };
+        DataExportStatusResponse: {
+            request_id: string;
+            status: string;
+            /** Format: date-time */
+            requested_at: string;
+            download_url?: string | null;
+            /** Format: date-time */
+            expires_at?: string | null;
+            /** Format: date-time */
+            ready_at?: string | null;
+            error?: string;
+        };
         /**
          * @description * `pdf` - PDF
          *     * `docx` - Word Document
@@ -6711,6 +6803,14 @@ export interface components {
          * @enum {string}
          */
         DocumentTypeEnum: "pdf" | "docx" | "txt" | "md" | "csv" | "html" | "json";
+        /** @description Serializer for email verification. */
+        EmailVerification: {
+            token: string;
+        };
+        EmailVerificationResponse: {
+            message: string;
+            user: components["schemas"]["User"];
+        };
         /**
          * @description * `react` - React
          *     * `html` - HTML
@@ -6725,6 +6825,13 @@ export interface components {
          * @enum {string}
          */
         FrameworkEnum: "react" | "html" | "svg" | "markdown" | "mermaid" | "pdf" | "docx" | "ics" | "csv" | "xlsx";
+        GithubAuthRequest: {
+            code: string;
+            state: string;
+        };
+        GoogleAuthRequest: {
+            credential: string;
+        };
         /** @description Serializer for image model catalog entries. */
         ImageModelCatalog: {
             /** Format: uuid */
@@ -6890,6 +6997,34 @@ export interface components {
             embedding_cost_usd?: string;
             /** Format: date-time */
             readonly created_at: string;
+        };
+        /**
+         * @description Shape of the `latest_deployment` computed field.
+         *
+         *     A deliberate subset of SparkDeploymentSerializer's fields — only
+         *     what get_latest_deployment actually puts on the wire.
+         */
+        LatestDeploymentSummary: {
+            id: string;
+            status: string;
+            preview_url: string;
+            claim_url: string;
+        };
+        /** @description Serializer for user login. */
+        Login: {
+            /** Format: email */
+            email: string;
+            password: string;
+        };
+        LoginResponse: {
+            access_token: string;
+            refresh_token: string;
+            token_type: string;
+            expires_in: number;
+            user: components["schemas"]["User"];
+        };
+        LogoutRequest: {
+            refresh_token?: string;
         };
         /**
          * @description Serializer for MCPServer model.
@@ -7244,6 +7379,10 @@ export interface components {
             metadata?: unknown;
             is_stopped?: boolean;
         };
+        /** @description A bare `{"message": "..."}` acknowledgement body. */
+        MessageResponse: {
+            message: string;
+        };
         /** @description Serializer for sparks embedded in messages (includes code for rendering). */
         MessageSpark: {
             /** Format: uuid */
@@ -7252,9 +7391,9 @@ export interface components {
             framework?: components["schemas"]["FrameworkEnum"];
             readonly code: string;
             dependencies?: unknown;
-            readonly assets: string;
-            readonly download_url: string;
-            readonly latest_deployment: string;
+            readonly assets: components["schemas"]["SparkAsset"][];
+            readonly download_url: string | null;
+            readonly latest_deployment: components["schemas"]["LatestDeploymentSummary"] | null;
             is_ignited?: boolean;
             /** Format: int64 */
             version?: number;
@@ -7346,6 +7485,23 @@ export interface components {
         ModelTierEnum: "fast" | "balanced" | "powerful" | "inherit";
         /** @enum {unknown} */
         NullEnum: null;
+        /**
+         * @description Shape returned by the Google / GitHub OAuth callback views.
+         *
+         *     A distinct shape from `LoginResponseSerializer` — OAuth callbacks
+         *     key the tokens as `access`/`refresh` and add `created`, while
+         *     password login uses `access_token`/`refresh_token`.
+         */
+        OAuthLoginResponse: {
+            access: string;
+            refresh: string;
+            user: components["schemas"]["User"];
+            created: boolean;
+            message: string;
+        };
+        OAuthStateResponse: {
+            state: string;
+        };
         PaginatedAgentPlanSummaryList: {
             /** @example 123 */
             count: number;
@@ -7645,6 +7801,17 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["SubAgentSummary"][];
+        };
+        /** @description Serializer for confirming password reset. */
+        PasswordResetConfirm: {
+            token: string;
+            password: string;
+            password_confirm: string;
+        };
+        /** @description Serializer for requesting password reset. */
+        PasswordResetRequest: {
+            /** Format: email */
+            email: string;
         };
         /** @description Serializer for AuditLogRetentionPolicy model. */
         PatchedAuditLogRetentionPolicy: {
@@ -8003,6 +8170,38 @@ export interface components {
             /** @description Whether this agent is deployed to sandboxes */
             is_active?: boolean;
         };
+        /** @description Serializer for User model. */
+        PatchedUser: {
+            /** Format: uuid */
+            readonly id?: string;
+            /**
+             * Email address
+             * Format: email
+             */
+            readonly email?: string;
+            full_name?: string;
+            first_name?: string;
+            last_name?: string;
+            /**
+             * Format: uri
+             * @description Profile picture URL from OAuth provider
+             */
+            readonly avatar_url?: string | null;
+            /**
+             * Email verified
+             * @description Designates whether the user has verified their email address.
+             */
+            readonly is_verified?: boolean;
+            /**
+             * Active
+             * @description Designates whether this user should be treated as active.
+             */
+            readonly is_active?: boolean;
+            /** Format: date-time */
+            readonly date_joined?: string;
+            /** Format: date-time */
+            readonly last_login?: string | null;
+        };
         /** @description Serializer for VoiceRoomSession model. */
         PatchedVoiceRoomSession: {
             /** Format: uuid */
@@ -8095,6 +8294,43 @@ export interface components {
          */
         PlanStepStatusEnum: "pending" | "in_progress" | "completed" | "failed";
         /**
+         * @description * `google` - Google
+         *     * `github` - GitHub
+         * @enum {string}
+         */
+        ProviderEnum: "google" | "github";
+        /** @description Serializer for refreshing access token. */
+        RefreshToken: {
+            refresh_token: string;
+        };
+        /**
+         * @description * `EU` - EU
+         *     * `non-EU` - non-EU
+         * @enum {string}
+         */
+        RegionDefaultEnum: "EU" | "non-EU";
+        /** @description Serializer for user registration. */
+        Register: {
+            /**
+             * Email address
+             * Format: email
+             */
+            email: string;
+            full_name?: string;
+            password: string;
+            password_confirm: string;
+            turnstile_token?: string;
+        };
+        RegisterResponse: {
+            message: string;
+            user: components["schemas"]["User"];
+        };
+        /** @description Serializer for resending verification email. */
+        ResendVerification: {
+            /** Format: email */
+            email: string;
+        };
+        /**
          * @description * `days` - Days
          *     * `months` - Months
          *     * `years` - Years
@@ -8116,6 +8352,49 @@ export interface components {
          * @enum {string}
          */
         ScopeEnum: "once" | "session" | "permanent";
+        /** @description One entry of `SessionListView`'s `sessions` list. */
+        Session: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_used: string | null;
+            user_agent: string;
+            ip_address: string | null;
+        };
+        SessionListResponse: {
+            sessions: components["schemas"]["Session"][];
+            count: number;
+        };
+        /** @description Serializer for SocialAccount model. */
+        SocialAccount: {
+            /** Format: uuid */
+            readonly id: string;
+            provider: components["schemas"]["ProviderEnum"];
+            readonly provider_display: string;
+            /** @description Unique ID from the OAuth provider (google_id, github_id) */
+            provider_user_id: string;
+            /**
+             * Format: email
+             * @description Email used with this provider
+             */
+            email: string;
+            /** @description Username from provider (GitHub, etc.) */
+            username?: string;
+            /** Format: uri */
+            avatar_url?: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            /**
+             * Format: date-time
+             * @description Last time this provider was used to login
+             */
+            readonly last_login: string | null;
+            readonly can_disconnect: boolean;
+        };
         /** @description Full spark serializer with code. */
         Spark: {
             /** Format: uuid */
@@ -8125,7 +8404,7 @@ export interface components {
             framework?: components["schemas"]["FrameworkEnum"];
             readonly code: string;
             dependencies?: unknown;
-            readonly assets: string;
+            readonly assets: components["schemas"]["SparkAsset"][];
             readonly version: number;
             /** Format: uuid */
             parent?: string | null;
@@ -8135,13 +8414,28 @@ export interface components {
             chat?: string | null;
             /** Format: uuid */
             message?: string | null;
-            readonly download_url: string;
-            readonly latest_deployment: string;
+            readonly download_url: string | null;
+            readonly latest_deployment: components["schemas"]["LatestDeploymentSummary"] | null;
             is_ignited?: boolean;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
+        };
+        /**
+         * @description Serializer for assets referenced by sparks.
+         *
+         *     Uses presigned URLs for assets to allow sandboxed iframes to access them
+         *     without authentication (presigned URLs are time-limited and self-authenticating).
+         */
+        SparkAsset: {
+            /** Format: uuid */
+            id: string;
+            readonly url: string;
+            readonly type: string;
+            filename: string;
+            width: number | null;
+            height: number | null;
         };
         /** @description Serializer for creating sparks. */
         SparkCreate: {
@@ -8164,18 +8458,18 @@ export interface components {
             framework?: components["schemas"]["FrameworkEnum"];
             readonly code: string;
             dependencies?: unknown;
-            readonly assets: string;
+            readonly assets: components["schemas"]["SparkAsset"][];
             /** Format: int64 */
             version?: number;
             /** Format: uri */
             preview_url?: string;
-            readonly download_url: string;
-            readonly latest_deployment: string;
+            readonly download_url: string | null;
+            readonly latest_deployment: components["schemas"]["LatestDeploymentSummary"] | null;
             is_ignited?: boolean;
             /** Format: uuid */
             readonly chat_id: string;
-            readonly chat_name: string;
-            readonly conversation_id: string;
+            readonly chat_name: string | null;
+            readonly conversation_id: string | null;
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -8304,6 +8598,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /** @description Shape of `JWTManager.create_token_pair` / `refresh_access_token`. */
+        TokenPair: {
+            access_token: string;
+            refresh_token: string;
+            token_type: string;
+            expires_in: number;
+        };
         /**
          * @description * `websocket` - WebSocket
          *     * `stdio` - Standard I/O
@@ -8312,6 +8613,38 @@ export interface components {
          * @enum {string}
          */
         TransportTypeEnum: "websocket" | "stdio" | "http" | "sandboxed";
+        /** @description Serializer for User model. */
+        User: {
+            /** Format: uuid */
+            readonly id: string;
+            /**
+             * Email address
+             * Format: email
+             */
+            readonly email: string;
+            full_name?: string;
+            first_name?: string;
+            last_name?: string;
+            /**
+             * Format: uri
+             * @description Profile picture URL from OAuth provider
+             */
+            readonly avatar_url: string | null;
+            /**
+             * Email verified
+             * @description Designates whether the user has verified their email address.
+             */
+            readonly is_verified: boolean;
+            /**
+             * Active
+             * @description Designates whether this user should be treated as active.
+             */
+            readonly is_active: boolean;
+            /** Format: date-time */
+            readonly date_joined: string;
+            /** Format: date-time */
+            readonly last_login: string | null;
+        };
         /** @description Minimal user serializer for audit logs. */
         UserSummary: {
             /** Format: uuid */
@@ -9098,12 +9431,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DataExportCreateResponse"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9118,12 +9462,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DataExportStatusResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9134,14 +9489,31 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDeletionRequest"];
+                "multipart/form-data": components["schemas"]["AccountDeletionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["AccountDeletionRequest"];
+            };
+        };
         responses: {
-            /** @description No response body */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccountDeletionCreateResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9152,14 +9524,31 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelDeletionRequest"];
+                "multipart/form-data": components["schemas"]["CancelDeletionRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["CancelDeletionRequest"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AccountDeletionCancelResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9174,12 +9563,43 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": string;
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9190,14 +9610,31 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+                "multipart/form-data": components["schemas"]["ChangePasswordRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9210,12 +9647,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConsentResponse"];
+                };
             };
         };
     };
@@ -9226,14 +9664,31 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Consent"];
+                "multipart/form-data": components["schemas"]["Consent"];
+                "application/x-www-form-urlencoded": components["schemas"]["Consent"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConsentResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9244,14 +9699,31 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentAttach"];
+                "multipart/form-data": components["schemas"]["ConsentAttach"];
+                "application/x-www-form-urlencoded": components["schemas"]["ConsentAttach"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConsentAttachResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9262,14 +9734,61 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GithubAuthRequest"];
+                "multipart/form-data": components["schemas"]["GithubAuthRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["GithubAuthRequest"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OAuthLoginResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9280,14 +9799,51 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleAuthRequest"];
+                "multipart/form-data": components["schemas"]["GoogleAuthRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["GoogleAuthRequest"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OAuthLoginResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9298,14 +9854,51 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleAuthRequest"];
+                "multipart/form-data": components["schemas"]["GoogleAuthRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["GoogleAuthRequest"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OAuthLoginResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9316,14 +9909,32 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Login"];
+                "multipart/form-data": components["schemas"]["Login"];
+                "application/x-www-form-urlencoded": components["schemas"]["Login"];
+            };
+        };
         responses: {
-            /** @description No response body */
+            /** @description Login successful. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9334,14 +9945,21 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LogoutRequest"];
+                "multipart/form-data": components["schemas"]["LogoutRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["LogoutRequest"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
             };
         };
     };
@@ -9354,12 +9972,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OAuthStateResponse"];
+                };
             };
         };
     };
@@ -9370,14 +9989,21 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+                "multipart/form-data": components["schemas"]["PasswordResetRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["PasswordResetRequest"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
             };
         };
     };
@@ -9388,14 +10014,31 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetConfirm"];
+                "multipart/form-data": components["schemas"]["PasswordResetConfirm"];
+                "application/x-www-form-urlencoded": components["schemas"]["PasswordResetConfirm"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9408,12 +10051,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
             };
         };
     };
@@ -9424,14 +10068,31 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedUser"];
+                "multipart/form-data": components["schemas"]["PatchedUser"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedUser"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9442,14 +10103,39 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["AvatarUploadRequest"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AvatarUploadResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9462,12 +10148,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9478,14 +10175,42 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Register"];
+                "multipart/form-data": components["schemas"]["Register"];
+                "application/x-www-form-urlencoded": components["schemas"]["Register"];
+            };
+        };
         responses: {
-            /** @description No response body */
-            200: {
+            /** @description Account created; verification email sent. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RegisterResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9496,14 +10221,31 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResendVerification"];
+                "multipart/form-data": components["schemas"]["ResendVerification"];
+                "application/x-www-form-urlencoded": components["schemas"]["ResendVerification"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9516,12 +10258,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SessionListResponse"];
+                };
             };
         };
     };
@@ -9534,12 +10277,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9554,12 +10308,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SessionListResponse"];
+                };
             };
         };
     };
@@ -9574,16 +10329,27 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
-    auth_social_accounts_retrieve: {
+    auth_social_accounts_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -9592,12 +10358,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SocialAccount"][];
+                };
             };
         };
     };
@@ -9612,12 +10379,33 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No response body */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9628,14 +10416,41 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshToken"];
+                "multipart/form-data": components["schemas"]["RefreshToken"];
+                "application/x-www-form-urlencoded": components["schemas"]["RefreshToken"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TokenPair"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
@@ -9646,14 +10461,31 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailVerification"];
+                "multipart/form-data": components["schemas"]["EmailVerification"];
+                "application/x-www-form-urlencoded": components["schemas"]["EmailVerification"];
+            };
+        };
         responses: {
-            /** @description No response body */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EmailVerificationResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };

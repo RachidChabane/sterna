@@ -60,7 +60,7 @@ sandbox/
 │   ├── main.py                     # API entrypoint
 │   ├── sandbox_executor.py         # Docker/gVisor container lifecycle
 │   ├── mcp_endpoints.py            # Live MCP server API (child-process architecture)
-│   ├── coding_agent_runner.py      # Runs the Claude CLI inside the sandbox
+│   ├── coding_agent_runner.py      # Runs opencode inside the sandbox
 │   ├── auth.py                     # Fail-closed JWT auth
 │   └── tests/                      # pytest suite
 ├── observability/                  # Shared OpenTelemetry setup
@@ -180,7 +180,7 @@ The orchestrator exposes scoped filesystem primitives under `/fs/*`
 
 ### Coding agent
 
-`/coding-agent/execute` runs the Claude CLI inside a sandbox container to autonomously
+`/coding-agent/execute` runs opencode inside a sandbox container to autonomously
 implement or plan a task against a cloned repository; `/coding-agent/progress` polls
 status. See `orchestrator/coding_agent_runner.py`.
 
@@ -262,7 +262,8 @@ python test_egress_whitelist.py
 - `GVISOR_SETUP.md` — gVisor installation details
 - `CONTAINER_ARCHITECTURE.md` — container image layout
 - `DATA_SCIENCE_GUIDE.md` — the data-science runtime image
-- `CODING_AGENT_CLI_INTEGRATION.md` — how the Claude CLI runs inside the sandbox
+- `orchestrator/opencode_harness.py` — how opencode runs inside the sandbox
+  (invocation, permission profile, plan/build agent modes)
 - `QUICKSTART.md` — local development quick start
 
 ## 🔗 Resources

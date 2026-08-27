@@ -76,6 +76,7 @@ class DataGenerator:
         for _ in range(num_samples):
             sample_type = random.choice(["qa", "generation", "classification"])
 
+            sample: Dict[str, Any]
             if sample_type == "qa":
                 sample = {
                     "input": self.faker.sentence(nb_words=15),
@@ -249,7 +250,7 @@ class DataGenerator:
         self, operation_type: str, num_items: int = 5
     ) -> Dict[str, Any]:
         """Generate bulk operation data."""
-        operations = {
+        operations: Dict[str, Dict[str, Any]] = {
             "delete": {
                 "ids": [str(uuid.uuid4()) for _ in range(num_items)],
                 "confirm": True,

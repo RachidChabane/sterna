@@ -15,6 +15,7 @@ Security measures:
 
 import io
 import logging
+from typing import Any, Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ def sanitize_image(
         from PIL import Image
 
         # Open and verify the image is valid
-        img = Image.open(io.BytesIO(content))
+        img: Image.Image = Image.open(io.BytesIO(content))
         img.verify()  # Verify it's a valid image (can only call once)
 
         # Re-open after verify (verify() leaves file in invalid state)
@@ -172,7 +173,7 @@ def sanitize_image(
         # Re-encode to strip ALL metadata
         output = io.BytesIO()
 
-        format_config = {
+        format_config: Dict[str, Tuple[str, str, Dict[str, Any]]] = {
             'JPEG': ('JPEG', 'image/jpeg', {'quality': quality, 'optimize': True}),
             'PNG': ('PNG', 'image/png', {'optimize': True}),
             'WEBP': ('WEBP', 'image/webp', {'quality': quality}),

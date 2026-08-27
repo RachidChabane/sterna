@@ -174,7 +174,7 @@ def get_provider_icon_url(
 
 
 @lru_cache(maxsize=128)
-def get_model_icon_slug(model_id: str, name: str = None) -> Optional[str]:
+def get_model_icon_slug(model_id: str, name: Optional[str] = None) -> Optional[str]:
     """
     Get a specific model icon slug if available.
 

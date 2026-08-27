@@ -4,7 +4,7 @@ Rate limiter for OpenRouter API calls with per-model limits.
 
 import time
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Protocol, Tuple, cast
 from threading import Lock
 
 from django.core.cache import cache
@@ -13,6 +13,16 @@ from .exceptions import RateLimitException
 from .constants import DEFAULT_RATE_LIMIT, DEFAULT_BURST_SIZE
 
 logger = logging.getLogger(__name__)
+
+
+class _PatternDeletableCache(Protocol):
+    """Cache backend that supports Redis-style key-pattern deletion.
+
+    `django.core.cache.cache` is typed as the base `BaseCache`, which has no
+    `delete_pattern` method; the configured backend (django-redis) adds it.
+    """
+
+    def delete_pattern(self, pattern: str) -> int: ...
 
 
 class TokenBucket:
@@ -28,7 +38,7 @@ class TokenBucket:
         """
         self.rate = rate
         self.capacity = capacity
-        self.tokens = capacity
+        self.tokens: float = capacity
         self.last_update = time.time()
         self.lock = Lock()
 
@@ -243,13 +253,15 @@ class RateLimiter:
                 if model_id in self.buckets:
                     del self.buckets[model_id]
                 # Clear Redis counters
-                cache.delete_pattern(f"{self.CACHE_KEY_PREFIX}*:{model_id}:*")
+                cast(_PatternDeletableCache, cache).delete_pattern(
+                    f"{self.CACHE_KEY_PREFIX}*:{model_id}:*"
+                )
             else:
                 self.buckets.clear()
                 # Clear all Redis counters
-                cache.delete_pattern(f"{self.CACHE_KEY_PREFIX}*")
+                cast(_PatternDeletableCache, cache).delete_pattern(f"{self.CACHE_KEY_PREFIX}*")
 
-    def get_limits_info(self, model_id: str) -> Dict[str, any]:
+    def get_limits_info(self, model_id: str) -> Dict[str, Any]:
         """
         Get current rate limit information for a model.
 

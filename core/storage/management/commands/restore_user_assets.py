@@ -2,7 +2,7 @@
 
 import sys
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 

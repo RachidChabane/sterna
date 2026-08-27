@@ -47,7 +47,7 @@ class MCPRequest:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert request to dictionary."""
-        result = {
+        result: Dict[str, Any] = {
             "jsonrpc": self.jsonrpc,
             "method": self.method,
         }

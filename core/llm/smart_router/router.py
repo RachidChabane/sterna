@@ -7,7 +7,10 @@ and resolves to the optimal real model. Invisible downstream.
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from llm.smart_router.classifier import ClassificationResult
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +54,10 @@ class SmartRouter:
         self,
         model_id: str,
         messages: list,
-        conversation_id: str = None,
+        conversation_id: Optional[str] = None,
         user=None,
-        excluded_models: list = None,
-        min_score_override: int = None,
+        excluded_models: Optional[list] = None,
+        min_score_override: Optional[int] = None,
     ) -> RoutingResolution:
         """
         Resolve the auto-router model ID to a real model.
@@ -95,6 +98,7 @@ class SmartRouter:
         llm_score = None
         classification_cost = None
         classification_latency = None
+        classification: Optional["ClassificationResult"] = None
         reason = ""
 
         if heuristic.is_trivial:
@@ -210,9 +214,9 @@ class SmartRouter:
         self,
         failed_model: str,
         messages: list,
-        conversation_id: str = None,
+        conversation_id: Optional[str] = None,
         user=None,
-        excluded_models: list = None,
+        excluded_models: Optional[list] = None,
     ) -> Optional[str]:
         """Re-run resolution excluding the failed model."""
         excluded = list(excluded_models or [])

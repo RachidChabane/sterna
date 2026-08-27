@@ -105,7 +105,9 @@ def extract_mentions_from_messages(messages: List[dict]) -> List[MentionedTool]:
     return all_mentions
 
 
-def build_mention_priority_prompt(mentions: List[MentionedTool], available_tools: List = None) -> Optional[str]:
+def build_mention_priority_prompt(
+    mentions: List[MentionedTool], available_tools: Optional[List] = None
+) -> Optional[str]:
     """
     Build a system prompt section that instructs the model to prioritize mentioned tools.
 
@@ -120,7 +122,7 @@ def build_mention_priority_prompt(mentions: List[MentionedTool], available_tools
         return None
 
     # Build a map of available tools for validation
-    available_map = {}
+    available_map: Dict[str, List[str]] = {}
     if available_tools:
         for tool in available_tools:
             server_name = getattr(tool, 'server_name', None) or getattr(getattr(tool, 'server', None), 'name', None)

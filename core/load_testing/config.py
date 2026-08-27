@@ -36,7 +36,7 @@ class TestConfig:
     EVALUATION_BATCH_SIZE = 50  # Samples per evaluation run
 
     # Performance baselines (in milliseconds)
-    PERFORMANCE_BASELINES = {
+    PERFORMANCE_BASELINES: Dict[str, Dict[str, float]] = {
         "auth_login": {"p50": 100, "p95": 500, "p99": 1000},
         "dataset_list": {"p50": 50, "p95": 200, "p99": 500},
         "dataset_create": {"p50": 200, "p95": 800, "p99": 2000},

@@ -625,10 +625,23 @@ class BillingService:
         """Queue failed deduction for async retry."""
         try:
             from usage_quota.tasks import queue_failed_deduction
-            queue_failed_deduction({
-                'user_id': str(user.id),
-                'operation': operation.to_dict(),
-            })
+            queue_failed_deduction(
+                user_id=str(user.id),
+                service=str(operation.service),
+                cost_usd=str(operation.cost_usd),
+                feature=str(operation.feature),
+                session_id=operation.session_id,
+                model_id=operation.model_id,
+                prompt_tokens=operation.prompt_tokens,
+                completion_tokens=operation.completion_tokens,
+                total_tokens=operation.total_tokens,
+                character_count=operation.character_count,
+                audio_seconds=operation.audio_seconds,
+                request_count=operation.request_count,
+                request_id=operation.request_id,
+                extra_data=operation.extra_data,
+                billing_origin=operation.billing_origin,
+            )
         except Exception:
             # Last resort: log for manual recovery
             logger.critical(

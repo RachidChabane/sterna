@@ -2,8 +2,18 @@
 Constants for LLM module.
 """
 
+from typing import Dict, List, TypedDict
+
+
+class ModelTierConfig(TypedDict):
+    """Configuration for one cost/quality tier of models."""
+
+    models: List[str]
+    cost_estimate: float
+
+
 # Model Tiers
-MODEL_TIERS = {
+MODEL_TIERS: Dict[str, ModelTierConfig] = {
     "budget": {
         "models": [
             "openai/gpt-3.5-turbo",

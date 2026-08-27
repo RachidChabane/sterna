@@ -9,9 +9,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone as dt_tz
 from typing import Iterator, Optional
 
-import boto3
-from botocore.config import Config
-from botocore.exceptions import ClientError
+import boto3  # type: ignore[import-untyped]
+from botocore.config import Config  # type: ignore[import-untyped]
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 

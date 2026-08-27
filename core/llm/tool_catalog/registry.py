@@ -423,7 +423,7 @@ class ToolCatalogRegistry:
             ).prefetch_related('tools')
 
             for server in user_servers:
-                db_tools = server.tools.all()
+                db_tools = server.tools.all()  # type: ignore[attr-defined]  # reverse FK, needs django-stubs plugin
                 if not db_tools.exists():
                     continue
 
@@ -438,7 +438,7 @@ class ToolCatalogRegistry:
 
                 # Use proper server_id format for UnifiedMCPRegistry compatibility
                 # Format: "custom:{db_id}" matches what UnifiedMCPRegistry expects
-                proper_server_id = f"custom:{server.id}"
+                proper_server_id = f"custom:{server.pk}"
                 converted = adapter._convert_mcp_tools(
                     mcp_tools=mcp_tools,
                     server_id=proper_server_id,
@@ -461,7 +461,7 @@ class ToolCatalogRegistry:
                         existing_entry = self._user_tools[user_id].get(tool.id)
                         if existing_entry and existing_entry.is_available:
                             # Already registered with runtime callable, just update metadata
-                            existing_entry.mcp_server_id = str(server.id)
+                            existing_entry.mcp_server_id = str(server.pk)
                             existing_entry.mcp_server_name = server.name
                             existing_entry.mcp_server_icon = server.icon_url
                             existing_entry.mcp_server_icon_invert = getattr(server, 'icon_invert_in_dark_mode', False)
@@ -472,7 +472,7 @@ class ToolCatalogRegistry:
                                 user_id=user_id,
                                 discovered_in_session=True,
                                 is_available=False,  # Will be updated by V2 registration if runtime available
-                                mcp_server_id=str(server.id),
+                                mcp_server_id=str(server.pk),
                                 mcp_server_name=server.name,
                                 mcp_server_icon=server.icon_url,
                                 mcp_server_icon_invert=getattr(server, 'icon_invert_in_dark_mode', False),
@@ -507,7 +507,7 @@ class ToolCatalogRegistry:
             logger.info(f"[ToolCatalog] Found {preconfigured_servers.count()} preconfigured servers to check")
 
             for server in preconfigured_servers:
-                db_tools = server.tools.all()
+                db_tools = server.tools.all()  # type: ignore[attr-defined]
                 tool_count = db_tools.count()
                 if tool_count == 0:
                     logger.debug(f"[ToolCatalog] Server '{server.name}' has no tools, skipping")
@@ -528,7 +528,7 @@ class ToolCatalogRegistry:
                         npm_package=server.npm_package,
                     ).first()
                     if user_server:
-                        user_server_id = user_server.id
+                        user_server_id = user_server.pk
                 elif server.remote_url and server.remote_url in user_connected_urls:
                     is_connected = True
                     # Find the user's actual server by remote_url
@@ -538,7 +538,7 @@ class ToolCatalogRegistry:
                         remote_url=server.remote_url,
                     ).first()
                     if user_server:
-                        user_server_id = user_server.id
+                        user_server_id = user_server.pk
 
                 mcp_tools = [
                     {
@@ -552,7 +552,7 @@ class ToolCatalogRegistry:
                 # Use proper server_id format for UnifiedMCPRegistry compatibility
                 # Format: "custom:{db_id}" - use USER's server ID if connected, otherwise preconfigured
                 # This ensures execution routes to the user's OAuth-authenticated server instance
-                execution_server_id = user_server_id if user_server_id else server.id
+                execution_server_id = user_server_id if user_server_id else server.pk
                 proper_server_id = f"custom:{execution_server_id}"
                 converted = adapter._convert_mcp_tools(
                     mcp_tools=mcp_tools,

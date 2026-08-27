@@ -11,7 +11,7 @@ import logging
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .compressor import compress_tool_result
 from .constants import (
@@ -168,7 +168,7 @@ class ScoutAgent:
         auth_token: str,
         user_id: str,
         session_id: str,
-        on_step: Optional[callable] = None,
+        on_step: Optional[Callable[[str], None]] = None,
     ) -> ScoutReport:
         """
         Explore the codebase for a given task.
@@ -351,8 +351,8 @@ class ScoutAgent:
             file_read_counts = {}
 
         # Filter to scout tools only and apply loop detection
-        scout_tool_calls = []
-        loop_blocked = []  # (index, tc, blocked_result)
+        scout_tool_calls: List[Dict[str, Any]] = []
+        loop_blocked: List[Tuple[int, Dict[str, Any], Dict[str, Any]]] = []  # (index, tc, blocked_result)
 
         for tc in tool_calls:
             tool_name = tc.get("function", {}).get("name", "")

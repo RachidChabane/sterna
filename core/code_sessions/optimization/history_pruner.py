@@ -128,9 +128,9 @@ def prune_conversation_history(messages: List[Dict[str, Any]], user=None) -> Lis
                 tool_name = tool_info[0] if tool_info else "unknown"
 
                 # Summarize based on tool type
-                summary = _summarize_tool_result(tool_name, content, user=user)
-                if summary and len(summary) < len(content):
-                    messages[i]["content"] = summary
+                age_summary = _summarize_tool_result(tool_name, content, user=user)
+                if age_summary and len(age_summary) < len(content):
+                    messages[i]["content"] = age_summary
                     pruned_count += 1
                     logger.debug(f"[HistoryPruner] Age-summarized {tool_name} result at index {i}")
 

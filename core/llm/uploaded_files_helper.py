@@ -18,7 +18,7 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 
-def prepare_uploaded_files_context(attachments: List[Any], chat_id: str = None) -> str:
+def prepare_uploaded_files_context(attachments: List[Any], chat_id: Optional[str] = None) -> str:
     """
     Prepare context message to inform the model about available uploaded files.
 

@@ -18,10 +18,9 @@ remote HTTP servers it loads.
 
 import logging
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from asgiref.sync import sync_to_async
-from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
@@ -29,7 +28,9 @@ from .client import MCPClientBase, create_mcp_client
 from .exceptions import MCPConnectionError, MCPError
 from .models import MCPServer, MCPTool
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from authentication.models import User
+
 logger = logging.getLogger(__name__)
 
 
@@ -269,7 +270,7 @@ class MCPRegistry:
 
     async def discover_all_tools(
         self,
-        user: User,
+        user: "User",
         force_refresh: bool = False,
     ) -> Dict[int, List[MCPTool]]:
         """Discover tools from all active servers for a user.
@@ -297,7 +298,7 @@ class MCPRegistry:
 
     async def get_available_tools(
         self,
-        user: User,
+        user: "User",
         refresh_if_stale: bool = True,
     ) -> List[MCPTool]:
         """Get all available tools for a user.
@@ -445,7 +446,7 @@ class MCPRegistry:
             # Disconnect stdio clients after use since they are short-lived processes
             if client and server_transport_type == 'stdio':
                 try:
-                    await self.disconnect_server(server_id)
+                    await self.disconnect_server(int(server_id))
                 except Exception as disconnect_error:
                     logger.warning(f"Error disconnecting stdio client: {disconnect_error}")
 

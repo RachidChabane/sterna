@@ -227,7 +227,7 @@ def handle_file_tool_calls(
     tool_messages = []
 
     for tool_call in tool_calls:
-        tool_call_id = tool_call.get("id")
+        tool_call_id = tool_call.get("id") or ""
         function = tool_call.get("function", {})
         tool_name = function.get("name")
         arguments_str = function.get("arguments", "{}")

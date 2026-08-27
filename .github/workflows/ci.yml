@@ -47,6 +47,7 @@ jobs:
       google-maps: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.google-maps }}
       sandbox-datascience: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.sandbox-datascience }}
       any-service: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.any-service }}
+      verify-inputs: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.verify-inputs }}
       infra: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.infra }}
       docs: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.docs }}
       # Version outputs for each service
@@ -95,6 +96,11 @@ jobs:
               - 'core/sandbox/runtime/Dockerfile.sandbox-base'
             any-service:
               - 'core/**'
+            verify-inputs:
+              - 'core/**'
+              - 'script/**'
+              - 'baselines/**'
+              - '.github/workflows/ci.yml'
             infra:
               - 'infra-migration/**'
             docs:
@@ -164,17 +170,17 @@ jobs:
               NEW=$(bump_version "$CURRENT" "$BUMP")
               VERSIONS=$(echo "$VERSIONS" | jq ".\"$SERVICE\" = \"$NEW\"")
               echo "$SERVICE: $CURRENT -> $NEW"
-              echo "$SERVICE=$NEW" >> $GITHUB_OUTPUT
+              echo "$SERVICE=$NEW" >> "$GITHUB_OUTPUT"
               UPDATED=true
             else
-              echo "$SERVICE=$CURRENT" >> $GITHUB_OUTPUT
+              echo "$SERVICE=$CURRENT" >> "$GITHUB_OUTPUT"
             fi
           done
 
           # Save updated versions (only on push)
           if [ "$UPDATED" = "true" ]; then
             echo "$VERSIONS" | jq '.' > core/versions.json
-            echo "versions_updated=true" >> $GITHUB_OUTPUT
+            echo "versions_updated=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Commit version bumps
@@ -187,10 +193,10 @@ jobs:
           git push
 
   lint:
-    name: Lint
+    name: Lint & Verify Gate
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.any-service == 'true'
+    if: needs.changes.outputs.verify-inputs == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -199,18 +205,43 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install linters
-        # Pinned to the version in core/venv so local and CI agree.
-        run: |
-          pip install ruff==0.8.6
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
 
-      - name: Run Ruff
-        run: ruff check .
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: core/frontend/pnpm-lock.yaml
 
-      # black and mypy were removed from this gate (2026-07-11): neither
-      # has ever passed on this codebase, so they only guaranteed a red
-      # pipeline. Ruff (pinned) is the enforced lint gate. Reintroduce
-      # mypy incrementally per-module if/when annotations reach coverage.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Bootstrap (backend venv + frontend deps)
+        run: script/bootstrap
+
+      - name: Lint (ruff gates, eslint report-only)
+        run: script/lint
+
+      - name: Typecheck (mypy + tsc, both gate)
+        run: script/typecheck
+
+      - name: OpenAPI schema drift
+        run: script/schema-diff
+
+      - name: Generated API types drift
+        run: script/api-types-diff
+
+      - name: Agent-core tool id drift
+        run: script/tool-ids-diff
+
+      - name: Code-quality ratchet
+        run: script/ratchet
 
   runbook-lint:
     name: Runbook Lint

@@ -485,8 +485,14 @@ class BatchCostEstimateResponseSerializer(serializers.Serializer):
 
 
 class ComparisonPrioritiesSerializer(serializers.Serializer):
+    # `context` here is a genuine JSON field name (ComparisonPriorities.context in
+    # comparison_config.py) that happens to collide with DRF's own Field.context
+    # property. DRF's SerializerMetaclass pops declared-field attributes out of the
+    # class body at class-creation time (see rest_framework.serializers.
+    # SerializerMetaclass._get_declared_fields), so this never actually shadows the
+    # real property at runtime — mypy can't see that dynamic step.
     cost = serializers.ChoiceField(choices=["off", "nice", "important", "critical"], required=False)
-    context = serializers.ChoiceField(choices=["off", "nice", "important", "critical"], required=False)
+    context = serializers.ChoiceField(choices=["off", "nice", "important", "critical"], required=False)  # type: ignore[assignment]
     capabilities = serializers.ChoiceField(choices=["off", "nice", "important", "critical"], required=False)
     multimodality = serializers.ChoiceField(choices=["off", "nice", "important", "critical"], required=False)
     availability = serializers.ChoiceField(choices=["off", "nice", "important", "critical"], required=False)
@@ -522,7 +528,7 @@ class ModelComparisonRequestSerializer(serializers.Serializer):
 
 class ScoreBreakdownSerializer(serializers.Serializer):
     cost = serializers.FloatField()
-    context = serializers.FloatField()
+    context = serializers.FloatField()  # type: ignore[assignment]  # see ComparisonPrioritiesSerializer.context note
     capabilities = serializers.FloatField()
     multimodality = serializers.FloatField()
     availability = serializers.FloatField()

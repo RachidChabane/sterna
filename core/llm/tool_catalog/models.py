@@ -297,7 +297,7 @@ class DiscoveredTool:
         # e.g., mcp_custom:463_notion-create-comment -> mcp_custom_463_notion-create-comment
         sanitized_id = self.definition.id.replace(":", "_")
 
-        result = {
+        result: Dict[str, Any] = {
             "function_name": sanitized_id,  # The exact name to use when calling this tool
             "name": self.definition.name,
             "description": desc,

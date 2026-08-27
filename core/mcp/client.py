@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 import websockets
-from websockets.client import WebSocketClientProtocol
+from websockets.asyncio.client import ClientConnection
 
 from .exceptions import (
     MCPAuthenticationError,
@@ -117,15 +117,12 @@ class MCPClientBase(ABC):
         try:
             response = await self._send_request(request)
             if response.is_error():
-                error_msg = response.error.get("message", "Unknown error")
+                error_msg = (response.error or {}).get("message", "Unknown error")
                 raise MCPConnectionError(f"Handshake failed: {error_msg}")
 
-            # Send initialized notification (no response expected)
-            initialized_notification = MCPRequest(
-                method=MCPMessageType.INITIALIZED,
-                params={},
-            )
-            await self._send_notification(initialized_notification)
+            # Send initialized notification (fire-and-forget: no id, so _send_request won't await a response)
+            initialized_notification = MCPRequest(method=MCPMessageType.INITIALIZED, params={})
+            await self._send_request(initialized_notification)
 
             return response.result or {}
 
@@ -156,13 +153,13 @@ class MCPClientBase(ABC):
         try:
             response = await self._send_request(request)
             if response.is_error():
-                error_msg = response.error.get("message", "Unknown error")
+                error_msg = (response.error or {}).get("message", "Unknown error")
                 raise MCPServerError(
                     f"Failed to list tools: {error_msg}",
-                    error_code=response.error.get("code"),
+                    error_code=(response.error or {}).get("code"),
                 )
 
-            tools_data = response.result.get("tools", [])
+            tools_data = (response.result or {}).get("tools", [])
             return [MCPToolDefinition.from_dict(tool) for tool in tools_data]
 
         except asyncio.TimeoutError:
@@ -190,13 +187,13 @@ class MCPClientBase(ABC):
         try:
             response = await self._send_request(request)
             if response.is_error():
-                error_msg = response.error.get("message", "Unknown error")
+                error_msg = (response.error or {}).get("message", "Unknown error")
                 raise MCPServerError(
                     f"Failed to list resources: {error_msg}",
-                    error_code=response.error.get("code"),
+                    error_code=(response.error or {}).get("code"),
                 )
 
-            resources_data = response.result.get("resources", [])
+            resources_data = (response.result or {}).get("resources", [])
             return [MCPResourceDefinition.from_dict(res) for res in resources_data]
 
         except asyncio.TimeoutError:
@@ -224,13 +221,13 @@ class MCPClientBase(ABC):
         try:
             response = await self._send_request(request)
             if response.is_error():
-                error_msg = response.error.get("message", "Unknown error")
+                error_msg = (response.error or {}).get("message", "Unknown error")
                 raise MCPServerError(
                     f"Failed to list prompts: {error_msg}",
-                    error_code=response.error.get("code"),
+                    error_code=(response.error or {}).get("code"),
                 )
 
-            prompts_data = response.result.get("prompts", [])
+            prompts_data = (response.result or {}).get("prompts", [])
             return [MCPPromptDefinition.from_dict(prompt) for prompt in prompts_data]
 
         except asyncio.TimeoutError:
@@ -271,7 +268,7 @@ class MCPClientBase(ABC):
         try:
             response = await self._send_request(request)
             if response.is_error():
-                error = response.error
+                error = response.error or {}
                 error_msg = error.get("message", "Unknown error")
                 error_code = error.get("code")
 
@@ -286,7 +283,7 @@ class MCPClientBase(ABC):
                         error_code=error_code,
                     )
 
-            return MCPToolCallResult.from_dict(response.result)
+            return MCPToolCallResult.from_dict(response.result or {})
 
         except asyncio.TimeoutError:
             raise MCPTimeoutError(f"Tool call '{tool_name}' timed out")
@@ -310,7 +307,7 @@ class MCPWebSocketClient(MCPClientBase):
         """
         super().__init__(timeout=timeout, auth_config=auth_config)
         self.url = url
-        self.websocket: Optional[WebSocketClientProtocol] = None
+        self.websocket: Optional[ClientConnection] = None
         self._pending_requests: Dict[str, asyncio.Future] = {}
 
     async def connect(self) -> None:
@@ -348,6 +345,8 @@ class MCPWebSocketClient(MCPClientBase):
 
     async def _receive_messages(self) -> None:
         """Background task to receive and route messages."""
+        if not self.websocket:
+            return
         try:
             async for message in self.websocket:
                 try:
@@ -362,7 +361,7 @@ class MCPWebSocketClient(MCPClientBase):
                         logger.warning(f"Received response for unknown request: {response.id}")
 
                 except json.JSONDecodeError:
-                    logger.error(f"Invalid JSON received: {message}")
+                    logger.error(f"Invalid JSON received: {message!r}")
                 except Exception as e:
                     logger.error(f"Error processing message: {e}")
 
@@ -387,7 +386,7 @@ class MCPWebSocketClient(MCPClientBase):
             raise MCPConnectionError("Not connected to MCP server")
 
         # Create future for response
-        future = asyncio.Future()
+        future: "asyncio.Future[MCPResponse]" = asyncio.Future()
         if request.id:
             self._pending_requests[request.id] = future
 
@@ -526,7 +525,7 @@ class MCPStdioClient(MCPClientBase):
                         logger.warning(f"Received response for unknown request: {response.id}")
 
                 except json.JSONDecodeError:
-                    logger.error(f"Invalid JSON from subprocess: {line}")
+                    logger.error(f"Invalid JSON from subprocess: {line!r}")
                 except Exception as e:
                     logger.error(f"Error processing message: {e}")
 
@@ -568,7 +567,7 @@ class MCPStdioClient(MCPClientBase):
             raise MCPConnectionError("Not connected to MCP server process")
 
         # Create future for response
-        future = asyncio.Future()
+        future: "asyncio.Future[MCPResponse]" = asyncio.Future()
         if request.id:
             self._pending_requests[request.id] = future
 
@@ -707,7 +706,7 @@ class MCPRemoteHTTPClient(MCPClientBase):
             MCPResponse from the first message event
         """
         event_type = None
-        data_lines = []
+        data_lines: List[str] = []
 
         async for line in response.aiter_lines():
             line = line.strip()
@@ -840,7 +839,7 @@ class MCPRemoteHTTPClient(MCPClientBase):
         except Exception as e:
             raise MCPConnectionError(f"Failed to send request: {str(e)}")
 
-    async def call(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def call(self, method: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Call any method on the MCP server.
 
         Args:
@@ -861,7 +860,7 @@ class MCPRemoteHTTPClient(MCPClientBase):
         response = await self._send_request(request)
 
         if response.is_error():
-            error_msg = response.error.get("message", "Unknown error")
+            error_msg = (response.error or {}).get("message", "Unknown error")
             raise MCPConnectionError(f"Method {method} failed: {error_msg}")
 
         return response.result or {}
@@ -936,7 +935,7 @@ class MCPRemoteHTTPClient(MCPClientBase):
             # Send initialize request and capture session ID from response
             response = await self._send_request(request, capture_session_id=True)
             if response.is_error():
-                error_msg = response.error.get("message", "Unknown error")
+                error_msg = (response.error or {}).get("message", "Unknown error")
                 raise MCPConnectionError(f"Handshake failed: {error_msg}")
 
             logger.info(f"MCP handshake successful, session_id captured: {self.session_id is not None}")

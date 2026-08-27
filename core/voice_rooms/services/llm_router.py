@@ -129,6 +129,10 @@ class LLMRouter:
         if not self._client:
             await self.initialize()
 
+        client = self._client
+        if client is None:
+            raise RuntimeError("LLMRouter.initialize() must be called before stream_completion()")
+
         # Tier gate: refuse the call when the user's plan disallows
         # voice rooms. The flag is shared with voice_session, so a
         # plan with voice_rooms=False rejects here too.
@@ -176,7 +180,7 @@ class LLMRouter:
 
                 # Use regular POST instead of stream() to avoid "stream closed" issues
                 # Then parse SSE events from the response body
-                response = await self._client.post(
+                response = await client.post(
                     "/chat/completions",
                     json=payload,
                     timeout=120.0,  # Longer timeout for streaming responses
@@ -305,6 +309,10 @@ class LLMRouter:
         if not self._client:
             await self.initialize()
 
+        client = self._client
+        if client is None:
+            raise RuntimeError("LLMRouter.initialize() must be called before complete()")
+
         payload = {
             "model": model,
             "messages": messages,
@@ -319,7 +327,7 @@ class LLMRouter:
                 payload["tool_choice"] = tool_choice
 
         try:
-            response = await self._client.post(
+            response = await client.post(
                 "/chat/completions",
                 json=payload,
             )

@@ -319,19 +319,19 @@ def tts_models(request):
 
 async def _generate_tts_audio(
     text: str,
-    provider_id: str = None,
-    voice_id: str = None,
-    model_id: str = None,
-    speed: float = None,
+    provider_id: str | None = None,
+    voice_id: str | None = None,
+    model_id: str | None = None,
+    speed: float | None = None,
     # ElevenLabs-specific settings
-    stability: float = None,
-    similarity_boost: float = None,
-    style: float = None,
-    use_speaker_boost: bool = None,
+    stability: float | None = None,
+    similarity_boost: float | None = None,
+    style: float | None = None,
+    use_speaker_boost: bool | None = None,
     user=None,
-    session_id: str = None,
+    session_id: str | None = None,
     feature: str = FeatureType.VOICE_ROOM,
-) -> bytes:
+) -> bytes | None:
     """Generate TTS audio using the specified provider."""
     service = TTSService(
         provider_id,
@@ -411,7 +411,7 @@ async def _translate_preview_text(text: str, target_language: str, user=None) ->
         await router.cleanup()
 
 
-async def _get_preview_text(language: str = None, user=None) -> str:
+async def _get_preview_text(language: str | None = None, user=None) -> str:
     """Get the preview text, translated if a language is specified.
 
     Args:

@@ -28,9 +28,9 @@ import sentry_sdk
 from django.conf import settings
 from django.utils.module_loading import import_string
 
-from django_ratelimit import ALL
-from django_ratelimit.core import is_ratelimited
-from django_ratelimit.exceptions import Ratelimited
+from django_ratelimit import ALL  # type: ignore[import-untyped]
+from django_ratelimit.core import is_ratelimited  # type: ignore[import-untyped]
+from django_ratelimit.exceptions import Ratelimited  # type: ignore[import-untyped]
 
 
 _suspicious_logger = logging.getLogger("security.suspicious_activity")

@@ -8,8 +8,10 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from google.auth.transport import requests
-from google.oauth2 import id_token
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
+from google.auth.transport import requests  # type: ignore[import-untyped]
+from google.oauth2 import id_token  # type: ignore[import-untyped]
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.cache import cache
@@ -19,6 +21,11 @@ import logging
 from exceptions import apply_ratelimit
 
 from .jwt_utils import JWTManager
+from .schema_serializers import (
+    GithubAuthRequestSerializer,
+    GoogleAuthRequestSerializer,
+    OAuthLoginResponseSerializer,
+)
 from .serializers import UserSerializer
 from .models import RefreshToken, SocialAccount
 
@@ -27,6 +34,10 @@ from sterna.client_ip import get_client_ip
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+# Non-2xx bodies vary per failure branch; see authentication/openapi_schema.py
+# for the rationale shared with the class-based auth views.
+_ERROR = OpenApiTypes.OBJECT
 
 
 def _google_token_auth(request):
@@ -235,6 +246,10 @@ def _google_token_auth(request):
         )
 
 
+@extend_schema(
+    request=GoogleAuthRequestSerializer,
+    responses={200: OAuthLoginResponseSerializer, 400: _ERROR, 409: _ERROR, 500: _ERROR},
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @apply_ratelimit(key="ip", rate="30/m", group="oauth-callback", method="POST")
@@ -243,6 +258,10 @@ def google_auth(request):
     return _google_token_auth(request)
 
 
+@extend_schema(
+    request=GoogleAuthRequestSerializer,
+    responses={200: OAuthLoginResponseSerializer, 400: _ERROR, 409: _ERROR, 500: _ERROR},
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @apply_ratelimit(key="ip", rate="30/m", group="oauth-callback", method="POST")
@@ -259,6 +278,16 @@ def google_one_tap_auth(request):
     return _google_token_auth(request)
 
 
+@extend_schema(
+    request=GithubAuthRequestSerializer,
+    responses={
+        200: OAuthLoginResponseSerializer,
+        400: _ERROR,
+        409: _ERROR,
+        500: _ERROR,
+        503: _ERROR,
+    },
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @apply_ratelimit(key="ip", rate="30/m", group="oauth-callback", method="POST")

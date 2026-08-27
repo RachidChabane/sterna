@@ -366,7 +366,7 @@ Example format:
 
 async def discover_mcp_servers(
     user_query: str,
-    preconfigured_servers: list[dict] = None,
+    preconfigured_servers: Optional[list[dict]] = None,
     user=None,
 ) -> DiscoveryResult:
     """Main entry point for AI-powered MCP server discovery.

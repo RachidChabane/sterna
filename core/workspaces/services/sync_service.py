@@ -13,10 +13,10 @@ import logging
 import mimetypes
 from datetime import datetime
 from pathlib import Path
-from typing import AsyncGenerator, List, Optional, Set
+from typing import AsyncGenerator, List, Optional, Set, cast
 from uuid import UUID
 
-import aiofiles
+import aiofiles  # type: ignore[import-untyped]
 from pydantic import BaseModel
 from django.conf import settings
 
@@ -110,15 +110,15 @@ class WorkspaceSyncService:
         self.r2 = r2
 
         # Configuration with defaults from Django settings or hardcoded
-        self.inline_threshold = inline_threshold or getattr(
+        self.inline_threshold: int = cast(int, inline_threshold or getattr(
             settings, 'WORKSPACE_INLINE_THRESHOLD', 256 * 1024
-        )
-        self.max_file_size = max_file_size or getattr(
+        ))
+        self.max_file_size: int = cast(int, max_file_size or getattr(
             settings, 'WORKSPACE_MAX_FILE_SIZE', 50 * 1024 * 1024
-        )
-        self.max_workspace_size = max_workspace_size or getattr(
+        ))
+        self.max_workspace_size: int = cast(int, max_workspace_size or getattr(
             settings, 'WORKSPACE_MAX_SIZE', 500 * 1024 * 1024
-        )
+        ))
         self.exclude_patterns = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
 
     # ─────────────────────────────────────────────────────────
@@ -197,10 +197,10 @@ class WorkspaceSyncService:
 
             # Save new/modified files
             for file_info in container_files:
-                existing = existing_by_path.get(file_info.path)
+                existing_file = existing_by_path.get(file_info.path)
 
                 # Skip if unchanged (same hash)
-                if existing and existing.sha256_hash == file_info.sha256:
+                if existing_file and existing_file.sha256_hash == file_info.sha256:
                     files_skipped += 1
                     continue
 

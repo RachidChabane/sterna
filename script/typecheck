@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
-# tsc is the enforced type gate for the frontend. mypy runs alongside it
-# in report-only mode over the Django app tree (the standalone
-# microservices under core/ — api-gateway, brave-search, google-maps,
+# tsc is the enforced type gate for the frontend. mypy is an enforced
+# gate over the Django app tree (the standalone microservices under
+# core/ — api-gateway, brave-search, google-maps,
 # user-preferences-service, sandbox — carry their own dependency stacks
-# and are excluded to avoid cross-service module clashes): its error
-# count is printed in a stable `RATCHET` line for the mypy ratchet to
-# consume. mypy exit 1 (type errors found) does not fail this script;
-# mypy exit >= 2 (crash, bad config, module clash) is a harness fault
-# and does fail it — a tool that didn't run must never be reported as a
+# and are excluded to avoid cross-service module clashes): any type
+# error fails this script. Its error count is also printed in a stable
+# `RATCHET` line so script/ratchet can independently track the count
+# and the checked-file denominator over time. mypy exit >= 2 (crash,
+# bad config, module clash) is a harness fault and fails this script
+# the same way — a tool that didn't run must never be reported as a
 # clean pass.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-echo "==> mypy (report-only)"
+echo "==> mypy (gates)"
 set +e
 mypy_output="$(
   cd "$repo_root/core" && "$repo_root/.venv/bin/mypy" \
@@ -41,6 +42,12 @@ else
 fi
 
 echo "RATCHET mypy_errors=${mypy_errors}"
+
+if [ "$mypy_errors" -gt 0 ]; then
+  printf '%s\n' "$mypy_output" >&2
+  echo "mypy found ${mypy_errors} error(s); this is a hard gate." >&2
+  exit 1
+fi
 
 echo "==> tsc --noEmit (frontend, gates)"
 (cd "$repo_root/core/frontend" && pnpm exec tsc -b --noEmit)

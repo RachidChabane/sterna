@@ -10,9 +10,9 @@ Behavior contract:
     log and return None — no exception, no API call.
   * Else: stripe.Customer.create(email=..., metadata={'user_id': ...}),
     save id back to user, return it.
-  * On stripe.error.RateLimitError: re-raise so the caller (Celery
+  * On stripe.RateLimitError: re-raise so the caller (Celery
     task) can retry with backoff.
-  * On stripe.error.StripeError other subclasses: log + re-raise —
+  * On stripe.StripeError other subclasses: log + re-raise —
     Celery's autoretry handles transient API errors; permanent ones
     (auth failures) should page via Sentry, not silently succeed.
 """
@@ -63,13 +63,13 @@ def get_or_create_stripe_customer(user) -> Optional[str]:
             email=user.email,
             metadata={"user_id": str(user.id)},
         )
-    except stripe.error.RateLimitError:
+    except stripe.RateLimitError:
         logger.warning(
             "stripe.customer.rate_limited",
             extra={"user_id": str(user.id)},
         )
         raise
-    except stripe.error.StripeError:
+    except stripe.StripeError:
         logger.exception(
             "stripe.customer.create_failed",
             extra={"user_id": str(user.id)},

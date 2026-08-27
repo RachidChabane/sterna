@@ -2,15 +2,22 @@
 
 import re
 import uuid
+from typing import TYPE_CHECKING, Optional
 
 import yaml
-from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.utils import timezone
 
 from mcp.fields import EncryptedTextField
+
+if TYPE_CHECKING:
+    from django.db.models.fields.related_descriptors import RelatedManager
+
+    from authentication.models import User
+    from conversations.models import Chat, Conversation
 
 
 # ==================== Sub-Agent Constants ====================
@@ -22,8 +29,6 @@ VALID_AGENT_TOOLS = frozenset({
 
 MAX_SUB_AGENTS_PER_USER = 30
 
-User = get_user_model()
-
 
 class GitHubConnection(models.Model):
     """User's GitHub OAuth connection for code operations.
@@ -32,8 +37,8 @@ class GitHubConnection(models.Model):
     Each user can have one GitHub connection.
     """
 
-    user = models.OneToOneField(
-        User,
+    user: "models.OneToOneField[User, User]" = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="github_code_connection",
         help_text="User who owns this GitHub connection",
@@ -48,34 +53,34 @@ class GitHubConnection(models.Model):
         default="",
         help_text="Encrypted OAuth refresh token (if available)",
     )
-    token_expires_at = models.DateTimeField(
+    token_expires_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When the access token expires",
     )
 
     # GitHub user info
-    github_username = models.CharField(
+    github_username: models.CharField = models.CharField(
         max_length=100,
         help_text="GitHub username",
     )
-    github_user_id = models.BigIntegerField(
+    github_user_id: models.BigIntegerField = models.BigIntegerField(
         help_text="GitHub user ID",
     )
-    avatar_url = models.URLField(
+    avatar_url: models.URLField = models.URLField(
         blank=True,
         help_text="GitHub avatar URL",
     )
 
     # Scope tracking
-    scopes = models.JSONField(
+    scopes: models.JSONField = models.JSONField(
         default=list,
         help_text="List of granted OAuth scopes",
     )
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "GitHub Connection"
@@ -104,28 +109,28 @@ class CodeSession(models.Model):
         COMPLETED = "completed", "Completed"
         ARCHIVED = "archived", "Archived"
 
-    id = models.UUIDField(
+    id: models.UUIDField = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
     )
-    user = models.ForeignKey(
-        User,
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="code_sessions",
         help_text="User who owns this session",
     )
 
     # Session info
-    name = models.CharField(
+    name: models.CharField = models.CharField(
         max_length=255,
         help_text="Session name (auto-generated or custom)",
     )
-    description = models.TextField(
+    description: models.TextField = models.TextField(
         blank=True,
         help_text="Optional session description",
     )
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.ACTIVE,
@@ -133,43 +138,43 @@ class CodeSession(models.Model):
     )
 
     # Repository connection (optional - can work without GitHub)
-    github_repo_full_name = models.CharField(
+    github_repo_full_name: models.CharField = models.CharField(
         max_length=255,
         blank=True,
         help_text="Full repository name: owner/repo",
     )
-    github_repo_url = models.URLField(
+    github_repo_url: models.URLField = models.URLField(
         blank=True,
         help_text="GitHub repository URL",
     )
-    github_branch = models.CharField(
+    github_branch: models.CharField = models.CharField(
         max_length=255,
         default="main",
         help_text="Target branch name",
     )
-    repo_cloned = models.BooleanField(
+    repo_cloned: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether the repository has been cloned to workspace",
     )
 
     # Model selection
-    model_id = models.CharField(
+    model_id: models.CharField = models.CharField(
         max_length=255,
         default="anthropic/claude-sonnet-4",
         help_text="Selected LLM model for this session",
     )
 
     # Session settings
-    settings = models.JSONField(
+    settings: models.JSONField = models.JSONField(
         default=dict,
         blank=True,
         help_text="Additional session settings",
     )
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    last_activity_at = models.DateTimeField(
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
+    last_activity_at: models.DateTimeField = models.DateTimeField(
         auto_now=True,
         help_text="Last activity timestamp for sorting",
     )
@@ -208,12 +213,12 @@ class CodeJob(models.Model):
         FAILED = "failed", "Failed"
         CANCELLED = "cancelled", "Cancelled"
 
-    id = models.UUIDField(
+    id: models.UUIDField = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
     )
-    session = models.ForeignKey(
+    session: "models.ForeignKey[CodeSession, CodeSession]" = models.ForeignKey(
         CodeSession,
         on_delete=models.CASCADE,
         related_name="jobs",
@@ -221,97 +226,97 @@ class CodeJob(models.Model):
     )
 
     # Job info
-    prompt = models.TextField(
+    prompt: models.TextField = models.TextField(
         help_text="User's coding request/prompt",
     )
-    enable_reasoning = models.BooleanField(
+    enable_reasoning: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether to enable extended thinking/reasoning for this job",
     )
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING,
         help_text="Current job status",
     )
-    progress = models.IntegerField(
+    progress: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Progress percentage (0-100)",
     )
-    progress_message = models.CharField(
+    progress_message: models.CharField = models.CharField(
         max_length=500,
         blank=True,
         help_text="Current progress message for UI display",
     )
 
     # Execution details
-    celery_task_id = models.CharField(
+    celery_task_id: models.CharField = models.CharField(
         max_length=255,
         blank=True,
         help_text="Celery task ID for this job",
     )
-    sandbox_container_id = models.CharField(
+    sandbox_container_id: models.CharField = models.CharField(
         max_length=255,
         blank=True,
         help_text="Docker container ID for the sandbox",
     )
 
     # Results
-    result = models.JSONField(
+    result: models.JSONField = models.JSONField(
         null=True,
         blank=True,
         help_text="Job execution result data",
     )
-    error_message = models.TextField(
+    error_message: models.TextField = models.TextField(
         blank=True,
         help_text="Error message if job failed",
     )
-    files_modified = models.JSONField(
+    files_modified: models.JSONField = models.JSONField(
         default=list,
         help_text="List of files modified during job execution",
     )
 
     # Conversation history for this job
-    messages = models.JSONField(
+    messages: models.JSONField = models.JSONField(
         default=list,
         help_text="Message history (user, assistant, tool messages)",
     )
 
     # Steps for UI display (text, tool_executions)
-    steps = models.JSONField(
+    steps: models.JSONField = models.JSONField(
         default=list,
         help_text="Execution steps for UI display (text, tool_executions)",
     )
 
     # PR metadata (generated by the LLM as its final step)
-    pr_title = models.CharField(
+    pr_title: models.CharField = models.CharField(
         max_length=255,
         blank=True,
         help_text="Pull request title (generated by assistant)",
     )
-    pr_body = models.TextField(
+    pr_body: models.TextField = models.TextField(
         blank=True,
         help_text="Pull request body/description (generated by assistant)",
     )
-    pr_ready = models.BooleanField(
+    pr_ready: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether the assistant has prepared PR metadata",
     )
 
     # Cost tracking
-    total_tokens = models.IntegerField(
+    total_tokens: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Total tokens used",
     )
-    prompt_tokens = models.IntegerField(
+    prompt_tokens: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Prompt tokens used",
     )
-    completion_tokens = models.IntegerField(
+    completion_tokens: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Completion tokens used",
     )
-    total_cost = models.DecimalField(
+    total_cost: models.DecimalField = models.DecimalField(
         max_digits=10,
         decimal_places=6,
         default=0,
@@ -319,44 +324,44 @@ class CodeJob(models.Model):
     )
 
     # Token optimization metrics (two-phase Scout/Editor architecture)
-    scout_tokens = models.IntegerField(
+    scout_tokens: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Tokens used by scout (cheap) model for exploration",
     )
-    scout_cost = models.DecimalField(
+    scout_cost: models.DecimalField = models.DecimalField(
         max_digits=10,
         decimal_places=6,
         default=0,
         help_text="Cost of scout phase in USD",
     )
-    editor_tokens = models.IntegerField(
+    editor_tokens: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Tokens used by editor model for modifications",
     )
-    editor_cost = models.DecimalField(
+    editor_cost: models.DecimalField = models.DecimalField(
         max_digits=10,
         decimal_places=6,
         default=0,
         help_text="Cost of editor phase in USD",
     )
-    used_two_phase = models.BooleanField(
+    used_two_phase: models.BooleanField = models.BooleanField(
         default=False,
         help_text="Whether two-phase Scout/Editor architecture was used",
     )
-    optimization_metrics = models.JSONField(
+    optimization_metrics: models.JSONField = models.JSONField(
         default=dict,
         blank=True,
         help_text="Detailed optimization metrics (compression ratio, savings, etc.)",
     )
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    started_at = models.DateTimeField(
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    started_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When the job started execution",
     )
-    completed_at = models.DateTimeField(
+    completed_at: models.DateTimeField = models.DateTimeField(
         null=True,
         blank=True,
         help_text="When the job completed",
@@ -397,7 +402,7 @@ class CodeJob(models.Model):
         self.started_at = timezone.now()
         self.save(update_fields=["status", "started_at"])
 
-    def mark_completed(self, result: dict = None):
+    def mark_completed(self, result: Optional[dict] = None):
         """Mark job as completed."""
         from decimal import Decimal
 
@@ -455,34 +460,34 @@ class JobLog(models.Model):
         WARNING = "warning", "Warning"
         ERROR = "error", "Error"
 
-    id = models.UUIDField(
+    id: models.UUIDField = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
     )
-    job = models.ForeignKey(
+    job: "models.ForeignKey[CodeJob, CodeJob]" = models.ForeignKey(
         CodeJob,
         on_delete=models.CASCADE,
         related_name="logs",
         help_text="Parent job for this log entry",
     )
 
-    level = models.CharField(
+    level: models.CharField = models.CharField(
         max_length=20,
         choices=Level.choices,
         default=Level.INFO,
         help_text="Log level",
     )
-    message = models.TextField(
+    message: models.TextField = models.TextField(
         help_text="Log message",
     )
-    metadata = models.JSONField(
+    metadata: models.JSONField = models.JSONField(
         default=dict,
         blank=True,
         help_text="Additional log metadata",
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at"]
@@ -504,12 +509,12 @@ class ClonedRepository(models.Model):
     to explore, plan, and implement changes.
     """
 
-    id = models.UUIDField(
+    id: models.UUIDField = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
     )
-    conversation = models.OneToOneField(
+    conversation: "models.OneToOneField[Conversation, Conversation]" = models.OneToOneField(
         "conversations.Conversation",
         on_delete=models.CASCADE,
         related_name="cloned_repository",
@@ -517,41 +522,41 @@ class ClonedRepository(models.Model):
     )
 
     # Repository info
-    full_name = models.CharField(
+    full_name: models.CharField = models.CharField(
         max_length=255,
         help_text="Full repository name: owner/repo",
     )
-    clone_url = models.URLField(
+    clone_url: models.URLField = models.URLField(
         help_text="GitHub clone URL (https)",
     )
-    default_branch = models.CharField(
+    default_branch: models.CharField = models.CharField(
         max_length=100,
         default="main",
         help_text="Default branch of the repository",
     )
-    current_branch = models.CharField(
+    current_branch: models.CharField = models.CharField(
         max_length=100,
         default="main",
         help_text="Currently checked out branch",
     )
-    workspace_path = models.CharField(
+    workspace_path: models.CharField = models.CharField(
         max_length=500,
         help_text="Path to cloned repo in sandbox workspace",
     )
 
     # HEAD commit tracking
-    head_commit_sha = models.CharField(
+    head_commit_sha: models.CharField = models.CharField(
         max_length=40,
         blank=True,
         help_text="SHA of HEAD commit",
     )
-    head_commit_message = models.CharField(
+    head_commit_message: models.CharField = models.CharField(
         max_length=500,
         blank=True,
         help_text="Message of HEAD commit",
     )
 
-    cloned_at = models.DateTimeField(auto_now_add=True)
+    cloned_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "Cloned Repository"
@@ -572,6 +577,9 @@ class AgentPlan(models.Model):
     created by exploring the codebase and understanding the task.
     """
 
+    if TYPE_CHECKING:
+        steps: RelatedManager["PlanStep"]
+
     class Status(models.TextChoices):
         CREATING = "creating", "Creating"
         READY = "ready", "Ready for Approval"
@@ -579,24 +587,24 @@ class AgentPlan(models.Model):
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
 
-    id = models.UUIDField(
+    id: models.UUIDField = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
     )
-    conversation = models.ForeignKey(
+    conversation: "models.ForeignKey[Conversation, Conversation]" = models.ForeignKey(
         "conversations.Conversation",
         on_delete=models.CASCADE,
         related_name="agent_plans",
         help_text="Conversation this plan belongs to",
     )
-    repo_full_name = models.CharField(
+    repo_full_name: models.CharField = models.CharField(
         max_length=255,
         blank=True,
         db_index=True,
         help_text="GitHub repo full name (owner/repo) for cross-conversation persistence",
     )
-    chat = models.ForeignKey(
+    chat: "models.ForeignKey[Optional[Chat], Optional[Chat]]" = models.ForeignKey(
         "conversations.Chat",
         on_delete=models.SET_NULL,
         null=True,
@@ -604,7 +612,7 @@ class AgentPlan(models.Model):
         related_name="agent_plans",
         help_text="Chat this plan belongs to",
     )
-    source_plan = models.ForeignKey(
+    source_plan: "models.ForeignKey[Optional['AgentPlan'], Optional['AgentPlan']]" = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
         null=True,
@@ -614,72 +622,72 @@ class AgentPlan(models.Model):
     )
 
     # Plan metadata
-    title = models.CharField(
+    title: models.CharField = models.CharField(
         max_length=255,
         help_text="Human-readable plan title",
     )
-    slug = models.SlugField(
+    slug: models.SlugField = models.SlugField(
         max_length=100,
         help_text="URL-safe slug for plan file",
     )
-    task_description = models.TextField(
+    task_description: models.TextField = models.TextField(
         help_text="Original task description from user",
     )
-    plan_content = models.TextField(
+    plan_content: models.TextField = models.TextField(
         help_text="Full markdown plan content",
     )
 
     # Progress tracking
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.CREATING,
         help_text="Current plan status",
     )
-    current_step_index = models.IntegerField(
+    current_step_index: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Index of currently executing step",
     )
-    total_steps = models.IntegerField(
+    total_steps: models.IntegerField = models.IntegerField(
         default=0,
         help_text="Total number of steps in plan",
     )
 
     # Job IDs for tracking agent executions
-    planning_job_id = models.CharField(
+    planning_job_id: models.CharField = models.CharField(
         max_length=50,
         blank=True,
         help_text="Coding agent job ID for planning phase",
     )
-    implementation_job_id = models.CharField(
+    implementation_job_id: models.CharField = models.CharField(
         max_length=50,
         blank=True,
         help_text="Coding agent job ID for implementation phase",
     )
-    implementation_branch = models.CharField(
+    implementation_branch: models.CharField = models.CharField(
         max_length=200,
         blank=True,
         help_text="Git branch created for implementation",
     )
 
     # GitHub issue linking
-    github_issue_number = models.IntegerField(
+    github_issue_number: models.IntegerField = models.IntegerField(
         null=True,
         blank=True,
         help_text="GitHub issue number this plan addresses",
     )
-    github_issue_url = models.URLField(
+    github_issue_url: models.URLField = models.URLField(
         blank=True,
         help_text="Full URL to the GitHub issue",
     )
-    github_issue_title = models.CharField(
+    github_issue_title: models.CharField = models.CharField(
         max_length=255,
         blank=True,
         help_text="Title of the GitHub issue",
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -717,12 +725,12 @@ class PlanStep(models.Model):
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
 
-    id = models.UUIDField(
+    id: models.UUIDField = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
     )
-    plan = models.ForeignKey(
+    plan: "models.ForeignKey[AgentPlan, AgentPlan]" = models.ForeignKey(
         AgentPlan,
         on_delete=models.CASCADE,
         related_name="steps",
@@ -730,19 +738,19 @@ class PlanStep(models.Model):
     )
 
     # Step details
-    step_number = models.IntegerField(
+    step_number: models.IntegerField = models.IntegerField(
         help_text="Order of step in plan (1-indexed)",
     )
-    title = models.CharField(
+    title: models.CharField = models.CharField(
         max_length=255,
         help_text="Brief step title",
     )
-    description = models.TextField(
+    description: models.TextField = models.TextField(
         help_text="Detailed step description",
     )
 
     # Progress tracking
-    status = models.CharField(
+    status: models.CharField = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING,
@@ -750,17 +758,17 @@ class PlanStep(models.Model):
     )
 
     # File tracking
-    files_to_modify = models.JSONField(
+    files_to_modify: models.JSONField = models.JSONField(
         default=list,
         help_text="List of files planned to modify",
     )
-    files_modified = models.JSONField(
+    files_modified: models.JSONField = models.JSONField(
         default=list,
         help_text="List of files actually modified",
     )
 
     # Results
-    result_summary = models.TextField(
+    result_summary: models.TextField = models.TextField(
         blank=True,
         help_text="Summary of what was done in this step",
     )
@@ -798,30 +806,30 @@ class SubAgent(models.Model):
 
     _NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*$")
 
-    id = models.UUIDField(
+    id: models.UUIDField = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
     )
-    user = models.ForeignKey(
-        User,
+    user: "models.ForeignKey[User, User]" = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="sub_agents",
         help_text="User who owns this sub-agent",
     )
 
     # Agent identity
-    name = models.CharField(
+    name: models.CharField = models.CharField(
         max_length=100,
         help_text="Slug-safe agent name (used as filename)",
     )
-    description = models.TextField(
+    description: models.TextField = models.TextField(
         blank=True,
         help_text="Short description of the agent's purpose",
     )
 
     # Model tier selection (resolves to concrete model via UserModelPreferences)
-    model_tier = models.CharField(
+    model_tier: models.CharField = models.CharField(
         max_length=20,
         choices=ModelTier.choices,
         default=ModelTier.INHERIT,
@@ -829,25 +837,25 @@ class SubAgent(models.Model):
     )
 
     # Agent configuration
-    system_prompt = models.TextField(
+    system_prompt: models.TextField = models.TextField(
         blank=True,
         max_length=50000,
         help_text="System prompt / instructions for the sub-agent",
     )
-    tools = models.JSONField(
+    tools: models.JSONField = models.JSONField(
         default=list,
         help_text="Allowed tools (e.g. Read, Glob, Grep)",
     )
-    disallowed_tools = models.JSONField(
+    disallowed_tools: models.JSONField = models.JSONField(
         default=list,
         help_text="Explicitly disallowed tools",
     )
-    max_turns = models.IntegerField(
+    max_turns: models.IntegerField = models.IntegerField(
         default=10,
         validators=[MinValueValidator(1), MaxValueValidator(100)],
         help_text="Maximum agentic turns",
     )
-    permission_mode = models.CharField(
+    permission_mode: models.CharField = models.CharField(
         max_length=20,
         choices=PermissionMode.choices,
         default=PermissionMode.DEFAULT,
@@ -855,14 +863,14 @@ class SubAgent(models.Model):
     )
 
     # Status
-    is_active = models.BooleanField(
+    is_active: models.BooleanField = models.BooleanField(
         default=True,
         help_text="Whether this agent is deployed to sandboxes",
     )
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = [("user", "name")]
@@ -982,32 +990,32 @@ class UserModelPreferences(models.Model):
     Maps abstract tiers (fast/balanced/powerful) to concrete OpenRouter model IDs.
     """
 
-    user = models.OneToOneField(
-        User,
+    user: "models.OneToOneField[User, User]" = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="model_preferences",
         help_text="User who owns these preferences",
     )
-    fast_model_id = models.CharField(
+    fast_model_id: models.CharField = models.CharField(
         max_length=255,
         default="",
         blank=True,
         help_text="OpenRouter model ID for the 'fast' tier (empty = latest haiku)",
     )
-    balanced_model_id = models.CharField(
+    balanced_model_id: models.CharField = models.CharField(
         max_length=255,
         default="",
         blank=True,
         help_text="OpenRouter model ID for the 'balanced' tier (empty = latest sonnet)",
     )
-    powerful_model_id = models.CharField(
+    powerful_model_id: models.CharField = models.CharField(
         max_length=255,
         default="",
         blank=True,
         help_text="OpenRouter model ID for the 'powerful' tier (empty = latest opus)",
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "User Model Preferences"
@@ -1072,12 +1080,12 @@ class CreatedPullRequest(models.Model):
     linking back to the plan and repository.
     """
 
-    id = models.UUIDField(
+    id: models.UUIDField = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
         editable=False,
     )
-    plan = models.ForeignKey(
+    plan: "models.ForeignKey[Optional[AgentPlan], Optional[AgentPlan]]" = models.ForeignKey(
         AgentPlan,
         on_delete=models.SET_NULL,
         null=True,
@@ -1085,7 +1093,7 @@ class CreatedPullRequest(models.Model):
         related_name="pull_requests",
         help_text="Plan that created this PR (may be null)",
     )
-    cloned_repo = models.ForeignKey(
+    cloned_repo: "models.ForeignKey[ClonedRepository, ClonedRepository]" = models.ForeignKey(
         ClonedRepository,
         on_delete=models.CASCADE,
         related_name="pull_requests",
@@ -1093,28 +1101,28 @@ class CreatedPullRequest(models.Model):
     )
 
     # PR info from GitHub
-    pr_number = models.IntegerField(
+    pr_number: models.IntegerField = models.IntegerField(
         help_text="GitHub PR number",
     )
-    pr_url = models.URLField(
+    pr_url: models.URLField = models.URLField(
         help_text="Full URL to the PR on GitHub",
     )
-    pr_title = models.CharField(
+    pr_title: models.CharField = models.CharField(
         max_length=255,
         help_text="PR title",
     )
 
     # Branch info
-    head_branch = models.CharField(
+    head_branch: models.CharField = models.CharField(
         max_length=100,
         help_text="Branch containing changes (head)",
     )
-    base_branch = models.CharField(
+    base_branch: models.CharField = models.CharField(
         max_length=100,
         help_text="Target branch for merge (base)",
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]

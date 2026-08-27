@@ -3,15 +3,29 @@ Serializers for Spark API.
 """
 import logging
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import Spark, SparkDeployment, App
 from conversations.models import Chat, Message
 
 logger = logging.getLogger(__name__)
 
 
+class LatestDeploymentSummarySerializer(serializers.Serializer):
+    """Shape of the `latest_deployment` computed field.
+
+    A deliberate subset of SparkDeploymentSerializer's fields — only
+    what get_latest_deployment actually puts on the wire.
+    """
+    id = serializers.CharField()
+    status = serializers.CharField()
+    preview_url = serializers.CharField(allow_blank=True)
+    claim_url = serializers.CharField(allow_blank=True)
+
+
 class DownloadUrlMixin:
     """Mixin to add download_url computed field to spark serializers."""
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_download_url(self, obj):
         """
         Generate download URL for downloadable spark types.
@@ -85,6 +99,7 @@ class SparkDeploymentSerializer(serializers.ModelSerializer):
 class LatestDeploymentMixin:
     """Mixin to add latest_deployment computed field to spark serializers."""
 
+    @extend_schema_field(LatestDeploymentSummarySerializer(allow_null=True))
     def get_latest_deployment(self, obj):
         # Use prefetched deployments if available
         deployments = getattr(obj, '_prefetched_objects_cache', {}).get('deployments')
@@ -102,7 +117,16 @@ class LatestDeploymentMixin:
         }
 
 
-class SparkSerializer(DownloadUrlMixin, LatestDeploymentMixin, serializers.ModelSerializer):
+class AssetsMixin:
+    """Mixin to add assets computed field to spark serializers."""
+
+    @extend_schema_field(SparkAssetSerializer(many=True))
+    def get_assets(self, obj):
+        """Get assets associated with this spark."""
+        return SparkAssetSerializer(obj.assets.all(), many=True).data
+
+
+class SparkSerializer(DownloadUrlMixin, LatestDeploymentMixin, AssetsMixin, serializers.ModelSerializer):
     """Full spark serializer with code."""
     code = serializers.SerializerMethodField()
     assets = serializers.SerializerMethodField()
@@ -125,18 +149,14 @@ class SparkSerializer(DownloadUrlMixin, LatestDeploymentMixin, serializers.Model
         """Retrieve code from storage."""
         return obj.get_code()
 
-    def get_assets(self, obj):
-        """Get assets associated with this spark."""
-        return SparkAssetSerializer(obj.assets.all(), many=True).data
 
-
-class SparkListSerializer(DownloadUrlMixin, LatestDeploymentMixin, serializers.ModelSerializer):
+class SparkListSerializer(DownloadUrlMixin, LatestDeploymentMixin, AssetsMixin, serializers.ModelSerializer):
     """Serializer for listing sparks with code for rendering."""
     code = serializers.SerializerMethodField()
     assets = serializers.SerializerMethodField()
     download_url = serializers.SerializerMethodField()
     latest_deployment = serializers.SerializerMethodField()
-    chat_id = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
+    chat_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
     chat_name = serializers.SerializerMethodField()
     conversation_id = serializers.SerializerMethodField()
 
@@ -153,16 +173,14 @@ class SparkListSerializer(DownloadUrlMixin, LatestDeploymentMixin, serializers.M
         """Retrieve code from storage."""
         return obj.get_code()
 
-    def get_assets(self, obj):
-        """Get assets associated with this spark."""
-        return SparkAssetSerializer(obj.assets.all(), many=True).data
-
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_chat_name(self, obj):
         """Get the name of the associated chat/conversation."""
         if obj.chat and obj.chat.conversation:
             return obj.chat.conversation.name or 'Untitled Conversation'
         return None
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_conversation_id(self, obj):
         """Get the conversation ID for navigation."""
         if obj.chat and obj.chat.conversation:
@@ -242,13 +260,13 @@ class SparkReferenceSerializer(serializers.Serializer):
     version = serializers.IntegerField()
 
 
-class MessageSparkSerializer(DownloadUrlMixin, LatestDeploymentMixin, serializers.ModelSerializer):
+class MessageSparkSerializer(DownloadUrlMixin, LatestDeploymentMixin, AssetsMixin, serializers.ModelSerializer):
     """Serializer for sparks embedded in messages (includes code for rendering)."""
     code = serializers.SerializerMethodField()
     assets = serializers.SerializerMethodField()
     download_url = serializers.SerializerMethodField()
     latest_deployment = serializers.SerializerMethodField()
-    parent_id = serializers.PrimaryKeyRelatedField(source='parent', read_only=True)
+    parent_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='parent', read_only=True)
 
     class Meta:
         model = Spark
@@ -258,18 +276,32 @@ class MessageSparkSerializer(DownloadUrlMixin, LatestDeploymentMixin, serializer
         """Retrieve code from storage."""
         return obj.get_code()
 
-    def get_assets(self, obj):
-        """Get assets associated with this spark."""
-        return SparkAssetSerializer(obj.assets.all(), many=True).data
+
+class SparkSummaryMixin:
+    """Mixin to add spark_title/spark_framework/conversation_id computed fields to app serializers."""
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_spark_title(self, obj):
+        return obj.spark.title if obj.spark else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_spark_framework(self, obj):
+        return obj.spark.framework if obj.spark else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_conversation_id(self, obj):
+        if obj.chat and obj.chat.conversation:
+            return str(obj.chat.conversation.id)
+        return None
 
 
-class AppSerializer(LatestDeploymentMixin, serializers.ModelSerializer):
+class AppSerializer(SparkSummaryMixin, serializers.ModelSerializer):
     """Full serializer for App (detail view)."""
 
-    spark_id = serializers.PrimaryKeyRelatedField(source='spark', read_only=True)
+    spark_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='spark', read_only=True)
     spark_title = serializers.SerializerMethodField()
     spark_framework = serializers.SerializerMethodField()
-    chat_id = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
+    chat_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
     conversation_id = serializers.SerializerMethodField()
     latest_deployment = serializers.SerializerMethodField()
 
@@ -285,17 +317,7 @@ class AppSerializer(LatestDeploymentMixin, serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_spark_title(self, obj):
-        return obj.spark.title if obj.spark else None
-
-    def get_spark_framework(self, obj):
-        return obj.spark.framework if obj.spark else None
-
-    def get_conversation_id(self, obj):
-        if obj.chat and obj.chat.conversation:
-            return str(obj.chat.conversation.id)
-        return None
-
+    @extend_schema_field(LatestDeploymentSummarySerializer(allow_null=True))
     def get_latest_deployment(self, obj):
         dep = obj.spark.deployments.order_by('-created_at').first() if obj.spark else None
         if not dep:
@@ -308,13 +330,13 @@ class AppSerializer(LatestDeploymentMixin, serializers.ModelSerializer):
         }
 
 
-class AppListSerializer(serializers.ModelSerializer):
+class AppListSerializer(SparkSummaryMixin, serializers.ModelSerializer):
     """Lighter serializer for listing apps."""
 
-    spark_id = serializers.PrimaryKeyRelatedField(source='spark', read_only=True)
+    spark_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='spark', read_only=True)
     spark_title = serializers.SerializerMethodField()
     spark_framework = serializers.SerializerMethodField()
-    chat_id = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
+    chat_id: serializers.PrimaryKeyRelatedField = serializers.PrimaryKeyRelatedField(source='chat', read_only=True)
     conversation_id = serializers.SerializerMethodField()
 
     class Meta:
@@ -326,14 +348,3 @@ class AppListSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = fields
-
-    def get_spark_title(self, obj):
-        return obj.spark.title if obj.spark else None
-
-    def get_spark_framework(self, obj):
-        return obj.spark.framework if obj.spark else None
-
-    def get_conversation_id(self, obj):
-        if obj.chat and obj.chat.conversation:
-            return str(obj.chat.conversation.id)
-        return None

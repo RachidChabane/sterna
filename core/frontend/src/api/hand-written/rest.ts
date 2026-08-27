@@ -1,13 +1,21 @@
 /**
- * Request and response shapes for REST endpoints whose OpenAPI
- * operations declare no body schema — authentication, billing, usage
- * quota, and subscription. Views in this surface return responses
+ * Request and response shapes maintained by hand against the API.
+ *
+ * Billing, usage quota, and subscription views return responses
  * without a `serializer_class`/`@extend_schema` annotation, so
  * drf-spectacular emits no schema for them and openapi-typescript has
- * nothing to generate. Maintained by hand against the API.
+ * nothing to generate for that whole surface. The handful of
+ * authentication types below are the exception — their endpoints are
+ * annotated, but the generated shape doesn't line up closely enough to
+ * replace these; see the comment on each for why.
  */
 
 // User and Authentication types
+
+// The generated `User` schema marks `first_name`/`last_name` optional
+// (`UserSerializer` re-derives them from `full_name` with
+// `required=False`), which is looser than every call site here
+// expects, so this shape stays hand-written.
 export interface User {
   id: string
   email: string
@@ -21,11 +29,11 @@ export interface User {
   last_login?: string | null
 }
 
-export interface LoginRequest {
-  email: string
-  password: string
-}
-
+// Login responses take one of two shapes depending on how the session
+// was created: password login returns `access_token`/`refresh_token`/
+// `token_type`/`expires_in`, while the Google/GitHub OAuth callbacks
+// return `access`/`refresh`/`created`. No single generated schema
+// component covers both, so this type documents the union by hand.
 export interface LoginResponse {
   access: string
   refresh: string
@@ -34,16 +42,6 @@ export interface LoginResponse {
   access_token?: string
   refresh_token?: string
   created?: boolean
-}
-
-export interface RegisterRequest {
-  email: string
-  password: string
-  password_confirm?: string
-  full_name?: string
-  // Cloudflare Turnstile captcha token. Optional in dev (backend bypass
-  // when DEBUG=True or secret unset). Required in production.
-  turnstile_token?: string
 }
 
 // API Response types
@@ -325,29 +323,8 @@ export interface InvoiceListResponse {
   results: Invoice[]
 }
 
-export interface ConsentCategories {
-  essential: boolean
-  analytics: boolean
-  marketing: boolean
-}
-
-export interface ConsentRecord {
-  session_id: string
-  categories: ConsentCategories
-  version: string
-  created_at: string
-  updated_at: string
-}
-
+// 'unknown' is a client-side default held before the consent endpoint
+// has responded; the backend itself only ever returns 'EU' or
+// 'non-EU' (see the generated `RegionDefaultEnum`), so this widened
+// union stays hand-written to cover that local sentinel value.
 export type ConsentRegionDefault = 'EU' | 'non-EU' | 'unknown'
-
-export interface ConsentResponse {
-  consent: ConsentRecord | null
-  region_default: ConsentRegionDefault
-}
-
-export interface ConsentSaveRequest {
-  session_id: string
-  categories: ConsentCategories
-  version: string
-}

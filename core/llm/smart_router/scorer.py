@@ -5,6 +5,7 @@ Selects the cheapest model that meets the complexity score and capability requir
 """
 
 import logging
+from typing import Optional
 
 from django.core.cache import cache
 
@@ -58,7 +59,7 @@ def select_model(
     needs_vision: bool = False,
     needs_reasoning: bool = False,
     needs_long_context: bool = False,
-    excluded_models: list = None,
+    excluded_models: Optional[list] = None,
 ) -> tuple:
     """
     Select the cheapest model meeting score and capability requirements.

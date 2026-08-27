@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 

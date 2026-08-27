@@ -61,7 +61,7 @@ def convert_messages(messages: List[Dict[str, Any]]) -> List:
         # fires for every message, exactly as it did inline.
         content = normalize_content(msg.get("content", ""))
 
-        message_class = _MESSAGE_CLASS_BY_ROLE.get(msg.get("role"))
+        message_class = _MESSAGE_CLASS_BY_ROLE.get(msg.get("role", ""))
         if message_class is None:
             continue
 

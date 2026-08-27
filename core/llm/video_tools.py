@@ -694,7 +694,7 @@ async def _execute_video_generation(
 
     # Clamp duration to model's max
     capabilities = model_config.capabilities or {}
-    max_duration = capabilities.get("max_duration", 12)
+    max_duration = int(capabilities.get("max_duration", 12))
     original_duration = duration
     duration = min(duration, max_duration)
     if duration != original_duration:
@@ -758,8 +758,17 @@ async def _execute_video_generation(
 
         logger.info(f"[VideoTool] Job started: {result.job_id}")
 
+        if not result.job_id:
+            logger.error("[VideoTool] Provider returned no job_id")
+            return json.dumps({
+                "status": "error",
+                "error_type": "generation_failed",
+                "message": "Video provider did not return a job ID",
+            })
+        job_id = result.job_id
+
         # Poll until complete
-        result = await provider.poll_until_complete(job_id=result.job_id)
+        result = await provider.poll_until_complete(job_id=job_id)
 
         if result.is_failed():
             logger.error(f"[VideoTool] Generation failed: {result.error_message}")
@@ -771,7 +780,7 @@ async def _execute_video_generation(
             })
 
         # Download video bytes
-        video_bytes = await provider.download(result.job_id)
+        video_bytes = await provider.download(job_id)
         logger.info(f"[VideoTool] Downloaded {len(video_bytes)} bytes")
 
         # Calculate cost using database pricing

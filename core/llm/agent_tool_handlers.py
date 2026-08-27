@@ -11,7 +11,7 @@ import httpx
 import asyncio
 import threading
 import contextvars
-from typing import Optional, Callable, Dict, List
+from typing import Optional, Callable, Dict, List, Any
 from langchain_core.tools import tool
 
 from sterna.middleware.request_id import request_id_headers
@@ -76,6 +76,9 @@ class FileToolsContext:
         # Resolved workspace chat_id (set by _resolve_workspace_chat_id).
         # May differ from chat_id when the repo was cloned in a different chat.
         self.workspace_chat_id: Optional[str] = None
+        # Command used to start the last dev-server preview (set when a
+        # preview server is started; read back for App record creation).
+        self.last_preview_command: Optional[str] = None
         # Create a reusable HTTP client (will be closed when context is destroyed)
         self._http_client: Optional[httpx.AsyncClient] = None
         # Track in-flight requests for cancellation
@@ -327,7 +330,7 @@ async def read_file(
         return json.dumps({"success": False, "error": "File tools context not initialized"})
 
     # Build request payload with optional parameters
-    payload = {"path": path}
+    payload: Dict[str, Any] = {"path": path}
     if max_lines is not None:
         payload["max_lines"] = max_lines
     if from_end is not None:
@@ -742,7 +745,7 @@ async def update_todos(todos: list) -> str:
         return json.dumps({"success": False, "error": "File tools context not initialized"})
 
     # Validate todo structure
-    validated_todos = []
+    validated_todos: List[Dict[str, Any]] = []
     for todo in todos:
         if isinstance(todo, dict) and "status" in todo:
             # Get text from either 'text' or 'content' field

@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document describes the comprehensive security architecture for the Sterna sandbox environment, designed to safely execute untrusted code from AI assistants while protecting the host system, network, and user data.
+This document describes the comprehensive security architecture for the Sterna sandbox environment, designed to safely execute untrusted code while protecting the host system, network, and user data. "Untrusted code" includes the opencode coding-agent CLI itself: it runs inside the container, not outside it, and makes its own outbound calls to OpenRouter through the egress whitelist.
 
 **Security Philosophy**: Defense in depth with monitoring over blocking. Allow AI agents flexibility while detecting and alerting on abuse patterns.
 

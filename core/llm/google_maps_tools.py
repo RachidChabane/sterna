@@ -221,8 +221,8 @@ async def get_directions(
 async def search_nearby_places(
     location: str,
     radius: int = 1500,
-    place_type: str = None,
-    keyword: str = None
+    place_type: Optional[str] = None,
+    keyword: Optional[str] = None
 ) -> str:
     """Find nearby places (POIs with ratings, address, open status)."""
     lat, lng = location.split(",")

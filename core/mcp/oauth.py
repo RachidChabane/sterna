@@ -173,7 +173,7 @@ class GitHubOAuthHandler(OAuthHandler):
             scopes=["repo", "user"],
         )
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, **kwargs: Any) -> str:
         """Generate GitHub authorization URL.
 
         Args:
@@ -183,9 +183,9 @@ class GitHubOAuthHandler(OAuthHandler):
             GitHub authorization URL
         """
         # GitHub uses response_type=code (not needed in params as it's default)
-        return super().get_authorization_url(state)
+        return super().get_authorization_url(state, **kwargs)
 
-    async def exchange_code_for_token(self, code: str) -> Dict[str, Any]:
+    async def exchange_code_for_token(self, code: str, use_basic_auth: bool = False, **kwargs: Any) -> Dict[str, Any]:
         """Exchange GitHub authorization code for access token.
 
         Args:
@@ -198,7 +198,7 @@ class GitHubOAuthHandler(OAuthHandler):
             httpx.HTTPStatusError: If token exchange fails
         """
         # GitHub doesn't require grant_type in the request
-        return await super().exchange_code_for_token(code)
+        return await super().exchange_code_for_token(code, use_basic_auth=use_basic_auth, **kwargs)
 
 
 class NotionOAuthHandler(OAuthHandler):
@@ -215,7 +215,7 @@ class NotionOAuthHandler(OAuthHandler):
             scopes=[],  # Notion doesn't use scopes in the same way
         )
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, **kwargs: Any) -> str:
         """Generate Notion authorization URL.
 
         Args:
@@ -230,10 +230,11 @@ class NotionOAuthHandler(OAuthHandler):
             "response_type": "code",
             "state": state,
             "owner": "user",  # Notion-specific
+            **kwargs,
         }
         return f"{self.authorize_url}?{urlencode(params)}"
 
-    async def exchange_code_for_token(self, code: str) -> Dict[str, Any]:
+    async def exchange_code_for_token(self, code: str, use_basic_auth: bool = False, **kwargs: Any) -> Dict[str, Any]:
         """Exchange Notion authorization code for access token.
 
         Args:
@@ -247,7 +248,7 @@ class NotionOAuthHandler(OAuthHandler):
         """
         # Notion requires grant_type
         return await super().exchange_code_for_token(
-            code, grant_type="authorization_code"
+            code, use_basic_auth=use_basic_auth, grant_type="authorization_code", **kwargs
         )
 
 
@@ -268,7 +269,7 @@ class GenericOAuthHandler(OAuthHandler):
         Raises:
             ValueError: If connector configuration is not found
         """
-        from .connector_loader import load_connector_config
+        from .connector_loader import load_connector_config  # type: ignore[import-not-found]
 
         # Load connector configuration from JSON
         config = load_connector_config(connector_slug)
@@ -308,7 +309,7 @@ class GenericOAuthHandler(OAuthHandler):
         self.token_extra_params = oauth_config.get('token_extra_params', {})
         self.use_basic_auth = oauth_config.get('use_basic_auth', False)
 
-    def get_authorization_url(self, state: str) -> str:
+    def get_authorization_url(self, state: str, **kwargs: Any) -> str:
         """Generate authorization URL with connector-specific extra params.
 
         Args:
@@ -318,9 +319,9 @@ class GenericOAuthHandler(OAuthHandler):
             Authorization URL to redirect user to
         """
         # Merge extra params from JSON config
-        return super().get_authorization_url(state, **self.authorize_extra_params)
+        return super().get_authorization_url(state, **self.authorize_extra_params, **kwargs)
 
-    async def exchange_code_for_token(self, code: str) -> Dict[str, Any]:
+    async def exchange_code_for_token(self, code: str, use_basic_auth: bool = False, **kwargs: Any) -> Dict[str, Any]:
         """Exchange authorization code for access token with connector-specific params.
 
         Args:
@@ -334,9 +335,7 @@ class GenericOAuthHandler(OAuthHandler):
         """
         # Merge extra params from JSON config and pass use_basic_auth
         return await super().exchange_code_for_token(
-            code,
-            use_basic_auth=self.use_basic_auth,
-            **self.token_extra_params
+            code, use_basic_auth=use_basic_auth or self.use_basic_auth, **self.token_extra_params, **kwargs
         )
 
 

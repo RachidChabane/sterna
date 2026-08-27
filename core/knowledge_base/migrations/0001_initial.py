@@ -7,7 +7,7 @@ import uuid
 from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
-from pgvector.django import VectorExtension, VectorField, HnswIndex
+from pgvector.django import VectorExtension, VectorField, HnswIndex  # type: ignore[import-untyped]
 
 
 class Migration(migrations.Migration):

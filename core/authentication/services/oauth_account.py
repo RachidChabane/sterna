@@ -26,13 +26,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from authentication.models import SocialAccount
-
-
-User = get_user_model()
+from authentication.models import SocialAccount, User
 
 
 @dataclass(frozen=True)
@@ -42,7 +38,7 @@ class OAuthResolution:
     Exactly one of ``user``/``conflict``/``unverified_block`` is set.
     """
 
-    user: Optional["User"] = None  # type: ignore[name-defined]
+    user: Optional[User] = None
     created: bool = False
     conflict: bool = False
     """True when an email-matching User exists with a usable password

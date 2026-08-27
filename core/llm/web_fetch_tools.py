@@ -11,7 +11,7 @@ Strategy (hybrid, best quality + resilience):
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Any, Dict, Optional
 import httpx
 import json
 import logging
@@ -159,7 +159,7 @@ async def _fetch_via_trafilatura(url: str, extract_links: bool = False) -> Optio
         title = metadata.title if metadata else None
         description = metadata.description if metadata else None
 
-        result = {
+        result: Dict[str, Any] = {
             "content": content,
             "title": title,
             "description": description,
@@ -181,7 +181,7 @@ async def _fetch_via_trafilatura(url: str, extract_links: bool = False) -> Optio
 def _extract_links_from_html(html: str) -> list:
     """Extract links from HTML using BeautifulSoup."""
     try:
-        from bs4 import BeautifulSoup
+        from bs4 import BeautifulSoup  # type: ignore[import-untyped]
         soup = BeautifulSoup(html, "html.parser")
         links = []
         seen = set()

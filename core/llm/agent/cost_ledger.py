@@ -87,7 +87,7 @@ class CostLedger:
         # the owning agent's `_user_id` is assignable after construction.
         self._resolve_user_id = resolve_user_id
         self._model_id = model_id
-        self._billing_origin = None
+        self._billing_origin: Optional[str] = None
         self.final_usage_recorded = False
 
     @property

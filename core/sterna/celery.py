@@ -6,9 +6,9 @@ primarily used for code job execution in the code_sessions feature.
 
 import os
 
-from celery import Celery
-from celery.schedules import crontab
-from celery.signals import (
+from celery import Celery  # type: ignore[import-untyped]
+from celery.schedules import crontab  # type: ignore[import-untyped]
+from celery.signals import (  # type: ignore[import-untyped]
     before_task_publish,
     setup_logging,
     task_postrun,

@@ -13,9 +13,11 @@ import base64
 import hashlib
 import logging
 from datetime import datetime, timedelta
+from typing import cast
 from uuid import UUID
 
 from django.conf import settings
+from django.http import HttpResponse, HttpResponseRedirect
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -421,7 +423,7 @@ def storage_health(request: Request) -> Response:
     is_admin = bool(
         request.user
         and request.user.is_authenticated
-        and request.user.is_staff
+        and cast(User, request.user).is_staff
     )
     if not is_admin:
         return Response({'overall': overall})
@@ -495,7 +497,7 @@ def upload_asset(request: Request) -> Response:
         )
 
     data = serializer.validated_data
-    user = request.user
+    user = cast(User, request.user)
 
     try:
         # Decode base64 content
@@ -640,7 +642,7 @@ def upload_asset(request: Request) -> Response:
 
 
 @api_view(['GET'])
-def download_asset(request: Request, asset_id: str) -> Response:
+def download_asset(request: Request, asset_id: str) -> Response | HttpResponse:
     """
     Download asset content.
 
@@ -653,8 +655,6 @@ def download_asset(request: Request, asset_id: str) -> Response:
         watermark: If 'true', apply watermark to images
         watermark_position: Position for watermark (bottom-right, bottom-left, top-right, top-left)
     """
-    from django.http import HttpResponse, HttpResponseRedirect
-
     try:
         asset_uuid = UUID(asset_id)
     except ValueError:
@@ -1121,7 +1121,7 @@ def create_share_link(request: Request, asset_id: str) -> Response:
 
     logger.info(
         f"Share link created: asset={asset_id}, token={token[:8]}..., "
-        f"user={request.user.id}, expires={expires_at}"
+        f"user={cast(User, request.user).id}, expires={expires_at}"
     )
 
     return Response(
@@ -1153,7 +1153,7 @@ def revoke_share_link(request: Request, token: str) -> Response:
     share_link.is_active = False
     share_link.save(update_fields=['is_active', 'updated_at'])
 
-    logger.info(f"Share link revoked: token={token[:8]}..., user={request.user.id}")
+    logger.info(f"Share link revoked: token={token[:8]}..., user={cast(User, request.user).id}")
 
     return Response({'success': True, 'revoked': True})
 
@@ -1265,7 +1265,7 @@ def is_social_media_crawler(user_agent: str) -> bool:
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def public_share_view(request: Request, token: str) -> Response:
+def public_share_view(request: Request, token: str) -> Response | HttpResponse:
     """
     Public share page for viewing shared assets.
 
@@ -1278,7 +1278,6 @@ def public_share_view(request: Request, token: str) -> Response:
     For social media crawlers, returns minimal HTML with OG tags.
     For browsers, returns full interactive page.
     """
-    from django.http import HttpResponse
     from django.template.loader import render_to_string
 
     share_link = AssetShareLink.objects.filter(
@@ -1362,7 +1361,7 @@ def public_share_view(request: Request, token: str) -> Response:
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def public_share_raw(request: Request, token: str) -> Response:
+def public_share_raw(request: Request, token: str) -> Response | HttpResponse:
     """
     Direct asset access for shared links.
 
@@ -1374,8 +1373,6 @@ def public_share_raw(request: Request, token: str) -> Response:
     Returns the actual binary content with appropriate headers.
     For images with watermark enabled, applies the watermark before serving.
     """
-    from django.http import HttpResponse, HttpResponseRedirect
-
     share_link = AssetShareLink.objects.filter(
         token=token,
         is_active=True,
@@ -1410,14 +1407,15 @@ def public_share_raw(request: Request, token: str) -> Response:
     # Apply watermark to images if enabled
     if needs_watermark:
         try:
-            content = apply_watermark(
+            watermarked = apply_watermark(
                 content,
                 position=share_link.watermark_position,
                 text='Sterna',
                 opacity=0.6
             )
-            # Watermarked images are always JPEG
-            mime_type = 'image/jpeg'
+            content = watermarked or content
+            # Watermarked images are always JPEG; otherwise keep the original type
+            mime_type = 'image/jpeg' if watermarked else asset.mime_type
         except Exception as e:
             logger.warning(f"Failed to apply watermark: {e}")
             # Fall back to original content

@@ -24,9 +24,9 @@ class KnowledgeBaseSettingsAdmin(admin.ModelAdmin):
         'total_storage_bytes', 'created_at', 'updated_at'
     ]
 
+    @admin.display(description='Storage Used')
     def storage_used_display(self, obj):
         return f"{obj.storage_used_mb:.2f} MB"
-    storage_used_display.short_description = 'Storage Used'
 
 
 @admin.register(KnowledgeDocument)
@@ -43,6 +43,7 @@ class KnowledgeDocumentAdmin(admin.ModelAdmin):
     ]
     raw_id_fields = ['user']
 
+    @admin.display(description='File Size')
     def file_size_display(self, obj):
         if obj.file_size_bytes < 1024:
             return f"{obj.file_size_bytes} B"
@@ -50,7 +51,6 @@ class KnowledgeDocumentAdmin(admin.ModelAdmin):
             return f"{obj.file_size_bytes / 1024:.1f} KB"
         else:
             return f"{obj.file_size_bytes / (1024 * 1024):.1f} MB"
-    file_size_display.short_description = 'File Size'
 
 
 @admin.register(KnowledgeChunk)

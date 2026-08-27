@@ -7,7 +7,7 @@ Uses ServicePricing configuration from database with fallback defaults.
 
 import logging
 from decimal import Decimal
-from typing import Optional
+from typing import Dict, Optional
 
 from django.core.cache import cache
 from django.db import models
@@ -19,7 +19,11 @@ logger = logging.getLogger(__name__)
 
 # Fallback pricing when database config is not available
 # These are approximate prices based on provider documentation as of 2024
-FALLBACK_PRICING = {
+#
+# Keyed by str (ServiceType members are str values) so lookups from
+# callers that only know the service as a plain str — not narrowed to
+# the ServiceType enum — type-check.
+FALLBACK_PRICING: Dict[str, Dict[str, Decimal]] = {
     # ElevenLabs TTS - per 1K characters
     ServiceType.ELEVENLABS_TTS: {
         'default': Decimal('0.30'),  # ~$0.30/1K chars (Flash model)
@@ -290,7 +294,8 @@ class CostCalculator:
         if pricing and pricing.price_per_request is not None:
             return Decimal(str(request_count)) * pricing.price_per_request
         fallback = FALLBACK_PRICING.get(ServiceType.GOOGLE_MAPS, {})
-        rate = fallback.get(endpoint, fallback.get('default', Decimal('0.005')))
+        default_rate = fallback.get('default', Decimal('0.005'))
+        rate = fallback.get(endpoint, default_rate) if endpoint else default_rate
         return Decimal(str(request_count)) * rate
 
     def _get_image_generation_price(

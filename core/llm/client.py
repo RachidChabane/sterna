@@ -5,7 +5,7 @@ OpenRouter client for unified LLM access.
 import time
 import logging
 import requests
-from typing import Dict, List, Optional, Any, TYPE_CHECKING
+from typing import Dict, List, Optional, Any, TYPE_CHECKING, cast
 from decimal import Decimal
 
 from django.conf import settings
@@ -97,7 +97,7 @@ class OpenRouterClient:
         else:
             # Extract user from request if not provided
             if not user and request and hasattr(request, 'user') and request.user.is_authenticated:
-                self._user = request.user
+                self._user = cast('User', request.user)
 
             (
                 self.api_key,
@@ -145,7 +145,7 @@ class OpenRouterClient:
         """
         if self._provider_slug:
             from .provider_registry import native_model_name
-            return native_model_name(model)
+            return native_model_name(model) or model
         return model
 
     def _strip_openrouter_only_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
@@ -160,7 +160,7 @@ class OpenRouterClient:
             )
         return {k: v for k, v in kwargs.items() if k not in self.OPENROUTER_ONLY_PARAMS}
 
-    def _map_request_source_to_feature(self, request_source: str) -> str:
+    def _map_request_source_to_feature(self, request_source: str) -> FeatureType:
         """Map request_source to FeatureType for quota tracking.
 
         Every ``request_source=`` value used when constructing an
@@ -825,13 +825,13 @@ class OpenRouterClient:
             logger.info(f"[DEBUG-AMAZON] Sending {len(messages)} messages to API")
             for i, m in enumerate(messages):
                 role = m.get('role', 'unknown')
-                content = m.get('content')
+                debug_content = m.get('content')
                 has_tc = 'tool_calls' in m
-                content_type = type(content).__name__
-                if isinstance(content, list):
-                    content_summary = f"array with {len(content)} elements: {[c.get('type', 'unknown') for c in content]}"
-                elif isinstance(content, str):
-                    content_summary = f"string len={len(content)}"
+                content_type = type(debug_content).__name__
+                if isinstance(debug_content, list):
+                    content_summary = f"array with {len(debug_content)} elements: {[c.get('type', 'unknown') for c in debug_content]}"
+                elif isinstance(debug_content, str):
+                    content_summary = f"string len={len(debug_content)}"
                 else:
                     content_summary = f"{content_type}"
                 logger.info(f"[DEBUG-AMAZON] msg[{i}]: role={role}, content={content_summary}, has_tool_calls={has_tc}")
@@ -849,8 +849,8 @@ class OpenRouterClient:
             accumulated_content = []
             accumulated_reasoning = []  # Track reasoning content separately
             accumulated_filtered_reasoning = []  # Track filtered reasoning for done event
-            accumulated_tool_calls = []  # Track tool calls for function calling
-            accumulated_images = []  # Track generated images for image generation models
+            accumulated_tool_calls: List[Dict[str, Any]] = []  # Track tool calls for function calling
+            accumulated_images: List[str] = []  # Track generated images for image generation models
             usage_data = None
             model_used = model
             finish_reason_final = None

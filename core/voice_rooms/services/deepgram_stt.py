@@ -6,7 +6,7 @@ import logging
 from typing import Callable, Optional, Awaitable, TYPE_CHECKING
 
 import websockets
-from websockets.client import WebSocketClientProtocol
+from websockets.asyncio.client import ClientConnection
 from django.conf import settings
 
 if TYPE_CHECKING:
@@ -60,7 +60,7 @@ class DeepgramSTTClient:
         self._user = user
         self._session_id = session_id
 
-        self.ws: Optional[WebSocketClientProtocol] = None
+        self.ws: Optional[ClientConnection] = None
         self._receive_task: Optional[asyncio.Task] = None
         self._keepalive_task: Optional[asyncio.Task] = None
         self._connected = False
@@ -68,6 +68,7 @@ class DeepgramSTTClient:
         self._language = "auto"
         self._reconnecting = False
         self._audio_bytes_sent = 0  # Track audio data for quota estimation
+        self._last_not_connected_log: Optional[float] = None  # Throttle "not connected" log spam
 
     def _deduct_stt_usage(self) -> None:
         """Deduct STT usage from quota system based on audio bytes sent."""
@@ -283,7 +284,7 @@ class DeepgramSTTClient:
 
         if not self._connected or not self.ws:
             # Log once per second instead of every chunk
-            if not hasattr(self, '_last_not_connected_log') or \
+            if self._last_not_connected_log is None or \
                (asyncio.get_event_loop().time() - self._last_not_connected_log) > 1.0:
                 logger.warning("Deepgram not connected, audio chunk dropped")
                 self._last_not_connected_log = asyncio.get_event_loop().time()

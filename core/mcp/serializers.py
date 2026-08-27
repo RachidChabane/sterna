@@ -579,7 +579,12 @@ class MCPToolApprovalSerializer(serializers.ModelSerializer):
         source="tool",
         write_only=True,
     )
-    is_valid = serializers.SerializerMethodField()
+    # DRF's SerializerMetaclass pops declared Field attributes out of the
+    # class namespace before the class object is created (see
+    # rest_framework.serializers.SerializerMetaclass._get_declared_fields),
+    # so this never actually shadows BaseSerializer.is_valid() at runtime —
+    # only the stub-derived static type sees a collision.
+    is_valid = serializers.SerializerMethodField()  # type: ignore[assignment]
 
     class Meta:
         model = MCPToolApproval
