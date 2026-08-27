@@ -714,8 +714,19 @@ paths:
       - Bearer: []
       - cookieAuth: []
       responses:
-        '200':
-          description: No response body
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataExportCreateResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/account/data-export/{request_id}/:
     get:
       operationId: auth_account_data_export_retrieve
@@ -734,19 +745,53 @@ paths:
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataExportStatusResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/account/delete-request/:
     post:
       operationId: auth_account_delete_request_create
       description: POST /api/auth/account/delete-request
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountDeletionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AccountDeletionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AccountDeletionRequest'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       responses:
-        '200':
-          description: No response body
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDeletionCreateResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/account/delete-request/cancel/:
     post:
       operationId: auth_account_delete_request_cancel_create
@@ -756,13 +801,36 @@ paths:
         body: { "token": "<one-shot JWT>" }
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelDeletionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancelDeletionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancelDeletionRequest'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDeletionCancelResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/avatar/{user_id}/:
     get:
       operationId: auth_avatar_retrieve
@@ -790,19 +858,68 @@ paths:
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/change-password/:
     post:
       operationId: auth_change_password_create
       description: Change password endpoint for authenticated users.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/consent/:
     get:
       operationId: auth_consent_retrieve
@@ -815,31 +932,81 @@ paths:
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+          description: ''
     post:
       operationId: auth_consent_create
       description: Anonymous-or-authenticated consent record CRUD.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Consent'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Consent'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Consent'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/consent/attach/:
     post:
       operationId: auth_consent_attach_create
       description: Bind anonymous ConsentRecord rows to the now-authenticated user.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentAttach'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConsentAttach'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConsentAttach'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentAttachResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/github/:
     post:
       operationId: auth_github_create
@@ -852,26 +1019,107 @@ paths:
         }
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GithubAuthRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GithubAuthRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GithubAuthRequest'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthLoginResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/google/:
     post:
       operationId: auth_google_create
       description: Authenticate user with a Google OAuth ID token.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthLoginResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/google/one-tap/:
     post:
       operationId: auth_google_one_tap_create
@@ -885,38 +1133,113 @@ paths:
         ``oauth-callback`` rate-limit bucket as the other two callbacks.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthLoginResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/login/:
     post:
       operationId: auth_login_create
       description: User login endpoint.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: Login successful.
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/logout/:
     post:
       operationId: auth_logout_create
       description: User logout endpoint.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
       security:
       - Bearer: []
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+          description: ''
   /api/auth/oauth/state/:
     post:
       operationId: auth_oauth_state_create
@@ -934,33 +1257,76 @@ paths:
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthStateResponse'
+          description: ''
   /api/auth/password-reset/:
     post:
       operationId: auth_password_reset_create
       description: Request password reset endpoint.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+          description: ''
   /api/auth/password-reset/confirm/:
     post:
       operationId: auth_password_reset_confirm_create
       description: Confirm password reset endpoint.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/profile/:
     get:
       operationId: auth_profile_retrieve
@@ -972,30 +1338,80 @@ paths:
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
     patch:
       operationId: auth_profile_partial_update
       description: Update current user profile.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUser'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUser'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUser'
       security:
       - Bearer: []
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/profile/avatar/:
     post:
       operationId: auth_profile_avatar_create
       description: Upload a new avatar image.
       tags:
       - auth
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AvatarUploadRequest'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvatarUploadResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
     delete:
       operationId: auth_profile_avatar_destroy
       description: Remove user's avatar (reset to default).
@@ -1005,34 +1421,98 @@ paths:
       - Bearer: []
       - cookieAuth: []
       responses:
-        '204':
-          description: No response body
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/register/:
     post:
       operationId: auth_register_create
       description: User registration endpoint.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
-        '200':
-          description: No response body
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+          description: Account created; verification email sent.
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/resend-verification/:
     post:
       operationId: auth_resend_verification_create
       description: Resend email verification endpoint.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendVerification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResendVerification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResendVerification'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/sessions/:
     get:
       operationId: auth_sessions_retrieve
@@ -1044,7 +1524,11 @@ paths:
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+          description: ''
     delete:
       operationId: auth_sessions_destroy
       description: Revoke a specific session or all sessions.
@@ -1054,8 +1538,19 @@ paths:
       - Bearer: []
       - cookieAuth: []
       responses:
-        '204':
-          description: No response body
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/sessions/{session_id}/:
     get:
       operationId: auth_sessions_retrieve_2
@@ -1074,7 +1569,11 @@ paths:
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+          description: ''
     delete:
       operationId: auth_sessions_destroy_2
       description: Revoke a specific session or all sessions.
@@ -1091,11 +1590,22 @@ paths:
       - Bearer: []
       - cookieAuth: []
       responses:
-        '204':
-          description: No response body
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/social-accounts/:
     get:
-      operationId: auth_social_accounts_retrieve
+      operationId: auth_social_accounts_list
       description: Get list of all social accounts for authenticated user.
       tags:
       - auth
@@ -1104,7 +1614,13 @@ paths:
       - cookieAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SocialAccount'
+          description: ''
   /api/auth/social-accounts/{account_id}/:
     delete:
       operationId: auth_social_accounts_destroy
@@ -1122,34 +1638,105 @@ paths:
       - Bearer: []
       - cookieAuth: []
       responses:
-        '204':
-          description: No response body
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/token/refresh/:
     post:
       operationId: auth_token_refresh_create
       description: Refresh access token endpoint.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshToken'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RefreshToken'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RefreshToken'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/auth/verify-email/:
     post:
       operationId: auth_verify_email_create
       description: Email verification endpoint.
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailVerification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmailVerification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmailVerification'
+        required: true
       security:
       - Bearer: []
       - cookieAuth: []
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailVerificationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/billing/checkout-session/:
     post:
       operationId: billing_checkout_session_create
@@ -8510,6 +9097,42 @@ paths:
           description: No response body
 components:
   schemas:
+    AccountDeletionCancelResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        status:
+          type: string
+        canceled_at:
+          type: string
+          format: date-time
+      required:
+      - canceled_at
+      - request_id
+      - status
+    AccountDeletionCreateResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        scheduled_for:
+          type: string
+          format: date-time
+        status:
+          type: string
+      required:
+      - request_id
+      - scheduled_for
+    AccountDeletionRequest:
+      type: object
+      properties:
+        password:
+          type: string
+        confirm_email:
+          type: string
+      required:
+      - confirm_email
     ActionCategoryEnum:
       enum:
       - AUTH
@@ -8764,9 +9387,11 @@ components:
           readOnly: true
         spark_title:
           type: string
+          nullable: true
           readOnly: true
         spark_framework:
           type: string
+          nullable: true
           readOnly: true
         chat_id:
           type: string
@@ -8774,6 +9399,7 @@ components:
           readOnly: true
         conversation_id:
           type: string
+          nullable: true
           readOnly: true
         project_path:
           type: string
@@ -8782,7 +9408,9 @@ components:
           type: string
           readOnly: true
         latest_deployment:
-          type: string
+          allOf:
+          - $ref: '#/components/schemas/LatestDeploymentSummary'
+          nullable: true
           readOnly: true
         created_at:
           type: string
@@ -8827,9 +9455,11 @@ components:
           readOnly: true
         spark_title:
           type: string
+          nullable: true
           readOnly: true
         spark_framework:
           type: string
+          nullable: true
           readOnly: true
         chat_id:
           type: string
@@ -8837,6 +9467,7 @@ components:
           readOnly: true
         conversation_id:
           type: string
+          nullable: true
           readOnly: true
         created_at:
           type: string
@@ -9121,9 +9752,34 @@ components:
         * `api_key` - API Key
         * `bearer` - Bearer Token
         * `oauth` - OAuth 2.0
+    AvatarUploadRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: uri
+      required:
+      - file
+    AvatarUploadResponse:
+      type: object
+      properties:
+        avatar_url:
+          type: string
+        message:
+          type: string
+      required:
+      - avatar_url
+      - message
     BlankEnum:
       enum:
       - ''
+    CancelDeletionRequest:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+      - token
     CategoryEnum:
       enum:
       - productivity
@@ -9154,6 +9810,28 @@ components:
         * `ecommerce` - E-commerce
         * `utilities` - Utilities & Tools
         * `other` - Other
+    ChangePasswordRequest:
+      type: object
+      description: |-
+        Documents the full request body — the view also reads
+        `logout_other_sessions` / `current_refresh_token` directly off
+        `request.data`, alongside the fields `ChangePasswordSerializer`
+        validates.
+      properties:
+        old_password:
+          type: string
+        new_password:
+          type: string
+        new_password_confirm:
+          type: string
+        logout_other_sessions:
+          type: boolean
+        current_refresh_token:
+          type: string
+      required:
+      - new_password
+      - new_password_confirm
+      - old_password
     Chat:
       type: object
       description: Serializer for Chat model.
@@ -9277,6 +9955,20 @@ components:
       - id
       - message_count
       - updated_at
+    ChatModelSummary:
+      type: object
+      description: Shape of one entry in ConversationListSerializer's `chat_models`
+        field.
+      properties:
+        model_id:
+          type: string
+          nullable: true
+        model_provider:
+          type: string
+          nullable: true
+      required:
+      - model_id
+      - model_provider
     CodeJob:
       type: object
       description: Full serializer for code jobs.
@@ -9586,6 +10278,84 @@ components:
         * `paused` - Paused
         * `completed` - Completed
         * `archived` - Archived
+    Consent:
+      type: object
+      properties:
+        session_id:
+          type: string
+          maxLength: 255
+        categories:
+          $ref: '#/components/schemas/ConsentCategories'
+        version:
+          type: string
+          maxLength: 32
+      required:
+      - categories
+      - session_id
+      - version
+    ConsentAttach:
+      type: object
+      properties:
+        session_id:
+          type: string
+          maxLength: 255
+      required:
+      - session_id
+    ConsentAttachResponse:
+      type: object
+      properties:
+        attached:
+          type: integer
+      required:
+      - attached
+    ConsentCategories:
+      type: object
+      description: Shape of the `categories` object in consent request/response bodies.
+      properties:
+        essential:
+          type: boolean
+        analytics:
+          type: boolean
+        marketing:
+          type: boolean
+      required:
+      - analytics
+      - essential
+      - marketing
+    ConsentRecord:
+      type: object
+      description: Shape of the `consent` object nested in consent GET/POST responses.
+      properties:
+        session_id:
+          type: string
+        categories:
+          $ref: '#/components/schemas/ConsentCategories'
+        version:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - categories
+      - created_at
+      - session_id
+      - updated_at
+      - version
+    ConsentResponse:
+      type: object
+      properties:
+        consent:
+          allOf:
+          - $ref: '#/components/schemas/ConsentRecord'
+          nullable: true
+        region_default:
+          $ref: '#/components/schemas/RegionDefaultEnum'
+      required:
+      - consent
+      - region_default
     Conversation:
       type: object
       description: Full serializer for Conversation model with nested chats.
@@ -9764,12 +10534,16 @@ components:
           readOnly: true
         model_id:
           type: string
+          nullable: true
           readOnly: true
         model_provider:
           type: string
+          nullable: true
           readOnly: true
         chat_models:
-          type: string
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatModelSummary'
           readOnly: true
         created_at:
           type: string
@@ -9861,6 +10635,43 @@ components:
       - pr_title
       - pr_url
       - repo_full_name
+    DataExportCreateResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        status:
+          type: string
+      required:
+      - request_id
+      - status
+    DataExportStatusResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+        status:
+          type: string
+        requested_at:
+          type: string
+          format: date-time
+        download_url:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        ready_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+      required:
+      - request_id
+      - requested_at
+      - status
     DocumentTypeEnum:
       enum:
       - pdf
@@ -9879,6 +10690,24 @@ components:
         * `csv` - CSV
         * `html` - HTML
         * `json` - JSON
+    EmailVerification:
+      type: object
+      description: Serializer for email verification.
+      properties:
+        token:
+          type: string
+      required:
+      - token
+    EmailVerificationResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+      - message
+      - user
     FrameworkEnum:
       enum:
       - react
@@ -9903,6 +10732,23 @@ components:
         * `ics` - ICS
         * `csv` - CSV
         * `xlsx` - Excel Spreadsheet
+    GithubAuthRequest:
+      type: object
+      properties:
+        code:
+          type: string
+        state:
+          type: string
+      required:
+      - code
+      - state
+    GoogleAuthRequest:
+      type: object
+      properties:
+        credential:
+          type: string
+      required:
+      - credential
     ImageModelCatalog:
       type: object
       description: Serializer for image model catalog entries.
@@ -10244,6 +11090,64 @@ components:
       - invocation_type
       - latency_ms
       - query_text
+    LatestDeploymentSummary:
+      type: object
+      description: |-
+        Shape of the `latest_deployment` computed field.
+
+        A deliberate subset of SparkDeploymentSerializer's fields — only
+        what get_latest_deployment actually puts on the wire.
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        preview_url:
+          type: string
+        claim_url:
+          type: string
+      required:
+      - claim_url
+      - id
+      - preview_url
+      - status
+    Login:
+      type: object
+      description: Serializer for user login.
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - email
+      - password
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+      - access_token
+      - expires_in
+      - refresh_token
+      - token_type
+      - user
+    LogoutRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
     MCPServer:
       type: object
       description: |-
@@ -10881,6 +11785,14 @@ components:
       required:
       - id
       - role
+    MessageResponse:
+      type: object
+      description: 'A bare `{"message": "..."}` acknowledgement body.'
+      properties:
+        message:
+          type: string
+      required:
+      - message
     MessageSpark:
       type: object
       description: Serializer for sparks embedded in messages (includes code for rendering).
@@ -10899,13 +11811,18 @@ components:
           readOnly: true
         dependencies: {}
         assets:
-          type: string
+          type: array
+          items:
+            $ref: '#/components/schemas/SparkAsset'
           readOnly: true
         download_url:
           type: string
+          nullable: true
           readOnly: true
         latest_deployment:
-          type: string
+          allOf:
+          - $ref: '#/components/schemas/LatestDeploymentSummary'
+          nullable: true
           readOnly: true
         is_ignited:
           type: boolean
@@ -11083,6 +12000,38 @@ components:
     NullEnum:
       enum:
       - null
+    OAuthLoginResponse:
+      type: object
+      description: |-
+        Shape returned by the Google / GitHub OAuth callback views.
+
+        A distinct shape from `LoginResponseSerializer` — OAuth callbacks
+        key the tokens as `access`/`refresh` and add `created`, while
+        password login uses `access_token`/`refresh_token`.
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+        created:
+          type: boolean
+        message:
+          type: string
+      required:
+      - access
+      - created
+      - message
+      - refresh
+      - user
+    OAuthStateResponse:
+      type: object
+      properties:
+        state:
+          type: string
+      required:
+      - state
     PaginatedAgentPlanSummaryList:
       type: object
       required:
@@ -11543,6 +12492,32 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SubAgentSummary'
+    PasswordResetConfirm:
+      type: object
+      description: Serializer for confirming password reset.
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        password_confirm:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - password_confirm
+      - token
+    PasswordResetRequest:
+      type: object
+      description: Serializer for requesting password reset.
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
     PatchedAuditLogRetentionPolicy:
       type: object
       description: Serializer for AuditLogRetentionPolicy model.
@@ -12137,6 +13112,51 @@ components:
         is_active:
           type: boolean
           description: Whether this agent is deployed to sandboxes
+    PatchedUser:
+      type: object
+      description: Serializer for User model.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+        full_name:
+          type: string
+          maxLength: 255
+        first_name:
+          type: string
+        last_name:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+          description: Profile picture URL from OAuth provider
+        is_verified:
+          type: boolean
+          readOnly: true
+          title: Email verified
+          description: Designates whether the user has verified their email address.
+        is_active:
+          type: boolean
+          readOnly: true
+          title: Active
+          description: Designates whether this user should be treated as active.
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+        last_login:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
     PatchedVoiceRoomSession:
       type: object
       description: Serializer for VoiceRoomSession model.
@@ -12294,6 +13314,75 @@ components:
         * `in_progress` - In Progress
         * `completed` - Completed
         * `failed` - Failed
+    ProviderEnum:
+      enum:
+      - google
+      - github
+      type: string
+      description: |-
+        * `google` - Google
+        * `github` - GitHub
+    RefreshToken:
+      type: object
+      description: Serializer for refreshing access token.
+      properties:
+        refresh_token:
+          type: string
+      required:
+      - refresh_token
+    RegionDefaultEnum:
+      enum:
+      - EU
+      - non-EU
+      type: string
+      description: |-
+        * `EU` - EU
+        * `non-EU` - non-EU
+    Register:
+      type: object
+      description: Serializer for user registration.
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        full_name:
+          type: string
+          maxLength: 255
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        password_confirm:
+          type: string
+          writeOnly: true
+        turnstile_token:
+          type: string
+          writeOnly: true
+      required:
+      - email
+      - password
+      - password_confirm
+    RegisterResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+      - message
+      - user
+    ResendVerification:
+      type: object
+      description: Serializer for resending verification email.
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
     RetentionUnitEnum:
       enum:
       - days
@@ -12326,6 +13415,100 @@ components:
         * `once` - Single Use
         * `session` - Current Session
         * `permanent` - Always Allow
+    Session:
+      type: object
+      description: One entry of `SessionListView`'s `sessions` list.
+      properties:
+        id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        last_used:
+          type: string
+          format: date-time
+          nullable: true
+        user_agent:
+          type: string
+        ip_address:
+          type: string
+          nullable: true
+      required:
+      - created_at
+      - id
+      - ip_address
+      - last_used
+      - user_agent
+    SessionListResponse:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+        count:
+          type: integer
+      required:
+      - count
+      - sessions
+    SocialAccount:
+      type: object
+      description: Serializer for SocialAccount model.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        provider:
+          $ref: '#/components/schemas/ProviderEnum'
+        provider_display:
+          type: string
+          readOnly: true
+        provider_user_id:
+          type: string
+          description: Unique ID from the OAuth provider (google_id, github_id)
+          maxLength: 255
+        email:
+          type: string
+          format: email
+          description: Email used with this provider
+          maxLength: 254
+        username:
+          type: string
+          description: Username from provider (GitHub, etc.)
+          maxLength: 255
+        avatar_url:
+          type: string
+          format: uri
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_login:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Last time this provider was used to login
+        can_disconnect:
+          type: boolean
+          readOnly: true
+      required:
+      - can_disconnect
+      - created_at
+      - email
+      - id
+      - last_login
+      - provider
+      - provider_display
+      - provider_user_id
+      - updated_at
     Spark:
       type: object
       description: Full spark serializer with code.
@@ -12346,7 +13529,9 @@ components:
           readOnly: true
         dependencies: {}
         assets:
-          type: string
+          type: array
+          items:
+            $ref: '#/components/schemas/SparkAsset'
           readOnly: true
         version:
           type: integer
@@ -12369,9 +13554,12 @@ components:
           nullable: true
         download_url:
           type: string
+          nullable: true
           readOnly: true
         latest_deployment:
-          type: string
+          allOf:
+          - $ref: '#/components/schemas/LatestDeploymentSummary'
+          nullable: true
           readOnly: true
         is_ignited:
           type: boolean
@@ -12393,6 +13581,38 @@ components:
       - title
       - updated_at
       - version
+    SparkAsset:
+      type: object
+      description: |-
+        Serializer for assets referenced by sparks.
+
+        Uses presigned URLs for assets to allow sandboxed iframes to access them
+        without authentication (presigned URLs are time-limited and self-authenticating).
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          readOnly: true
+        type:
+          type: string
+          readOnly: true
+        filename:
+          type: string
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+      required:
+      - filename
+      - height
+      - id
+      - type
+      - url
+      - width
     SparkCreate:
       type: object
       description: Serializer for creating sparks.
@@ -12441,7 +13661,9 @@ components:
           readOnly: true
         dependencies: {}
         assets:
-          type: string
+          type: array
+          items:
+            $ref: '#/components/schemas/SparkAsset'
           readOnly: true
         version:
           type: integer
@@ -12454,9 +13676,12 @@ components:
           maxLength: 200
         download_url:
           type: string
+          nullable: true
           readOnly: true
         latest_deployment:
-          type: string
+          allOf:
+          - $ref: '#/components/schemas/LatestDeploymentSummary'
+          nullable: true
           readOnly: true
         is_ignited:
           type: boolean
@@ -12466,9 +13691,11 @@ components:
           readOnly: true
         chat_name:
           type: string
+          nullable: true
           readOnly: true
         conversation_id:
           type: string
+          nullable: true
           readOnly: true
         created_at:
           type: string
@@ -12688,6 +13915,23 @@ components:
       - model_tier
       - name
       - updated_at
+    TokenPair:
+      type: object
+      description: Shape of `JWTManager.create_token_pair` / `refresh_access_token`.
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+        expires_in:
+          type: integer
+      required:
+      - access_token
+      - expires_in
+      - refresh_token
+      - token_type
     TransportTypeEnum:
       enum:
       - websocket
@@ -12700,6 +13944,59 @@ components:
         * `stdio` - Standard I/O
         * `http` - HTTP/SSE (Remote)
         * `sandboxed` - Sandboxed NPM
+    User:
+      type: object
+      description: Serializer for User model.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: Email address
+        full_name:
+          type: string
+          maxLength: 255
+        first_name:
+          type: string
+        last_name:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+          description: Profile picture URL from OAuth provider
+        is_verified:
+          type: boolean
+          readOnly: true
+          title: Email verified
+          description: Designates whether the user has verified their email address.
+        is_active:
+          type: boolean
+          readOnly: true
+          title: Active
+          description: Designates whether this user should be treated as active.
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+        last_login:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - avatar_url
+      - date_joined
+      - email
+      - id
+      - is_active
+      - is_verified
+      - last_login
     UserSummary:
       type: object
       description: Minimal user serializer for audit logs.

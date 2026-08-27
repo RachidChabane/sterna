@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -391,6 +392,7 @@ class SocialAccountSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at", "last_login"]
 
+    @extend_schema_field(serializers.BooleanField())
     def get_can_disconnect(self, obj):
         """Check if user can disconnect this account."""
         # User can disconnect if they have:
@@ -404,9 +406,26 @@ class SocialAccountSerializer(serializers.ModelSerializer):
         return has_password or social_accounts_count > 1
 
 
+class ConsentCategoriesSerializer(serializers.Serializer):
+    """Shape of the `categories` object in consent request/response bodies."""
+    essential = serializers.BooleanField()
+    analytics = serializers.BooleanField()
+    marketing = serializers.BooleanField()
+
+
+@extend_schema_field(ConsentCategoriesSerializer())
+class ConsentCategoriesField(serializers.JSONField):
+    """`JSONField` that documents its shape without changing validation.
+
+    ``ConsentSerializer.validate_categories`` below is the actual
+    validator; this subclass only gives drf-spectacular a precise type
+    to describe instead of an opaque JSON blob.
+    """
+
+
 class ConsentSerializer(serializers.Serializer):
     session_id = serializers.CharField(max_length=255, required=True)
-    categories = serializers.JSONField(required=True)
+    categories = ConsentCategoriesField(required=True)
     version = serializers.CharField(max_length=32, required=True)
 
     def validate_categories(self, value):

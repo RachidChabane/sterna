@@ -229,6 +229,12 @@ class ConversationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'last_message_at']
 
 
+class ChatModelSummarySerializer(serializers.Serializer):
+    """Shape of one entry in ConversationListSerializer's `chat_models` field."""
+    model_id = serializers.CharField(allow_null=True)
+    model_provider = serializers.CharField(allow_null=True)
+
+
 class ConversationListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for conversation list views."""
 
@@ -259,16 +265,19 @@ class ConversationListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'last_message_at']
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_model_id(self, obj):
         """Get model_id from first chat."""
         first_chat = obj.chats.first()
         return first_chat.model_id if first_chat else None
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_model_provider(self, obj):
         """Get model_provider from first chat."""
         first_chat = obj.chats.first()
         return first_chat.model_provider if first_chat else None
 
+    @extend_schema_field(ChatModelSummarySerializer(many=True))
     def get_chat_models(self, obj):
         """Get all chat models for display on hover."""
         return [
