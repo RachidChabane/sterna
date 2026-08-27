@@ -805,9 +805,9 @@ class MCPServerViewSet(viewsets.ModelViewSet):
                         # Auto-refresh expired tokens before discovery
                         if server.oauth_needs_refresh:
                             logger.info(f"OAuth token expired for server {server.id}, attempting refresh...")
-                            from .oauth import DynamicOAuthManager
-                            oauth_manager = DynamicOAuthManager()
-                            refresh_success = await oauth_manager.refresh_server_token(server)
+                            from .oauth import MCPDynamicOAuthFlow
+                            oauth_flow = MCPDynamicOAuthFlow()
+                            refresh_success = await oauth_flow.refresh_server_token(server)
                             if not refresh_success:
                                 raise MCPConnectionError(
                                     "OAuth token expired and refresh failed. Please re-authorize the connection."
