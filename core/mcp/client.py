@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 import websockets
@@ -27,6 +27,7 @@ from .protocol import (
     MCPToolCallResult,
     MCPToolDefinition,
 )
+from .sse import parse_sse_response
 from .versioning import negotiate_handshake_version
 
 logger = logging.getLogger(__name__)
@@ -614,6 +615,10 @@ class MCPRemoteHTTPClient(MCPClientBase):
     Remote MCP servers expose HTTP endpoints for JSON-RPC communication.
     """
 
+    # Endpoint path candidates tried, in order, until the MCP endpoint is
+    # discovered and cached on `_pinned_endpoint`.
+    _ENDPOINT_CANDIDATES: Tuple[str, ...] = ("", "/rpc", "/message", "/mcp")
+
     def __init__(
         self,
         url: str,
@@ -638,6 +643,12 @@ class MCPRemoteHTTPClient(MCPClientBase):
         self.client: Optional[httpx.AsyncClient] = None
         self.server_info: Optional[Dict[str, Any]] = None
         self.session_id: Optional[str] = None  # MCP Streamable HTTP session ID
+        # The MCP endpoint path (relative to self.url) that answered the
+        # first request, cached so later calls POST straight to it
+        # instead of re-running endpoint discovery every time. The spec
+        # defines a single, fixed MCP endpoint for the life of the
+        # connection.
+        self._pinned_endpoint: Optional[str] = None
 
     def _build_auth_headers(self, include_session: bool = True) -> Dict[str, str]:
         """Build authentication headers based on auth type.
@@ -654,6 +665,12 @@ class MCPRemoteHTTPClient(MCPClientBase):
         # Include session ID if we have one (required for all requests after initialize)
         if include_session and self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
+
+        # Required on every request once a version has been negotiated
+        # (never on the `initialize` request itself, which is what
+        # negotiates it).
+        if self.negotiated_protocol_version:
+            headers["MCP-Protocol-Version"] = self.negotiated_protocol_version
 
         if self.auth_type == "none" or not self.auth_config:
             return headers
@@ -699,57 +716,13 @@ class MCPRemoteHTTPClient(MCPClientBase):
             await self.client.aclose()
             self.client = None
         self.is_connected = False
+        # A future connect() starts a new session: forget what this one
+        # negotiated and discovered.
+        self.session_id = None
+        self._pinned_endpoint = None
+        self.negotiated_protocol_version = None
         self.server_info = None
         logger.info(f"Disconnected from MCP server at {self.url}")
-
-    async def _parse_sse_response(self, response) -> MCPResponse:
-        """Parse Server-Sent Events response from MCP Streamable HTTP.
-
-        SSE format:
-            event: message
-            data: {"jsonrpc":"2.0","result":...,"id":1}
-
-        Args:
-            response: httpx streaming response
-
-        Returns:
-            MCPResponse from the first message event
-        """
-        event_type = None
-        data_lines: List[str] = []
-
-        async for line in response.aiter_lines():
-            line = line.strip()
-
-            if not line:
-                # Empty line marks end of event
-                if event_type == "message" and data_lines:
-                    data = "\n".join(data_lines)
-                    try:
-                        parsed = json.loads(data)
-                        return MCPResponse.from_dict(parsed)
-                    except json.JSONDecodeError as e:
-                        raise MCPConnectionError(f"Failed to parse SSE data: {e}")
-                # Reset for next event
-                event_type = None
-                data_lines = []
-                continue
-
-            if line.startswith("event:"):
-                event_type = line[6:].strip()
-            elif line.startswith("data:"):
-                data_lines.append(line[5:].strip())
-
-        # Handle case where stream ends without empty line
-        if event_type == "message" and data_lines:
-            data = "\n".join(data_lines)
-            try:
-                parsed = json.loads(data)
-                return MCPResponse.from_dict(parsed)
-            except json.JSONDecodeError as e:
-                raise MCPConnectionError(f"Failed to parse SSE data: {e}")
-
-        raise MCPConnectionError("No valid response received from SSE stream")
 
     async def _send_request(self, request: MCPRequest, capture_session_id: bool = False) -> MCPResponse:
         """Send JSON-RPC request via HTTP POST.
@@ -769,9 +742,15 @@ class MCPRemoteHTTPClient(MCPClientBase):
             raise MCPConnectionError("HTTP client not initialized")
 
         try:
-            # MCP Streamable HTTP uses the base URL directly
-            # Also try common endpoint patterns for other server implementations
-            endpoints_to_try = ["", "/rpc", "/message", "/mcp"]
+            # Once discovered, the MCP endpoint is fixed for the life of
+            # the connection: reuse it instead of re-running discovery
+            # on every request. Only guess among the candidates before
+            # that first success.
+            endpoints_to_try: Tuple[str, ...] = (
+                (self._pinned_endpoint,)
+                if self._pinned_endpoint is not None
+                else self._ENDPOINT_CANDIDATES
+            )
 
             # Build headers for this request (includes session ID if available)
             # For initialize request, don't include session ID yet
@@ -806,6 +785,11 @@ class MCPRemoteHTTPClient(MCPClientBase):
 
                         response.raise_for_status()
 
+                        # This endpoint answered successfully: pin it so
+                        # later requests skip discovery entirely.
+                        if self._pinned_endpoint is None:
+                            self._pinned_endpoint = endpoint
+
                         # Capture session ID from initialize response
                         if capture_session_id:
                             session_id = response.headers.get("mcp-session-id") or response.headers.get("Mcp-Session-Id")
@@ -818,7 +802,7 @@ class MCPRemoteHTTPClient(MCPClientBase):
                         # Handle SSE (Server-Sent Events) responses
                         if "text/event-stream" in content_type:
                             logger.debug("Parsing SSE response")
-                            return await self._parse_sse_response(response)
+                            return await parse_sse_response(response)
 
                         # Handle regular JSON responses
                         content = await response.aread()
@@ -891,9 +875,13 @@ class MCPRemoteHTTPClient(MCPClientBase):
             # Build headers including session ID if available
             request_headers = self._build_auth_headers(include_session=True)
 
+            # Use the pinned MCP endpoint if one was already discovered;
+            # otherwise fall back to the base URL.
+            full_url = self.url + (self._pinned_endpoint or "")
+
             # For notifications, just POST and ignore the response
             response = await self.client.post(
-                self.url,
+                full_url,
                 json=notification.to_dict(),
                 headers=request_headers,
             )
