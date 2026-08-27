@@ -1,10 +1,10 @@
 """OAuth for MCP servers.
 
 Implements the MCP Authorization specification's dynamic OAuth flow:
-per-server metadata discovery (RFC 8414), optional dynamic client
-registration (RFC 7591), PKCE (RFC 7636), and token exchange/refresh.
-There is no provider-specific handler layer — every remote MCP server
-authenticates through the same discovery-driven flow.
+per-server metadata discovery (RFC 9728 + RFC 8414), optional dynamic
+client registration (RFC 7591), PKCE (RFC 7636), resource-scoped tokens
+(RFC 8707), and token exchange/refresh. No provider-specific handler
+layer — every remote MCP server authenticates through the same flow.
 """
 
 import base64
@@ -19,6 +19,12 @@ import httpx
 from asgiref.sync import sync_to_async
 from django.conf import settings
 
+from .oauth_metadata import (
+    canonical_resource_uri,
+    discover_authorization_server_metadata,
+    discover_protected_resource_metadata,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,10 +38,10 @@ logger = logging.getLogger(__name__)
 # configuration on our end.
 #
 # References:
-# - MCP Authorization Spec: https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization
-# - RFC 8414: OAuth 2.0 Authorization Server Metadata
-# - RFC 7591: OAuth 2.0 Dynamic Client Registration
-# - RFC 7636: PKCE (Proof Key for Code Exchange)
+# - MCP Authorization Spec: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+# - RFC 9728 (Protected Resource Metadata), RFC 8414 (AS Metadata),
+#   RFC 8707 (Resource Indicators), RFC 7591 (Dynamic Client Registration),
+#   RFC 7636 (PKCE)
 # =============================================================================
 
 if TYPE_CHECKING:
@@ -168,8 +174,9 @@ class PKCEFlow:
         code_challenge: str,
         state: str,
         scopes: Optional[list] = None,
+        resource: str = '',
     ) -> str:
-        """Build the OAuth authorization URL with PKCE."""
+        """Build the OAuth authorization URL with PKCE (`resource`: RFC 8707, sent unconditionally)."""
         params = {
             'response_type': 'code',
             'client_id': client_id,
@@ -180,17 +187,18 @@ class PKCEFlow:
         }
         if scopes:
             params['scope'] = ' '.join(scopes)
+        if resource:
+            params['resource'] = resource
         return f"{authorization_endpoint}?{urlencode(params)}"
 
 
 class DynamicOAuthDiscoveryService:
     """Discovers OAuth configuration from MCP servers dynamically.
 
-    Implements RFC 8414 (OAuth 2.0 Authorization Server Metadata) and
-    the MCP Authorization specification.
+    RFC 9728 locates the authorization server(s); RFC 8414 / OpenID
+    Connect discovery fetches their endpoints (see `oauth_metadata.py`).
     """
 
-    MCP_PROTOCOL_VERSION = '2025-03-26'
     DEFAULT_TIMEOUT = 30.0
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT):
@@ -202,39 +210,27 @@ class DynamicOAuthDiscoveryService:
         return f"{parsed.scheme}://{parsed.netloc}"
 
     async def discover(self, server_url: str) -> DynamicOAuthMetadata:
-        """Fetch OAuth metadata from /.well-known/oauth-authorization-server."""
+        """Discover OAuth metadata for the server protecting `server_url`.
+
+        Follows RFC 9728 to the named authorization server(s) — which may
+        live on a different origin — falling back to same-origin discovery.
+        """
+        prm, challenge_scope = await discover_protected_resource_metadata(server_url, timeout=self.timeout)
         base_url = self._get_base_url(server_url)
-        metadata_url = f"{base_url}/.well-known/oauth-authorization-server"
+        issuers_to_try = list((prm or {}).get('authorization_servers') or []) or [base_url]
 
-        logger.info(f"Discovering OAuth metadata from {metadata_url}")
+        for issuer in issuers_to_try:
+            data = await discover_authorization_server_metadata(issuer, timeout=self.timeout)
+            if data is None:
+                continue
+            metadata = DynamicOAuthMetadata.from_response(data)
+            if challenge_scope:
+                metadata.scopes_supported = challenge_scope.split()
+            logger.info(f"OAuth discovery successful: {metadata.issuer}")
+            return metadata
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(
-                    metadata_url,
-                    headers={
-                        'Accept': 'application/json',
-                        'MCP-Protocol-Version': self.MCP_PROTOCOL_VERSION,
-                    },
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    metadata = DynamicOAuthMetadata.from_response(data)
-                    logger.info(f"OAuth discovery successful: {metadata.issuer}")
-                    return metadata
-
-                if response.status_code == 404:
-                    logger.info("No OAuth metadata found, using fallback endpoints")
-                    return DynamicOAuthMetadata.with_defaults(base_url)
-
-                raise DynamicOAuthDiscoveryError(
-                    f"OAuth discovery failed: HTTP {response.status_code}"
-                )
-
-        except httpx.RequestError as e:
-            logger.warning(f"OAuth discovery request failed: {e}")
-            return DynamicOAuthMetadata.with_defaults(base_url)
+        logger.info(f"No authorization server metadata found for {server_url}, using fallback endpoints")
+        return DynamicOAuthMetadata.with_defaults(base_url)
 
     async def register_client(
         self,
@@ -296,8 +292,9 @@ class DynamicOAuthTokenManager:
         client_id: str,
         client_secret: str = '',
         code_verifier: str = '',
+        resource: str = '',
     ) -> DynamicTokenResponse:
-        """Exchange authorization code for tokens."""
+        """Exchange authorization code for tokens (`resource`: RFC 8707, sent unconditionally)."""
         data = {
             'grant_type': 'authorization_code',
             'code': code,
@@ -309,6 +306,8 @@ class DynamicOAuthTokenManager:
             data['client_secret'] = client_secret
         if code_verifier:
             data['code_verifier'] = code_verifier
+        if resource:
+            data['resource'] = resource
 
         logger.info(f"Exchanging authorization code at {token_endpoint}")
 
@@ -341,6 +340,7 @@ class DynamicOAuthTokenManager:
         refresh_token: str,
         client_id: str,
         client_secret: str = '',
+        resource: str = '',
     ) -> DynamicTokenResponse:
         """Refresh an expired access token."""
         data = {
@@ -351,6 +351,8 @@ class DynamicOAuthTokenManager:
 
         if client_secret:
             data['client_secret'] = client_secret
+        if resource:
+            data['resource'] = resource
 
         logger.info(f"Refreshing token at {token_endpoint}")
 
@@ -457,6 +459,7 @@ class MCPDynamicOAuthFlow:
             code_challenge=challenge,
             state=state,
             scopes=metadata.scopes_supported or None,
+            resource=canonical_resource_uri(server.remote_url),
         )
 
         return {
@@ -514,6 +517,7 @@ class MCPDynamicOAuthFlow:
                 client_id=server.oauth_client_id,
                 client_secret=server.oauth_client_secret,
                 code_verifier=server.oauth_pkce_verifier,
+                resource=canonical_resource_uri(server.remote_url),
             )
         except DynamicOAuthTokenError as e:
             server.oauth_state = ''
@@ -548,6 +552,7 @@ class MCPDynamicOAuthFlow:
                 refresh_token=server.oauth_refresh_token,
                 client_id=server.oauth_client_id,
                 client_secret=server.oauth_client_secret,
+                resource=canonical_resource_uri(server.remote_url),
             )
 
             await sync_to_async(server.store_oauth_tokens)(
@@ -570,11 +575,6 @@ class MCPDynamicOAuthFlow:
 
 class DynamicOAuthError(Exception):
     """Base exception for dynamic OAuth errors."""
-    pass
-
-
-class DynamicOAuthDiscoveryError(DynamicOAuthError):
-    """Error during OAuth discovery."""
     pass
 
 

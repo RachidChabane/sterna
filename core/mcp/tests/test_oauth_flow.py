@@ -36,11 +36,11 @@ pytestmark = pytest.mark.django_db
 
 
 class _FakeResponse:
-    def __init__(self, status_code=200, json_data=None, text=""):
+    def __init__(self, status_code=200, json_data=None, text="", headers_override=None):
         self.status_code = status_code
         self._json_data = json_data if json_data is not None else {}
         self.text = text or ""
-        self.headers = {"content-type": "application/json"}
+        self.headers = {"content-type": "application/json", **(headers_override or {})}
 
     def json(self):
         return self._json_data
@@ -55,13 +55,18 @@ class _FakeResponse:
 class _FakeAsyncClient:
     """Stand-in for httpx.AsyncClient supporting `async with ... as client`.
 
-    If ``calls`` (a list) is supplied, every get/post records its kwargs
-    there so tests can assert on what was actually sent to the "server" —
-    e.g. that PKCE's code_verifier reached the token endpoint.
+    Either a single ``response`` answers every get/post, or
+    ``url_responses`` (a dict keyed by exact request URL) routes each
+    call to its own canned response — needed once discovery makes
+    several requests to different URLs in one flow. If ``calls`` (a
+    list) is supplied, every get/post records its kwargs there so tests
+    can assert on what was actually sent — e.g. that PKCE's
+    code_verifier reached the token endpoint.
     """
 
-    def __init__(self, response=None, raise_exc=None, calls=None, **_kwargs):
+    def __init__(self, response=None, url_responses=None, raise_exc=None, calls=None, **_kwargs):
         self._response = response
+        self._url_responses = url_responses
         self._raise_exc = raise_exc
         self._calls = calls
 
@@ -71,24 +76,29 @@ class _FakeAsyncClient:
     async def __aexit__(self, *exc):
         return False
 
-    async def get(self, *args, **kwargs):
-        if self._calls is not None:
-            self._calls.append({"args": args, "kwargs": kwargs})
+    def _respond(self, url):
         if self._raise_exc:
             raise self._raise_exc
+        if self._url_responses is not None:
+            return self._url_responses.get(url, _FakeResponse(404))
         return self._response
 
-    async def post(self, *args, **kwargs):
+    async def get(self, url, *args, **kwargs):
         if self._calls is not None:
-            self._calls.append({"args": args, "kwargs": kwargs})
-        if self._raise_exc:
-            raise self._raise_exc
-        return self._response
+            self._calls.append({"args": (url, *args), "kwargs": kwargs})
+        return self._respond(url)
+
+    async def post(self, url, *args, **kwargs):
+        if self._calls is not None:
+            self._calls.append({"args": (url, *args), "kwargs": kwargs})
+        return self._respond(url)
 
 
-def _client_factory(response=None, raise_exc=None, calls=None):
+def _client_factory(response=None, url_responses=None, raise_exc=None, calls=None):
     def factory(*args, **kwargs):
-        return _FakeAsyncClient(response=response, raise_exc=raise_exc, calls=calls)
+        return _FakeAsyncClient(
+            response=response, url_responses=url_responses, raise_exc=raise_exc, calls=calls
+        )
 
     return factory
 
@@ -134,6 +144,8 @@ def test_pkce_authorization_url_includes_state_and_challenge():
 
 
 def test_discovery_parses_well_known_metadata():
+    """No PRM, no WWW-Authenticate: falls back to same-origin AS discovery
+    at the server's own well-known URL (pre-RFC9728 servers)."""
     service = DynamicOAuthDiscoveryService()
     metadata_body = {
         "issuer": "https://mcp.example.com",
@@ -143,7 +155,7 @@ def test_discovery_parses_well_known_metadata():
         "code_challenge_methods_supported": ["S256"],
     }
     with patch(
-        "mcp.oauth.httpx.AsyncClient",
+        "mcp.oauth_metadata.httpx.AsyncClient",
         side_effect=_client_factory(response=_FakeResponse(200, metadata_body)),
     ):
         metadata = async_to_sync(service.discover)("https://mcp.example.com/mcp")
@@ -156,7 +168,7 @@ def test_discovery_parses_well_known_metadata():
 def test_discovery_falls_back_to_defaults_on_404():
     service = DynamicOAuthDiscoveryService()
     with patch(
-        "mcp.oauth.httpx.AsyncClient",
+        "mcp.oauth_metadata.httpx.AsyncClient",
         side_effect=_client_factory(response=_FakeResponse(404)),
     ):
         metadata = async_to_sync(service.discover)("https://mcp.example.com/mcp")
@@ -165,6 +177,69 @@ def test_discovery_falls_back_to_defaults_on_404():
     # `with_defaults` guesses a conventional /register endpoint even
     # though the server never actually advertised support for it.
     assert metadata.registration_endpoint == "https://mcp.example.com/register"
+
+
+def test_discovery_follows_protected_resource_metadata_to_a_different_origin():
+    """401 + WWW-Authenticate resource_metadata → PRM → authorization_servers
+    can name an authorization server on an entirely different origin."""
+    service = DynamicOAuthDiscoveryService()
+    calls = []
+    responses = {
+        "https://mcp.example.com/mcp": _FakeResponse(
+            401,
+            headers_override={
+                "www-authenticate": (
+                    'Bearer resource_metadata="https://mcp.example.com/.well-known/'
+                    'oauth-protected-resource/mcp", scope="files:read"'
+                )
+            },
+        ),
+        "https://mcp.example.com/.well-known/oauth-protected-resource/mcp": _FakeResponse(
+            200, {"resource": "https://mcp.example.com/mcp", "authorization_servers": ["https://auth.example.org"]}
+        ),
+        "https://auth.example.org/.well-known/oauth-authorization-server": _FakeResponse(
+            200,
+            {
+                "issuer": "https://auth.example.org",
+                "authorization_endpoint": "https://auth.example.org/authorize",
+                "token_endpoint": "https://auth.example.org/token",
+            },
+        ),
+    }
+    with patch(
+        "mcp.oauth_metadata.httpx.AsyncClient",
+        side_effect=_client_factory(url_responses=responses, calls=calls),
+    ):
+        metadata = async_to_sync(service.discover)("https://mcp.example.com/mcp")
+
+    assert metadata.issuer == "https://auth.example.org"
+    assert metadata.token_endpoint == "https://auth.example.org/token"
+    # The 401 challenge's scope is the spec's first-priority scope source.
+    assert metadata.scopes_supported == ["files:read"]
+
+
+def test_discovery_rejects_authorization_server_metadata_with_mismatched_issuer():
+    """A metadata document whose `issuer` doesn't match the URL it was
+    fetched from must be rejected (RFC 8414 §3.3) — falls through to
+    `with_defaults` rather than trusting it."""
+    service = DynamicOAuthDiscoveryService()
+    responses = {
+        "https://mcp.example.com/mcp": _FakeResponse(404),
+        "https://mcp.example.com/.well-known/oauth-protected-resource/mcp": _FakeResponse(404),
+        "https://mcp.example.com/.well-known/oauth-protected-resource": _FakeResponse(404),
+        "https://mcp.example.com/.well-known/oauth-authorization-server": _FakeResponse(
+            200, {"issuer": "https://attacker.example", "token_endpoint": "https://attacker.example/token"}
+        ),
+        "https://mcp.example.com/.well-known/openid-configuration": _FakeResponse(404),
+    }
+    with patch(
+        "mcp.oauth_metadata.httpx.AsyncClient",
+        side_effect=_client_factory(url_responses=responses),
+    ):
+        metadata = async_to_sync(service.discover)("https://mcp.example.com/mcp")
+
+    # Fell back to defaults rather than trusting the spoofed document.
+    assert metadata.token_endpoint == "https://mcp.example.com/token"
 
 
 def test_register_client_raises_on_http_error():
@@ -238,6 +313,8 @@ def test_start_authorization_stores_pkce_verifier_and_state(user_a):
     assert result["state"] in result["authorization_url"]
     # PKCE verifier must never be encrypted-away-to-empty or leaked in the URL.
     assert server.oauth_pkce_verifier not in result["authorization_url"]
+    # RFC 8707 resource indicator, sent unconditionally per the MCP spec.
+    assert "resource=https%3A%2F%2Fmcp.example.com%2Fmcp" in result["authorization_url"]
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +439,10 @@ def test_callback_success_stores_tokens_and_marks_connected(user_a):
     assert result_server.oauth_state == ""
     assert result_server.oauth_pkce_verifier == ""
     assert result_server.connection_healthy is True
+
+    # RFC 8707 resource indicator must reach the token endpoint too.
+    assert len(calls) == 1
+    assert calls[0]["kwargs"]["data"]["resource"] == "https://mcp.example.com/mcp"
 
     # PKCE must actually be transmitted to the token endpoint — a test
     # that only checks the stored result would stay green even if PKCE
