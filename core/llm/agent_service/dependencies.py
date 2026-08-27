@@ -10,12 +10,13 @@ execution context carry this user and this chat.
 This module is the one place they are put together, so the shape of a
 turn is stated once and a request only supplies its own values. The
 two endpoints assemble different turns and each has its own builder:
-V2 runs every call it is given, compacts a history that no longer
-fits, derives citations and previews from what a tool returned, and
-reports a coding-agent run's progress while the call is still in
-flight; V1 gates every call outside its sandboxed workspace tools,
-sends the history as it stands, and speaks a vocabulary with no
-derived event in it.
+V2 runs every catalog and file tool call it is given but still gates
+one an MCP server surfaces, compacts a history that no longer fits,
+derives citations and previews from what a tool returned, and reports
+a coding-agent run's progress while the call is still in flight; V1
+gates every call outside its sandboxed workspace tools, sends the
+history as it stands, and speaks a vocabulary with no derived event in
+it.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ from .coding_agent_progress import CodingAgentProgress, ResolveContext
 from .context_window import CompactingContextWindow
 from .cost_accounting import CatalogPriceCostAccountant
 from .mcp_port import RegistryMCPTools, published_tool_id
-from .policy import run_every_call
+from .policy import run_every_call_except_mcp
 from .registry_factory import RequestToolSet, build_tool_set
 from .tool_invoker import BoundToolInvoker
 from .tool_result_events import V2ToolResultEvents
@@ -136,7 +137,7 @@ async def build_turn_stack(
         approvals=StoredToolApprovals(
             user_id=request.user_id, session_id=request.chat_id or ""
         ),
-        approval_policy=run_every_call,
+        approval_policy=run_every_call_except_mcp,
         context_window=CompactingContextWindow(
             summarizer_endpoint=summarizer_endpoint, model_id=request.model
         ),

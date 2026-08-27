@@ -262,22 +262,15 @@ def test_GAP_no_ssrf_protection_on_remote_url(api_client, auth_as, user_a, inter
     )
 
 
-def test_BUG_discover_tools_with_expiring_oauth_token_hits_broken_import(
+def test_discover_tools_with_expiring_oauth_token_and_no_refresh_token_fails_gracefully(
     api_client, auth_as, user_a
 ):
-    """DOCUMENTS A LIVE BUG, does not assert desired behavior.
-
-    `MCPServerViewSet.discover_tools` (views.py, remote-server branch)
-    does `from .oauth import DynamicOAuthManager` when
-    `server.oauth_needs_refresh` is True — but `mcp/oauth.py` defines no
-    such class (it's `MCPDynamicOAuthFlow`). Any remote OAuth server
-    whose token is within 5 minutes of expiry hits an ImportError and
-    the discovery call 500s instead of refreshing the token. No network
-    call is ever made — the ImportError fires before any HTTP request.
-
-    Tracked in .oss-prep/notes/ — not fixed here per task scope
-    (test-only changes). If `DynamicOAuthManager` is added/renamed
-    correctly, this test starts failing and must be updated.
+    """`MCPServerViewSet.discover_tools` (views.py, remote-server branch)
+    refreshes the OAuth token through `MCPDynamicOAuthFlow` when
+    `server.oauth_needs_refresh` is True. With no refresh token stored,
+    the refresh attempt returns False (no network call is made) and
+    discovery reports a clear re-authorize error instead of raising an
+    unrelated exception.
     """
     server = make_server(
         user_a,
@@ -296,9 +289,6 @@ def test_BUG_discover_tools_with_expiring_oauth_token_hits_broken_import(
         format="json",
     )
 
-    assert response.status_code == 500, (
-        "discover_tools no longer 500s on an expiring OAuth token — the "
-        "DynamicOAuthManager import bug may have been fixed; "
-        "update/remove this bug-documenting test."
-    )
-    assert "DynamicOAuthManager" in response.data["message"]
+    assert response.status_code == 500
+    assert "refresh failed" in response.data["message"]
+    assert "re-authorize" in response.data["message"]

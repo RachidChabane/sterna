@@ -65,7 +65,7 @@
       "core/mcp/client.py": 1049,
       "core/mcp/management/commands/seed_preconfigured_servers.py": 1335,
       "core/mcp/models.py": 843,
-      "core/mcp/oauth.py": 943,
+      "core/mcp/oauth.py": 598,
       "core/mcp/unified_registry.py": 932,
       "core/mcp/views.py": 1690,
       "core/sandbox/orchestrator/coding_agent_runner.py": 1749,

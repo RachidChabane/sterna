@@ -167,10 +167,10 @@ class Spark(models.Model):
         if self.storage_type == self.StorageType.INLINE:
             return self.code
 
-        # Fetch from R2
+        # Fetch from R2 by the deterministic key set in _upload_to_r2.
         from workspaces.services.workspace_storage import WorkspaceStorageService
         storage = WorkspaceStorageService()
-        content = storage.retrieve_file(self.r2_key)
+        content = storage._download_from_r2(self.r2_key)
         return content.decode('utf-8') if content else ''
 
     def save_code(self, code: str):
@@ -214,7 +214,9 @@ class Spark(models.Model):
         return f"{name}{ext}" if name else f"spark{ext}"
 
     def _upload_to_r2(self, code: str):
-        """Upload code to R2 storage."""
+        """Upload code to R2 under a key derived from the spark's own
+        user/chat/id identity. get_code() reads back this same key.
+        """
         from workspaces.services.workspace_storage import WorkspaceStorageService
 
         storage = WorkspaceStorageService()
@@ -223,21 +225,19 @@ class Spark(models.Model):
         else:
             r2_key = f"{self.user_id}/sparks/{self.id}/code.tsx"
 
-        # BROKEN: store_file() takes (user_id, chat_id, content,
-        # content_hash=None, mime_type=None) — it has no r2_key parameter —
-        # so this call raises TypeError for any spark over the inline-size
-        # threshold. Repairing it needs a decision on which user_id/chat_id
-        # the spark should be stored under.
-        storage.store_file(
-            content=code.encode('utf-8'),
-            r2_key=r2_key,  # type: ignore[call-arg]
-            mime_type='text/typescript',
-        )
+        success = storage._upload_to_r2(r2_key, code.encode('utf-8'), 'text/typescript')
 
-        self.storage_type = self.StorageType.R2
-        self.code = ''  # Clear inline code
-        self.r2_bucket = storage.bucket_name  # type: ignore[attr-defined]
-        self.r2_key = r2_key
+        if success:
+            self.storage_type = self.StorageType.R2
+            self.code = ''  # Clear inline code
+            self.r2_bucket = storage.config.bucket_name
+            self.r2_key = r2_key
+        else:
+            # R2 unavailable: keep the code inline rather than losing it.
+            self.storage_type = self.StorageType.INLINE
+            self.code = code
+            self.r2_bucket = ''
+            self.r2_key = ''
 
 
 class SparkDeployment(models.Model):

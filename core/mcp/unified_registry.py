@@ -320,9 +320,9 @@ class UnifiedMCPRegistry:
             True if refresh succeeded, False otherwise
         """
         try:
-            from .oauth import DynamicOAuthManager  # type: ignore[attr-defined]
-            oauth_manager = DynamicOAuthManager()
-            success = await oauth_manager.refresh_server_token(server)
+            from .oauth import MCPDynamicOAuthFlow
+            oauth_flow = MCPDynamicOAuthFlow()
+            success = await oauth_flow.refresh_server_token(server)
             if success:
                 logger.info(f"[UnifiedMCPRegistry] Token refreshed for server {server.id}")
             else:

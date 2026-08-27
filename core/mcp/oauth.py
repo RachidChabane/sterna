@@ -1,8 +1,10 @@
-"""OAuth handlers for MCP connectors.
+"""OAuth for MCP servers.
 
-This module provides OAuth authentication handlers for MCP connectors.
-Handlers are dynamically configured from connector JSON files, making
-it easy to add new OAuth providers without code changes.
+Implements the MCP Authorization specification's dynamic OAuth flow:
+per-server metadata discovery (RFC 9728 + RFC 8414), optional dynamic
+client registration (RFC 7591), PKCE (RFC 7636), resource-scoped tokens
+(RFC 8707), and token exchange/refresh. No provider-specific handler
+layer — every remote MCP server authenticates through the same flow.
 """
 
 import base64
@@ -10,361 +12,20 @@ import hashlib
 import logging
 import secrets
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlencode, urlparse
 
 import httpx
 from asgiref.sync import sync_to_async
 from django.conf import settings
 
+from .oauth_metadata import (
+    canonical_resource_uri,
+    discover_authorization_server_metadata,
+    discover_protected_resource_metadata,
+)
+
 logger = logging.getLogger(__name__)
-
-
-class OAuthHandler:
-    """Base class for OAuth handlers."""
-
-    def __init__(
-        self,
-        client_id: str,
-        client_secret: str,
-        redirect_uri: str,
-        authorize_url: str,
-        token_url: str,
-        scopes: list[str],
-    ):
-        """Initialize OAuth handler.
-
-        Args:
-            client_id: OAuth client ID
-            client_secret: OAuth client secret
-            redirect_uri: OAuth redirect URI
-            authorize_url: OAuth authorization endpoint
-            token_url: OAuth token exchange endpoint
-            scopes: Required OAuth scopes
-        """
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.redirect_uri = redirect_uri
-        self.authorize_url = authorize_url
-        self.token_url = token_url
-        self.scopes = scopes
-
-    def generate_state(self) -> str:
-        """Generate a random state parameter for CSRF protection.
-
-        Adds 'mcp:' prefix to differentiate MCP OAuth flow from authentication flow
-        when using the same GitHub OAuth app for both purposes.
-        """
-        return "mcp:" + secrets.token_urlsafe(32)
-
-    def get_authorization_url(self, state: str, **kwargs) -> str:
-        """Generate the OAuth authorization URL.
-
-        Args:
-            state: CSRF state token
-            **kwargs: Additional parameters for the authorization URL
-
-        Returns:
-            Authorization URL to redirect user to
-        """
-        params = {
-            "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
-            "scope": " ".join(self.scopes),
-            "state": state,
-            **kwargs,
-        }
-        return f"{self.authorize_url}?{urlencode(params)}"
-
-    async def exchange_code_for_token(
-        self, code: str, use_basic_auth: bool = False, **kwargs
-    ) -> Dict[str, Any]:
-        """Exchange authorization code for access token.
-
-        Args:
-            code: Authorization code from OAuth callback
-            use_basic_auth: If True, send credentials via Basic Auth header instead of body
-            **kwargs: Additional parameters for token exchange
-
-        Returns:
-            Token response containing access_token, refresh_token, etc.
-
-        Raises:
-            httpx.HTTPStatusError: If token exchange fails
-        """
-        headers = {"Accept": "application/json"}
-
-        if use_basic_auth:
-            # Notion and some providers require Basic Auth
-            import base64
-            credentials = f"{self.client_id}:{self.client_secret}"
-            encoded = base64.b64encode(credentials.encode()).decode()
-            headers["Authorization"] = f"Basic {encoded}"
-
-            # Don't include credentials in body when using Basic Auth
-            data = {
-                "code": code,
-                "redirect_uri": self.redirect_uri,
-                **kwargs,
-            }
-        else:
-            # GitHub and most providers use credentials in body
-            data = {
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-                "code": code,
-                "redirect_uri": self.redirect_uri,
-                **kwargs,
-            }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                self.token_url,
-                data=data,
-                headers=headers,
-            )
-            response.raise_for_status()
-            return response.json()
-
-    async def refresh_access_token(
-        self, refresh_token: str, **kwargs
-    ) -> Dict[str, Any]:
-        """Refresh an expired access token.
-
-        Args:
-            refresh_token: Refresh token
-            **kwargs: Additional parameters
-
-        Returns:
-            New token response
-
-        Raises:
-            httpx.HTTPStatusError: If token refresh fails
-        """
-        data = {
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-            **kwargs,
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                self.token_url,
-                data=data,
-                headers={"Accept": "application/json"},
-            )
-            response.raise_for_status()
-            return response.json()
-
-
-class GitHubOAuthHandler(OAuthHandler):
-    """OAuth handler for GitHub."""
-
-    def __init__(self):
-        """Initialize GitHub OAuth handler with settings from Django config."""
-        super().__init__(
-            client_id=settings.GITHUB_OAUTH_CLIENT_ID,
-            client_secret=settings.GITHUB_OAUTH_CLIENT_SECRET,
-            redirect_uri=settings.GITHUB_OAUTH_REDIRECT_URI,
-            authorize_url="https://github.com/login/oauth/authorize",
-            token_url="https://github.com/login/oauth/access_token",
-            scopes=["repo", "user"],
-        )
-
-    def get_authorization_url(self, state: str, **kwargs: Any) -> str:
-        """Generate GitHub authorization URL.
-
-        Args:
-            state: CSRF state token
-
-        Returns:
-            GitHub authorization URL
-        """
-        # GitHub uses response_type=code (not needed in params as it's default)
-        return super().get_authorization_url(state, **kwargs)
-
-    async def exchange_code_for_token(self, code: str, use_basic_auth: bool = False, **kwargs: Any) -> Dict[str, Any]:
-        """Exchange GitHub authorization code for access token.
-
-        Args:
-            code: Authorization code from GitHub callback
-
-        Returns:
-            Token response with access_token
-
-        Raises:
-            httpx.HTTPStatusError: If token exchange fails
-        """
-        # GitHub doesn't require grant_type in the request
-        return await super().exchange_code_for_token(code, use_basic_auth=use_basic_auth, **kwargs)
-
-
-class NotionOAuthHandler(OAuthHandler):
-    """OAuth handler for Notion (for future use)."""
-
-    def __init__(self):
-        """Initialize Notion OAuth handler."""
-        super().__init__(
-            client_id=getattr(settings, "NOTION_OAUTH_CLIENT_ID", ""),
-            client_secret=getattr(settings, "NOTION_OAUTH_CLIENT_SECRET", ""),
-            redirect_uri=getattr(settings, "NOTION_OAUTH_REDIRECT_URI", ""),
-            authorize_url="https://api.notion.com/v1/oauth/authorize",
-            token_url="https://api.notion.com/v1/oauth/token",
-            scopes=[],  # Notion doesn't use scopes in the same way
-        )
-
-    def get_authorization_url(self, state: str, **kwargs: Any) -> str:
-        """Generate Notion authorization URL.
-
-        Args:
-            state: CSRF state token
-
-        Returns:
-            Notion authorization URL
-        """
-        params = {
-            "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
-            "response_type": "code",
-            "state": state,
-            "owner": "user",  # Notion-specific
-            **kwargs,
-        }
-        return f"{self.authorize_url}?{urlencode(params)}"
-
-    async def exchange_code_for_token(self, code: str, use_basic_auth: bool = False, **kwargs: Any) -> Dict[str, Any]:
-        """Exchange Notion authorization code for access token.
-
-        Args:
-            code: Authorization code from Notion callback
-
-        Returns:
-            Token response
-
-        Raises:
-            httpx.HTTPStatusError: If token exchange fails
-        """
-        # Notion requires grant_type
-        return await super().exchange_code_for_token(
-            code, use_basic_auth=use_basic_auth, grant_type="authorization_code", **kwargs
-        )
-
-
-class GenericOAuthHandler(OAuthHandler):
-    """Generic OAuth handler that configures itself from connector JSON.
-
-    This handler dynamically loads its configuration from the connector's
-    JSON file, making it possible to add new OAuth providers without
-    writing Python code.
-    """
-
-    def __init__(self, connector_slug: str):
-        """Initialize from connector JSON configuration.
-
-        Args:
-            connector_slug: Slug of the connector (e.g., 'github', 'slack')
-
-        Raises:
-            ValueError: If connector configuration is not found
-        """
-        from .connector_loader import load_connector_config  # type: ignore[import-not-found]
-
-        # Load connector configuration from JSON
-        config = load_connector_config(connector_slug)
-        if not config:
-            raise ValueError(f"Connector configuration not found: {connector_slug}")
-
-        oauth_config = config['oauth_config']
-
-        # Get OAuth credentials from Django settings
-        # Pattern: {SLUG}_OAUTH_CLIENT_ID, {SLUG}_OAUTH_CLIENT_SECRET
-        slug_upper = connector_slug.upper()
-        client_id = getattr(settings, f"{slug_upper}_OAUTH_CLIENT_ID", "")
-        client_secret = getattr(settings, f"{slug_upper}_OAUTH_CLIENT_SECRET", "")
-        redirect_uri = getattr(settings, f"{slug_upper}_OAUTH_REDIRECT_URI", "")
-
-        # Log warning if credentials are missing
-        if not client_id or not client_secret:
-            logger.warning(
-                f"OAuth credentials not configured for {connector_slug}. "
-                f"Set {slug_upper}_OAUTH_CLIENT_ID and {slug_upper}_OAUTH_CLIENT_SECRET "
-                f"in your environment."
-            )
-
-        # Initialize base OAuth handler
-        super().__init__(
-            client_id=client_id,
-            client_secret=client_secret,
-            redirect_uri=redirect_uri,
-            authorize_url=oauth_config['authorize_url'],
-            token_url=oauth_config['token_url'],
-            scopes=oauth_config['scopes'],
-        )
-
-        # Store extra params for authorize and token exchange
-        self.connector_slug = connector_slug
-        self.authorize_extra_params = oauth_config.get('authorize_extra_params', {})
-        self.token_extra_params = oauth_config.get('token_extra_params', {})
-        self.use_basic_auth = oauth_config.get('use_basic_auth', False)
-
-    def get_authorization_url(self, state: str, **kwargs: Any) -> str:
-        """Generate authorization URL with connector-specific extra params.
-
-        Args:
-            state: CSRF state token
-
-        Returns:
-            Authorization URL to redirect user to
-        """
-        # Merge extra params from JSON config
-        return super().get_authorization_url(state, **self.authorize_extra_params, **kwargs)
-
-    async def exchange_code_for_token(self, code: str, use_basic_auth: bool = False, **kwargs: Any) -> Dict[str, Any]:
-        """Exchange authorization code for access token with connector-specific params.
-
-        Args:
-            code: Authorization code from OAuth callback
-
-        Returns:
-            Token response containing access_token, refresh_token, etc.
-
-        Raises:
-            httpx.HTTPStatusError: If token exchange fails
-        """
-        # Merge extra params from JSON config and pass use_basic_auth
-        return await super().exchange_code_for_token(
-            code, use_basic_auth=use_basic_auth or self.use_basic_auth, **self.token_extra_params, **kwargs
-        )
-
-
-def get_oauth_handler(provider: str) -> OAuthHandler:
-    """Factory function to get OAuth handler for a provider.
-
-    This function returns a dynamically configured OAuth handler based on
-    the provider's JSON configuration. This makes it easy to add new OAuth
-    providers without modifying code - just add a JSON file!
-
-    Args:
-        provider: Provider identifier (e.g., 'github', 'notion', 'slack')
-
-    Returns:
-        OAuth handler instance configured from JSON
-
-    Raises:
-        ValueError: If provider configuration is not found
-    """
-    # Use generic handler for all providers (configured from JSON)
-    try:
-        return GenericOAuthHandler(provider)
-    except ValueError as e:
-        # Provider not found - provide helpful error message
-        raise ValueError(
-            f"OAuth provider '{provider}' not configured. "
-            f"Ensure a JSON configuration exists at mcp/connectors/{provider}.json "
-            f"and OAuth credentials are set in environment variables."
-        ) from e
 
 
 # =============================================================================
@@ -377,10 +38,10 @@ def get_oauth_handler(provider: str) -> OAuthHandler:
 # configuration on our end.
 #
 # References:
-# - MCP Authorization Spec: https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization
-# - RFC 8414: OAuth 2.0 Authorization Server Metadata
-# - RFC 7591: OAuth 2.0 Dynamic Client Registration
-# - RFC 7636: PKCE (Proof Key for Code Exchange)
+# - MCP Authorization Spec: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+# - RFC 9728 (Protected Resource Metadata), RFC 8414 (AS Metadata),
+#   RFC 8707 (Resource Indicators), RFC 7591 (Dynamic Client Registration),
+#   RFC 7636 (PKCE)
 # =============================================================================
 
 if TYPE_CHECKING:
@@ -513,8 +174,9 @@ class PKCEFlow:
         code_challenge: str,
         state: str,
         scopes: Optional[list] = None,
+        resource: str = '',
     ) -> str:
-        """Build the OAuth authorization URL with PKCE."""
+        """Build the OAuth authorization URL with PKCE (`resource`: RFC 8707, sent unconditionally)."""
         params = {
             'response_type': 'code',
             'client_id': client_id,
@@ -525,17 +187,18 @@ class PKCEFlow:
         }
         if scopes:
             params['scope'] = ' '.join(scopes)
+        if resource:
+            params['resource'] = resource
         return f"{authorization_endpoint}?{urlencode(params)}"
 
 
 class DynamicOAuthDiscoveryService:
     """Discovers OAuth configuration from MCP servers dynamically.
 
-    Implements RFC 8414 (OAuth 2.0 Authorization Server Metadata) and
-    the MCP Authorization specification.
+    RFC 9728 locates the authorization server(s); RFC 8414 / OpenID
+    Connect discovery fetches their endpoints (see `oauth_metadata.py`).
     """
 
-    MCP_PROTOCOL_VERSION = '2025-03-26'
     DEFAULT_TIMEOUT = 30.0
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT):
@@ -547,39 +210,27 @@ class DynamicOAuthDiscoveryService:
         return f"{parsed.scheme}://{parsed.netloc}"
 
     async def discover(self, server_url: str) -> DynamicOAuthMetadata:
-        """Fetch OAuth metadata from /.well-known/oauth-authorization-server."""
+        """Discover OAuth metadata for the server protecting `server_url`.
+
+        Follows RFC 9728 to the named authorization server(s) — which may
+        live on a different origin — falling back to same-origin discovery.
+        """
+        prm, challenge_scope = await discover_protected_resource_metadata(server_url, timeout=self.timeout)
         base_url = self._get_base_url(server_url)
-        metadata_url = f"{base_url}/.well-known/oauth-authorization-server"
+        issuers_to_try = list((prm or {}).get('authorization_servers') or []) or [base_url]
 
-        logger.info(f"Discovering OAuth metadata from {metadata_url}")
+        for issuer in issuers_to_try:
+            data = await discover_authorization_server_metadata(issuer, timeout=self.timeout)
+            if data is None:
+                continue
+            metadata = DynamicOAuthMetadata.from_response(data)
+            if challenge_scope:
+                metadata.scopes_supported = challenge_scope.split()
+            logger.info(f"OAuth discovery successful: {metadata.issuer}")
+            return metadata
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(
-                    metadata_url,
-                    headers={
-                        'Accept': 'application/json',
-                        'MCP-Protocol-Version': self.MCP_PROTOCOL_VERSION,
-                    },
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    metadata = DynamicOAuthMetadata.from_response(data)
-                    logger.info(f"OAuth discovery successful: {metadata.issuer}")
-                    return metadata
-
-                if response.status_code == 404:
-                    logger.info("No OAuth metadata found, using fallback endpoints")
-                    return DynamicOAuthMetadata.with_defaults(base_url)
-
-                raise DynamicOAuthDiscoveryError(
-                    f"OAuth discovery failed: HTTP {response.status_code}"
-                )
-
-        except httpx.RequestError as e:
-            logger.warning(f"OAuth discovery request failed: {e}")
-            return DynamicOAuthMetadata.with_defaults(base_url)
+        logger.info(f"No authorization server metadata found for {server_url}, using fallback endpoints")
+        return DynamicOAuthMetadata.with_defaults(base_url)
 
     async def register_client(
         self,
@@ -641,8 +292,9 @@ class DynamicOAuthTokenManager:
         client_id: str,
         client_secret: str = '',
         code_verifier: str = '',
+        resource: str = '',
     ) -> DynamicTokenResponse:
-        """Exchange authorization code for tokens."""
+        """Exchange authorization code for tokens (`resource`: RFC 8707, sent unconditionally)."""
         data = {
             'grant_type': 'authorization_code',
             'code': code,
@@ -654,6 +306,8 @@ class DynamicOAuthTokenManager:
             data['client_secret'] = client_secret
         if code_verifier:
             data['code_verifier'] = code_verifier
+        if resource:
+            data['resource'] = resource
 
         logger.info(f"Exchanging authorization code at {token_endpoint}")
 
@@ -686,6 +340,7 @@ class DynamicOAuthTokenManager:
         refresh_token: str,
         client_id: str,
         client_secret: str = '',
+        resource: str = '',
     ) -> DynamicTokenResponse:
         """Refresh an expired access token."""
         data = {
@@ -696,6 +351,8 @@ class DynamicOAuthTokenManager:
 
         if client_secret:
             data['client_secret'] = client_secret
+        if resource:
+            data['resource'] = resource
 
         logger.info(f"Refreshing token at {token_endpoint}")
 
@@ -802,6 +459,7 @@ class MCPDynamicOAuthFlow:
             code_challenge=challenge,
             state=state,
             scopes=metadata.scopes_supported or None,
+            resource=canonical_resource_uri(server.remote_url),
         )
 
         return {
@@ -859,6 +517,7 @@ class MCPDynamicOAuthFlow:
                 client_id=server.oauth_client_id,
                 client_secret=server.oauth_client_secret,
                 code_verifier=server.oauth_pkce_verifier,
+                resource=canonical_resource_uri(server.remote_url),
             )
         except DynamicOAuthTokenError as e:
             server.oauth_state = ''
@@ -893,6 +552,7 @@ class MCPDynamicOAuthFlow:
                 refresh_token=server.oauth_refresh_token,
                 client_id=server.oauth_client_id,
                 client_secret=server.oauth_client_secret,
+                resource=canonical_resource_uri(server.remote_url),
             )
 
             await sync_to_async(server.store_oauth_tokens)(
@@ -915,11 +575,6 @@ class MCPDynamicOAuthFlow:
 
 class DynamicOAuthError(Exception):
     """Base exception for dynamic OAuth errors."""
-    pass
-
-
-class DynamicOAuthDiscoveryError(DynamicOAuthError):
-    """Error during OAuth discovery."""
     pass
 
 

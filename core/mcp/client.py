@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 import websockets
@@ -27,8 +27,16 @@ from .protocol import (
     MCPToolCallResult,
     MCPToolDefinition,
 )
+from .sse import parse_sse_response
+from .versioning import negotiate_handshake_version
 
 logger = logging.getLogger(__name__)
+
+# Client identity sent with every `initialize` request.
+DEFAULT_CLIENT_INFO: Dict[str, Any] = {
+    "name": "Sterna MCP Client",
+    "version": "1.0.0",
+}
 
 
 class MCPClientBase(ABC):
@@ -49,6 +57,10 @@ class MCPClientBase(ABC):
         self.auth_config = auth_config or {}
         self.is_connected = False
         self._message_id = 0
+        # Set once `handshake()` negotiates a version with the server;
+        # None means no version has been negotiated yet (handshake was
+        # skipped or has not completed).
+        self.negotiated_protocol_version: Optional[str] = None
 
     def _generate_message_id(self) -> str:
         """Generate a unique message ID."""
@@ -99,26 +111,23 @@ class MCPClientBase(ABC):
         if not self.is_connected:
             raise MCPConnectionError("Not connected to MCP server")
 
-        client_info = client_info or {
-            "name": "Sterna MCP Client",
-            "version": "1.0.0",
-        }
+        client_info = client_info or DEFAULT_CLIENT_INFO
 
-        request = MCPRequest(
-            id=self._generate_message_id(),
-            method=MCPMessageType.INITIALIZE,
-            params={
-                "protocolVersion": "2024-11-05",
-                "clientInfo": client_info,
-                "capabilities": {},
-            },
-        )
+        async def send_initialize(version: str) -> MCPResponse:
+            request = MCPRequest(
+                id=self._generate_message_id(),
+                method=MCPMessageType.INITIALIZE,
+                params={
+                    "protocolVersion": version,
+                    "clientInfo": client_info,
+                    "capabilities": {},
+                },
+            )
+            return await self._send_request(request)
 
         try:
-            response = await self._send_request(request)
-            if response.is_error():
-                error_msg = (response.error or {}).get("message", "Unknown error")
-                raise MCPConnectionError(f"Handshake failed: {error_msg}")
+            response, negotiated = await negotiate_handshake_version(send_initialize)
+            self.negotiated_protocol_version = negotiated
 
             # Send initialized notification (fire-and-forget: no id, so _send_request won't await a response)
             initialized_notification = MCPRequest(method=MCPMessageType.INITIALIZED, params={})
@@ -128,6 +137,8 @@ class MCPClientBase(ABC):
 
         except asyncio.TimeoutError:
             raise MCPTimeoutError("Handshake timed out")
+        except MCPConnectionError:
+            raise
         except Exception as e:
             raise MCPConnectionError(f"Handshake failed: {str(e)}")
 
@@ -604,6 +615,10 @@ class MCPRemoteHTTPClient(MCPClientBase):
     Remote MCP servers expose HTTP endpoints for JSON-RPC communication.
     """
 
+    # Endpoint path candidates tried, in order, until the MCP endpoint is
+    # discovered and cached on `_pinned_endpoint`.
+    _ENDPOINT_CANDIDATES: Tuple[str, ...] = ("", "/rpc", "/message", "/mcp")
+
     def __init__(
         self,
         url: str,
@@ -628,6 +643,12 @@ class MCPRemoteHTTPClient(MCPClientBase):
         self.client: Optional[httpx.AsyncClient] = None
         self.server_info: Optional[Dict[str, Any]] = None
         self.session_id: Optional[str] = None  # MCP Streamable HTTP session ID
+        # The MCP endpoint path (relative to self.url) that answered the
+        # first request, cached so later calls POST straight to it
+        # instead of re-running endpoint discovery every time. The spec
+        # defines a single, fixed MCP endpoint for the life of the
+        # connection.
+        self._pinned_endpoint: Optional[str] = None
 
     def _build_auth_headers(self, include_session: bool = True) -> Dict[str, str]:
         """Build authentication headers based on auth type.
@@ -644,6 +665,12 @@ class MCPRemoteHTTPClient(MCPClientBase):
         # Include session ID if we have one (required for all requests after initialize)
         if include_session and self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
+
+        # Required on every request once a version has been negotiated
+        # (never on the `initialize` request itself, which is what
+        # negotiates it).
+        if self.negotiated_protocol_version:
+            headers["MCP-Protocol-Version"] = self.negotiated_protocol_version
 
         if self.auth_type == "none" or not self.auth_config:
             return headers
@@ -689,57 +716,13 @@ class MCPRemoteHTTPClient(MCPClientBase):
             await self.client.aclose()
             self.client = None
         self.is_connected = False
+        # A future connect() starts a new session: forget what this one
+        # negotiated and discovered.
+        self.session_id = None
+        self._pinned_endpoint = None
+        self.negotiated_protocol_version = None
         self.server_info = None
         logger.info(f"Disconnected from MCP server at {self.url}")
-
-    async def _parse_sse_response(self, response) -> MCPResponse:
-        """Parse Server-Sent Events response from MCP Streamable HTTP.
-
-        SSE format:
-            event: message
-            data: {"jsonrpc":"2.0","result":...,"id":1}
-
-        Args:
-            response: httpx streaming response
-
-        Returns:
-            MCPResponse from the first message event
-        """
-        event_type = None
-        data_lines: List[str] = []
-
-        async for line in response.aiter_lines():
-            line = line.strip()
-
-            if not line:
-                # Empty line marks end of event
-                if event_type == "message" and data_lines:
-                    data = "\n".join(data_lines)
-                    try:
-                        parsed = json.loads(data)
-                        return MCPResponse.from_dict(parsed)
-                    except json.JSONDecodeError as e:
-                        raise MCPConnectionError(f"Failed to parse SSE data: {e}")
-                # Reset for next event
-                event_type = None
-                data_lines = []
-                continue
-
-            if line.startswith("event:"):
-                event_type = line[6:].strip()
-            elif line.startswith("data:"):
-                data_lines.append(line[5:].strip())
-
-        # Handle case where stream ends without empty line
-        if event_type == "message" and data_lines:
-            data = "\n".join(data_lines)
-            try:
-                parsed = json.loads(data)
-                return MCPResponse.from_dict(parsed)
-            except json.JSONDecodeError as e:
-                raise MCPConnectionError(f"Failed to parse SSE data: {e}")
-
-        raise MCPConnectionError("No valid response received from SSE stream")
 
     async def _send_request(self, request: MCPRequest, capture_session_id: bool = False) -> MCPResponse:
         """Send JSON-RPC request via HTTP POST.
@@ -759,9 +742,15 @@ class MCPRemoteHTTPClient(MCPClientBase):
             raise MCPConnectionError("HTTP client not initialized")
 
         try:
-            # MCP Streamable HTTP uses the base URL directly
-            # Also try common endpoint patterns for other server implementations
-            endpoints_to_try = ["", "/rpc", "/message", "/mcp"]
+            # Once discovered, the MCP endpoint is fixed for the life of
+            # the connection: reuse it instead of re-running discovery
+            # on every request. Only guess among the candidates before
+            # that first success.
+            endpoints_to_try: Tuple[str, ...] = (
+                (self._pinned_endpoint,)
+                if self._pinned_endpoint is not None
+                else self._ENDPOINT_CANDIDATES
+            )
 
             # Build headers for this request (includes session ID if available)
             # For initialize request, don't include session ID yet
@@ -796,6 +785,11 @@ class MCPRemoteHTTPClient(MCPClientBase):
 
                         response.raise_for_status()
 
+                        # This endpoint answered successfully: pin it so
+                        # later requests skip discovery entirely.
+                        if self._pinned_endpoint is None:
+                            self._pinned_endpoint = endpoint
+
                         # Capture session ID from initialize response
                         if capture_session_id:
                             session_id = response.headers.get("mcp-session-id") or response.headers.get("Mcp-Session-Id")
@@ -808,7 +802,7 @@ class MCPRemoteHTTPClient(MCPClientBase):
                         # Handle SSE (Server-Sent Events) responses
                         if "text/event-stream" in content_type:
                             logger.debug("Parsing SSE response")
-                            return await self._parse_sse_response(response)
+                            return await parse_sse_response(response)
 
                         # Handle regular JSON responses
                         content = await response.aread()
@@ -881,9 +875,13 @@ class MCPRemoteHTTPClient(MCPClientBase):
             # Build headers including session ID if available
             request_headers = self._build_auth_headers(include_session=True)
 
+            # Use the pinned MCP endpoint if one was already discovered;
+            # otherwise fall back to the base URL.
+            full_url = self.url + (self._pinned_endpoint or "")
+
             # For notifications, just POST and ignore the response
             response = await self.client.post(
-                self.url,
+                full_url,
                 json=notification.to_dict(),
                 headers=request_headers,
             )
@@ -916,29 +914,29 @@ class MCPRemoteHTTPClient(MCPClientBase):
         if not self.is_connected:
             raise MCPConnectionError("Not connected to MCP server")
 
-        client_info = client_info or {
-            "name": "Sterna MCP Client",
-            "version": "1.0.0",
-        }
+        client_info = client_info or DEFAULT_CLIENT_INFO
 
-        request = MCPRequest(
-            id=self._generate_message_id(),
-            method=MCPMessageType.INITIALIZE,
-            params={
-                "protocolVersion": "2024-11-05",
-                "clientInfo": client_info,
-                "capabilities": {},
-            },
-        )
+        async def send_initialize(version: str) -> MCPResponse:
+            request = MCPRequest(
+                id=self._generate_message_id(),
+                method=MCPMessageType.INITIALIZE,
+                params={
+                    "protocolVersion": version,
+                    "clientInfo": client_info,
+                    "capabilities": {},
+                },
+            )
+            # Session ID is minted on this call, so it can't be sent yet.
+            return await self._send_request(request, capture_session_id=True)
 
         try:
-            # Send initialize request and capture session ID from response
-            response = await self._send_request(request, capture_session_id=True)
-            if response.is_error():
-                error_msg = (response.error or {}).get("message", "Unknown error")
-                raise MCPConnectionError(f"Handshake failed: {error_msg}")
+            response, negotiated = await negotiate_handshake_version(send_initialize)
+            self.negotiated_protocol_version = negotiated
 
-            logger.info(f"MCP handshake successful, session_id captured: {self.session_id is not None}")
+            logger.info(
+                f"MCP handshake successful (protocol {negotiated}), "
+                f"session_id captured: {self.session_id is not None}"
+            )
 
             # Send initialized notification (no response expected)
             initialized_notification = MCPRequest(
@@ -951,6 +949,8 @@ class MCPRemoteHTTPClient(MCPClientBase):
 
         except asyncio.TimeoutError:
             raise MCPTimeoutError("Handshake timed out")
+        except MCPConnectionError:
+            raise
         except Exception as e:
             raise MCPConnectionError(f"Handshake failed: {str(e)}")
 

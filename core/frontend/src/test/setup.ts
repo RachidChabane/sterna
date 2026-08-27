@@ -102,3 +102,7 @@ class MockResizeObserver implements ResizeObserver {
   disconnect() {}
 }
 global.ResizeObserver = MockResizeObserver
+
+// jsdom has no layout engine, so it never implements scrollIntoView.
+// cmdk calls it when the active item changes.
+Element.prototype.scrollIntoView = vi.fn()
