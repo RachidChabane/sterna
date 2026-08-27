@@ -125,6 +125,7 @@ class RecordingTool:
         approval: ToolApproval = ToolApproval.AUTO,
         raises: Optional[BaseException] = None,
         delay_seconds: float = 0.0,
+        server_name: Optional[str] = None,
     ) -> None:
         self.tool_id = tool_id
         self.calls: List[JsonDict] = []
@@ -132,6 +133,7 @@ class RecordingTool:
         self._approval = approval
         self._raises = raises
         self._delay_seconds = delay_seconds
+        self._server_name = server_name
 
     async def _handle(self, arguments: JsonDict, context: ToolExecutionContext) -> JsonDict:
         self.calls.append(dict(arguments))
@@ -144,7 +146,10 @@ class RecordingTool:
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             id=self.tool_id,
-            display=ToolDisplay(name=self.tool_id.replace("_", " ").title()),
+            display=ToolDisplay(
+                name=self.tool_id.replace("_", " ").title(),
+                server_name=self._server_name,
+            ),
             description=f"Fixture tool {self.tool_id}.",
             input_schema={"type": "object", "properties": {}},
             handler=self._handle,
