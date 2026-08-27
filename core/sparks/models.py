@@ -223,15 +223,11 @@ class Spark(models.Model):
         else:
             r2_key = f"{self.user_id}/sparks/{self.id}/code.tsx"
 
-        # NOTE: pre-existing mismatch against the current
-        # WorkspaceStorageService API — store_file() takes
-        # (user_id, chat_id, content, content_hash=None, mime_type=None) and
-        # has no r2_key parameter, and the service has no bucket_name
-        # attribute (that lives on storage.config.bucket_name). This method
-        # predates that API and is untested (no sparks/tests coverage), so
-        # fixing it for real requires a product/design decision this
-        # typing pass isn't positioned to make; ignored narrowly rather
-        # than silently reshaped.
+        # BROKEN: store_file() takes (user_id, chat_id, content,
+        # content_hash=None, mime_type=None) — it has no r2_key parameter —
+        # so this call raises TypeError for any spark over the inline-size
+        # threshold. Repairing it needs a decision on which user_id/chat_id
+        # the spark should be stored under.
         storage.store_file(
             content=code.encode('utf-8'),
             r2_key=r2_key,  # type: ignore[call-arg]
