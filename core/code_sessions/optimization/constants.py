@@ -27,12 +27,6 @@ ENABLE_SMART_TRUNCATION = os.getenv(
     "ENABLE_SMART_TRUNCATION", "true"
 ).lower() == "true"
 
-# DEPRECATED: Two-phase orchestrator approach
-# Now using explore_codebase as a tool that the main model calls when needed
-ENABLE_TWO_PHASE = os.getenv(
-    "ENABLE_TWO_PHASE", "false"  # Disabled - using tool-based approach instead
-).lower() == "true"
-
 # Enable explore_codebase tool (scout as a callable tool)
 ENABLE_SCOUT_TOOL = os.getenv(
     "ENABLE_SCOUT_TOOL", "true"

@@ -67,10 +67,4 @@ def __getattr__(name):
         from . import prompts_v2
         return getattr(prompts_v2, name)
 
-    # V2 PTC
-    if name in ("PTCEngine", "PTCCodeGenerator", "PTCToolBinding",
-                "PTCExecutionResult"):
-        from . import ptc
-        return getattr(ptc, name)
-
     raise AttributeError(f"module 'llm' has no attribute '{name}'")
