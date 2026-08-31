@@ -219,6 +219,11 @@ backend, frontend, microservice and smoke suites on every push.
 
 ## Status
 
+Sterna was developed for about a year in a private repository before being
+ported here, so this repository's history starts with the full codebase landing
+at once (an initial import of roughly 300k lines) rather than with the
+project's actual commit-by-commit evolution.
+
 Feature-complete and covered by backend, frontend and end-to-end suites, run on
 a staging cluster, and never used by production traffic. Stripe has only ever
 operated in test mode; no live payment has been processed. Treat a first
