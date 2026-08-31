@@ -32,6 +32,28 @@ if JWT_SECRET_KEY.startswith("django-insecure"):
         "sign JWTs with a development key in prod/staging."
     )
 
+# Field-level encryption keys protect OAuth tokens, MCP connector
+# credentials and BYOK provider keys at rest. base.py ships a Fernet
+# key that is public in this repository as the development default,
+# so prod must require the env var and reject that key outright.
+FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY")  # ImproperlyConfigured if unset
+if FIELD_ENCRYPTION_KEY == DEV_FIELD_ENCRYPTION_KEY:
+    raise ImproperlyConfigured(
+        "FIELD_ENCRYPTION_KEY is the public development key — refusing to "
+        "encrypt production secrets with it. Generate a real key with: "
+        "python -c \"from cryptography.fernet import Fernet; "
+        "print(Fernet.generate_key().decode())\""
+    )
+
+# BYOK keys rotate independently of FIELD_ENCRYPTION_KEY; falling back
+# to it is acceptable, falling back to the public dev key is not.
+BYOK_ENCRYPTION_KEY = env("BYOK_ENCRYPTION_KEY", default=FIELD_ENCRYPTION_KEY)
+if BYOK_ENCRYPTION_KEY == DEV_FIELD_ENCRYPTION_KEY:
+    raise ImproperlyConfigured(
+        "BYOK_ENCRYPTION_KEY is the public development key — refusing to "
+        "encrypt BYOK provider keys with it."
+    )
+
 # task-29 H1 + H4: prod must require CF-Connecting-IP for trustworthy
 # rate-limit keying, and must hard-reject dev-token JWT bypass even
 # if env vars are misconfigured.

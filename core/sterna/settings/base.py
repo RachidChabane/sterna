@@ -28,10 +28,10 @@ SECRET_KEY = env(
 # Field-level encryption key for sensitive data (OAuth tokens, etc.)
 # IMPORTANT: This key MUST be set in production and kept secret
 # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-FIELD_ENCRYPTION_KEY = env(
-    "FIELD_ENCRYPTION_KEY",
-    default="tqV8H-VqVlPBVQKvVR8mVJjKz5YQ7UVr_gJHZ4L9W2M="  # Development only - CHANGE IN PRODUCTION
-)
+# The development default below is public in this repository; prod.py
+# refuses to boot with it (same fail-loud contract as SECRET_KEY).
+DEV_FIELD_ENCRYPTION_KEY = "tqV8H-VqVlPBVQKvVR8mVJjKz5YQ7UVr_gJHZ4L9W2M="
+FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY", default=DEV_FIELD_ENCRYPTION_KEY)
 
 # BYOK (Bring-Your-Own-Key) encryption — separate setting from
 # FIELD_ENCRYPTION_KEY so BYOK keys can be rotated independently of
