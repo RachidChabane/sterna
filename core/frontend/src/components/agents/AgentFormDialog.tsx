@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { useMediaQuery } from '@/hooks/use-media-query'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useSubAgentStore } from '@/store/subAgentStore'
 import type { SubAgent, SubAgentCreateData, ModelTier } from '@/api/subAgents'
 import { toast } from 'sonner'

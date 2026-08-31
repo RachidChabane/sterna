@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { CreateRoomModal } from '../CreateRoomModal'
 import { useAuthStore } from '@/store/authStore'
-import { useMediaQuery } from '@/hooks/use-media-query'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useAgentRoster } from '../createRoomModal/useAgentRoster'
 import { useTtsProviderModels } from '../createRoomModal/useTtsProviderModels'
 import { useRoomFormPopulation } from '../createRoomModal/useRoomFormPopulation'
@@ -14,7 +14,7 @@ import type { AgentFormData } from '../createRoomModal/types'
 // step tabs switch content. Everything each extracted hook itself does is
 // covered by that hook's own tests.
 vi.mock('@/store/authStore')
-vi.mock('@/hooks/use-media-query')
+vi.mock('@/hooks/useMediaQuery')
 vi.mock('../createRoomModal/useAgentRoster')
 vi.mock('../createRoomModal/useTtsProviderModels')
 vi.mock('../createRoomModal/useRoomFormPopulation')

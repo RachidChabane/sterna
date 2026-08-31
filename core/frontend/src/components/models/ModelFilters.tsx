@@ -23,7 +23,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
-import { useMediaQuery } from '@/hooks/use-media-query'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useModelStats } from '@/hooks/useModelStats'
 import useModelStore from '@/store/modelStore'
 import type { ModelFilter } from '@/types/models'
